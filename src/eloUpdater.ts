@@ -7,6 +7,7 @@ import Database from "strike-discord-framework/dist/database.js";
 import Logger from "strike-discord-framework/dist/logger.js";
 
 import { Application } from "./application.js";
+import { createUserEloGraph } from "./graph/graph.js";
 import { Aircraft, Death, isKillValid, Kill, User, Weapon } from "./structures.js";
 
 const BASE_ELO = 2000;
@@ -239,8 +240,8 @@ class ELOUpdater {
 			const last = users[users.length - 1];
 			console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
 			// console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
-			// fs.writeFileSync('../out-log.txt', this.userLogs["76561198093124125"]);
-			// await createUserEloGraph(users.find(u => u.id == "76561198093124125"));
+			fs.writeFileSync('../out-log.txt', this.userLogs["76561198017778651"]);
+			await createUserEloGraph(users.find(u => u.id == "76561198017778651"));
 			// console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
 			// console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
 			process.exit();

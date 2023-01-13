@@ -5,7 +5,7 @@ import { Command, CommandEvent } from "strike-discord-framework/dist/command.js"
 
 import { ENDPOINT_BASE, getHost } from "../../api.js";
 import { Application } from "../../application.js";
-import { createUserEloGraph } from "../../graph.js";
+import { createUserEloGraph } from "../../graph/graph.js";
 import { Aircraft, User, Weapon } from "../../structures.js";
 
 async function lookupUser(users: CollectionManager<string, User>, query: string) {
@@ -62,7 +62,7 @@ class Stats extends Command {
 			if (!user) return framework.error(`Could not find a user with that id/name`);
 		} else {
 			const linkedUser = await app.users.collection.findOne({ discordId: message.author.id });
-			if (!linkedUser) return framework.error(`You must be linked to a steam account to use this command without an argument. \`link <steamid>\``);
+			if (!linkedUser) return framework.error(`You must be linked to a steam account to use this command without an argument. \`,link <steamid>\``);
 			user = linkedUser;
 		}
 

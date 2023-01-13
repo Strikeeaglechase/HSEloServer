@@ -4,7 +4,7 @@ import Logger from "strike-discord-framework/dist/logger.js";
 import { v4 as uuidv4 } from "uuid";
 
 import { Application } from "./application.js";
-import { createUserEloGraph } from "./graph.js";
+import { createUserEloGraph } from "./graph/graph.js";
 import {
 	Aircraft, Death, Kill, logUser, parseAircraftString, parseTeamString, parseWeaponString, Spawn,
 	userToLimitedUser, Weapon

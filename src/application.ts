@@ -111,13 +111,26 @@ class Application {
 	private async createScoreboardMessage() {
 		const embed = new Discord.MessageEmbed({ title: "Scoreboard" });
 		await this.updateSortedUsers();
-		const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
+		const filteredUsers = this.cachedSortedUsers;//.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
 
+		// ```ansi
+		// Offline player
+		// Offline player
+		// [1;2m[1;37mOnline player[0m[0m
+		// Offline player
+		// ```
 		const table: (string | number)[][] = [["#", "Name", "ELO", "F/A-26b", "F-45A", "Kills", "Deaths", "KDR"]];
+		const prefixes: string[] = [];
+		const suffixes: string[] = [];
 		filteredUsers.forEach((user, idx) => {
+			const isOnline = this.onlineUsers.some(u => u.id == user.id);
+			const prefix = isOnline ? "[1;2m[1;37m" : "";
+			const suffix = isOnline ? "[0m[0m" : "";
+			prefixes.push(prefix);
+			suffixes.push(suffix);
 			table.push([
-				idx + 1,
-				user.pilotNames[0] + (this.onlineUsers.some(u => u.id == user.id) ? " [ON]" : ""),
+				(idx + 1),
+				user.pilotNames[0],
 				Math.round(user.elo),
 				user.spawns[Aircraft.FA26b],
 				user.spawns[Aircraft.F45A],
@@ -132,8 +145,11 @@ class Application {
 		});
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
-		resultStr += `\`\`\`\n${this.table(table)}\n\`\`\`\n`;
-		resultStr += `\`\`\`\n${this.table(multiplierTable, 32)}\n\`\`\``;
+		resultStr += `\`\`\`ansi\n${this.table(table, 16).map((l, i) => {
+			if (i == 0) return l;
+			return prefixes[i - 1] + l + suffixes[i - 1];
+		}).join("\n")}\n\`\`\`\n`;
+		resultStr += `\`\`\`\n${this.table(multiplierTable, 32).join("\n")}\n\`\`\``;
 
 		// embed.addFields({ name: "Online", value: `${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}`, inline: true });
 		embed.setDescription(resultStr);
@@ -143,7 +159,7 @@ class Application {
 
 	private table(data: (string | number)[][], tEntryMaxLen = 16) {
 		const widths = data[0].map((_, i) => Math.max(...data.map(row => String(row[i]).length)));
-		return data.map(row => row.map((val, i) => String(val).padEnd(widths[i]).substring(0, tEntryMaxLen)).join(" ")).join("\n");
+		return data.map(row => row.map((val, i) => String(val).padEnd(widths[i]).substring(0, tEntryMaxLen)).join(" "));
 	}
 
 	private async updateScoreboards() {

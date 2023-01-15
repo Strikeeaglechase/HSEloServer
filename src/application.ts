@@ -113,7 +113,7 @@ class Application {
 	private async createScoreboardMessage() {
 		const embed = new Discord.MessageEmbed({ title: "Scoreboard" });
 		await this.updateSortedUsers();
-		const filteredUsers = this.cachedSortedUsers;//.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
+		const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
 
 		// ```ansi
 		// Offline player

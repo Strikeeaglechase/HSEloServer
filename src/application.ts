@@ -173,7 +173,10 @@ class Application {
 			const msg = await channel.messages.fetch(scoreboard.messageId).catch(() => { });
 			if (!msg) return;
 
-			await msg.edit({ embeds: [embed] }).catch(() => { });
+			await msg.edit({ embeds: [embed] }).catch((e) => {
+				this.log.warn(`Unable to update scoreboard: ${e}`);
+				console.log(e);
+			});
 
 			if (scoreboard.guildId == enableRankDisplayIn) {
 				await this.updateUserRankDisplay();

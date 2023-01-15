@@ -7,6 +7,7 @@ import Database from "strike-discord-framework/dist/database.js";
 import Logger from "strike-discord-framework/dist/logger.js";
 
 import { Application } from "./application.js";
+import { shouldUserBeBanned } from "./banHandler.js";
 import { createUserEloGraph } from "./graph/graph.js";
 import { Aircraft, Death, isKillValid, Kill, User, Weapon } from "./structures.js";
 
@@ -119,7 +120,7 @@ class ELOUpdater {
 		}
 
 		const relevantMetrics = killMetrics.sort((a, b) => b.count - a.count);//.filter(metric => metric.prec > 0.01);
-		if (relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b") == undefined) return;
+		if (relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b") == undefined) return [];
 		const expectPerc = 1 / relevantMetrics.length;
 		let normalizer = 1 / (expectPerc / relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b").prec);
 		relevantMetrics.forEach(metric => {
@@ -151,7 +152,7 @@ class ELOUpdater {
 		deaths = deaths.sort((a, b) => a.time - b.time);
 
 		const killMultipliers = this.getEloMultipliers(kills);
-
+		// console.log(killMultipliers);
 		users.forEach(u => {
 			u.elo = BASE_ELO;
 			u.kills = 0;
@@ -190,7 +191,7 @@ class ELOUpdater {
 
 				const metric = killMultipliers.find(m => m.killStr == killStr);
 
-				const eloChange = this.calculateEloSteal(killer.elo, victim.elo, metric.multiplier ?? 1);
+				const eloChange = this.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
 				killer.elo += eloChange.eloSteal;
 				victim.elo -= eloChange.eloSteal;
 				// const killerElo = killer.elo;
@@ -306,6 +307,13 @@ class ELOUpdater {
 		killer.elo = Math.max(killer.elo, 1);
 
 		await this.app.users.update(killer, killer.id);
+		await this.app.users.collection.updateOne({ id: killer.id }, { $inc: { teamKills: 1 } });
+		killer.teamKills++;
+		const shouldBeBanned = shouldUserBeBanned(killer);
+		if (shouldBeBanned) {
+			this.log.info(`Banning user ${killer.pilotNames[0]} for team killing`);
+			await this.app.users.collection.updateOne({ id: killer.id }, { $set: { isBanned: true } });
+		}
 		return eloSteal;
 	}
 

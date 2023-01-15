@@ -91,7 +91,9 @@ class Application {
 			},
 			elo: BASE_ELO,
 			eloHistory: [],
-			discordId: null
+			discordId: null,
+			isBanned: false,
+			teamKills: 0
 		};
 		await this.users.add(user);
 		return user;

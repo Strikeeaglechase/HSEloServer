@@ -142,14 +142,24 @@ class API {
 		let user = await this.app.users.get(req.params.id);
 		if (!user) user = await this.app.createNewUser(req.params.id);
 
-		if (!user.pilotNames.includes(req.body.pilotName)) {
+		if (user.pilotNames.length == 0 || user.pilotNames[0] != req.body.pilotName) {
 			this.log.info(`New pilot name for user ${logUser(user)}: ${req.body.pilotName}`);
-			user.pilotNames.unshift(req.body.pilotName);
+			// user.pilotNames.unshift(req.body.pilotName);
+			// Preform unshift
+			await this.app.users.collection.updateOne({ id: user.id },
+				{
+					$push: {
+						pilotNames: {
+							$each: [req.body.pilotName],
+							$position: 0
+						}
+					}
+				});
 		}
 
 		this.log.info(`User ${logUser(user)} logged in`);
-		user.loginTimes.push(Date.now());
-		await this.app.users.update(user, user.id);
+		await this.app.users.collection.updateOne({ id: user.id }, { $push: { loginTimes: Date.now() } });
+		// await this.app.users.update(user, user.id);
 		res.sendStatus(200);
 	}
 

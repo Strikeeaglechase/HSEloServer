@@ -17,6 +17,8 @@ export interface User {
 	eloHistory: { time: number, elo: number; }[];
 	rank?: number;
 	discordId: string;
+	isBanned: boolean;
+	teamKills: number;
 }
 
 export interface LimitedUserData {
@@ -27,6 +29,7 @@ export interface LimitedUserData {
 	elo: number;
 	rank?: number;
 	discordId: string;
+	isBanned: boolean;
 }
 
 export function userToLimitedUser(user: User): LimitedUserData {
@@ -37,7 +40,8 @@ export function userToLimitedUser(user: User): LimitedUserData {
 		deaths: user.deaths,
 		elo: user.elo,
 		rank: user.rank,
-		discordId: user.discordId
+		discordId: user.discordId,
+		isBanned: user.isBanned
 	};
 }
 

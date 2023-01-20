@@ -152,6 +152,22 @@ class ELOUpdater {
 		console.log(`Back update process completed, took ${Date.now() - firstStart}ms, paused for ${numPause * 100}ms`);
 	}
 
+	private checkInvalidUsers(users: User[]) {
+		const valid = new Set<string>();
+		const invalid: string[] = [];
+		users.forEach(u => {
+			if (valid.has(u.id)) {
+				// @ts-ignore
+				console.log(`Duplicate user: ${u.id} (${u._id})`);
+				// @ts-ignore
+				invalid.push(u._id);
+			} else {
+				valid.add(u.id);
+			}
+		});
+		return invalid;
+	}
+
 	private async *internapBackUpdateElosWithMultipliers(
 		usersDb: CollectionManager<string, User>,
 		killsDb: CollectionManager<string, Kill>,
@@ -166,6 +182,12 @@ class ELOUpdater {
 		// console.log(`User load took ${Date.now() - d}ms`);
 		// d = Date.now();
 		this.backupUsers(users);
+		const invalid = this.checkInvalidUsers(users);
+		invalid.forEach(invalidUid => {
+			usersDb.collection.deleteOne({ _id: invalidUid });
+			// @ts-ignore
+			users = users.filter(u => u._id != invalidUid);
+		});
 		// console.log(`User backup took ${Date.now() - d}ms`);
 		// d = Date.now();
 

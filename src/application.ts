@@ -70,8 +70,9 @@ class Application {
 		});
 
 		const interval = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60;
+		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 30;
 		setInterval(() => this.updateScoreboards(), interval);
-		setInterval(() => this.updateEloMultipliers(), interval);
+		setInterval(() => this.updateEloMultipliers(), eloMultiplierUpdateRate);
 	}
 
 	public async createNewUser(id: string) {

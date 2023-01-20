@@ -36,13 +36,9 @@ function parseQuery(query: any, allowedQueries: string[]) {
 	return result;
 }
 
-const graphCacheTime = 1000 * 60; // 1 minute
-
 class API {
 	private server: express.Express = express();
 	private log: Logger;
-
-	private userGraphCache: Record<string, { time: number, path: string; }> = {};
 
 	constructor(private app: Application) {
 		this.log = app.log;
@@ -125,15 +121,8 @@ class API {
 		const user = await this.app.users.get(req.params.id);
 		if (!user) return res.sendStatus(404);
 
-		const cache = this.userGraphCache[user.id];
-
-		if (!cache || Date.now() - cache.time > graphCacheTime) {
-			// Create graph
-			const path = await createUserEloGraph(user);
-			res.sendFile(path);
-		} else {
-			res.sendFile(cache.path);
-		}
+		const path = await createUserEloGraph(user);
+		res.sendFile(path);
 	}
 
 	private async handleUserLogin(req: express.Request, res: express.Response) {

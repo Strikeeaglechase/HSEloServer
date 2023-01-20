@@ -111,6 +111,7 @@ class Stats extends Command {
 			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
 			{ name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
 		]);
+		embed.setFooter({ text: `ID: ${user.id}` });
 		const path = await createUserEloGraph(user);
 		const host = getHost();
 		embed.setImage(`${host}${ENDPOINT_BASE}public/graph/${user.id}/${Math.floor(Math.random() * 1000)}`);

@@ -17,6 +17,9 @@ const graphConfig = {
 	"axis": { "domainColor": "#fff", "gridColor": "#888", "tickColor": "#fff" }
 };
 
+const graphCache = new Map<string, { time: number, path: string; }>();
+const graphCacheTime = 1000 * 60 * 5; // 5 minutes
+
 const processManager = new AsyncProcessManager<[User, User?, string?], string>(actuallyCreateUserEloGraph);
 
 async function renderGraphSchema(schema: any, outputPath: string) {
@@ -32,16 +35,40 @@ async function renderGraphSchema(schema: any, outputPath: string) {
 		.toFile(outputPath);
 }
 
+const maxHistoryPoints = 250;
+function reduceHistory(history: { elo: number, time: number; }[]) {
+	if (history.length <= maxHistoryPoints) return history;
+
+	const step = history.length / maxHistoryPoints;
+	const windowSize = Math.max(1, Math.floor(step / 2));
+	const result: { elo: number, time: number; }[] = [];
+	for (let i = 0; i < history.length; i += step) {
+		let idx = Math.floor(i);
+		let sum = 0;
+		let pts = 0;
+		for (let j = idx - windowSize; j < idx + windowSize; j++) {
+			if (j < 0 || j >= history.length) continue;
+			sum += history[j].elo;
+			pts++;
+		}
+		result.push({ elo: sum / pts, time: history[idx].time });
+	}
+	return result;
+}
+
 async function actuallyCreateUserEloGraph(user: User, userB?: User, mode?: string) {
 	if (userB) return actuallyCreateCompareGraph(user, userB, mode);
 
 	if (!fs.existsSync(eloGraphOutput)) fs.mkdirSync(eloGraphOutput, { recursive: true });
 	const graphSchema = JSON.parse(JSON.stringify(normGraph));
-	graphSchema.data[0].values = user.eloHistory.map((elo, idx) => ({ x: idx, y: elo.elo }));
+	graphSchema.data[0].values = reduceHistory(user.eloHistory).map((elo, idx) => ({ x: idx, y: elo.elo }));
 
 	const outputPath = `${eloGraphOutput}${user.id}.png`;
 	await renderGraphSchema(graphSchema, path.join(eloGraphOutput, `${user.id}.png`));
-	return path.resolve(outputPath);
+
+	const finalPath = path.resolve(outputPath);
+	graphCache.set(user.id, { time: Date.now(), path: finalPath });
+	return finalPath;
 }
 
 async function actuallyCreateCompareGraph(userA: User, userB: User, mode: string) {
@@ -51,11 +78,11 @@ async function actuallyCreateCompareGraph(userA: User, userB: User, mode: string
 	const allElos: { elo: number, time: number, user: number; }[] = [];
 	const userAElos: { elo: number, time: number, user: number; }[] = [];
 	const userBElos: { elo: number, time: number, user: number; }[] = [];
-	userA.eloHistory.forEach((elo, idx) => {
+	reduceHistory(userA.eloHistory).forEach((elo, idx) => {
 		allElos.push({ elo: elo.elo, time: elo.time, user: 0 });
 		userAElos.push({ elo: elo.elo, time: elo.time, user: 0 });
 	});
-	userB.eloHistory.forEach((elo, idx) => {
+	reduceHistory(userB.eloHistory).forEach((elo, idx) => {
 		allElos.push({ elo: elo.elo, time: elo.time, user: 1 });
 		userBElos.push({ elo: elo.elo, time: elo.time, user: 1 });
 	});
@@ -82,9 +109,12 @@ async function actuallyCreateCompareGraph(userA: User, userB: User, mode: string
 }
 
 export async function createUserEloGraph(user: User) {
+	if (graphCache.has(user.id) && graphCache.get(user.id).time + graphCacheTime > Date.now()) return graphCache.get(user.id).path;
 	return processManager.execute(user.id, user);
 }
 
 export async function createCompareGraph(userA: User, userB: User, mode: "stretch" | "time") {
-	return processManager.execute(`${userA.id}-${userB.id}`, userA, userB, mode);
+	const id = `${userA.id}-${userB.id}`;
+	if (graphCache.has(id) && graphCache.get(id).time + graphCacheTime > Date.now()) return graphCache.get(id).path;
+	return processManager.execute(id, userA, userB, mode);
 }

@@ -70,7 +70,7 @@ class ELOUpdater {
 		this.prodKills = await this.prodDb.collection("kills", false, "id");
 		this.prodDeaths = await this.prodDb.collection("deaths", false, "id");
 		// this.checkSpawns();
-		this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, false);
+		// this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, false);
 	}
 
 	private checkSpawns() {
@@ -295,7 +295,7 @@ class ELOUpdater {
 			console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
 			// console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
 			// fs.writeFileSync('../out-log.txt', this.userLogs["76561198017778651"]);
-			// await createUserEloGraph(users.find(u => u.id == "76561198017778651"));
+			// await createUserEloGraph(users.find(u => u.id == "76561198093124125"));
 			// console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
 			// console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
 			// process.exit();

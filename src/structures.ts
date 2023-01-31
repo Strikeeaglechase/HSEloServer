@@ -76,11 +76,15 @@ export enum Weapon {
 	AIRST,
 	HARM,
 	Invalid,
-	AIM9E
+	AIM9E,
+	CFIT
 }
 
 export function parseWeaponString(weapon: string): Weapon {
+	// Special weapons
 	if (weapon === "GUN") return Weapon.Gun;
+	if (weapon === "CFIT") return Weapon.CFIT;
+
 	const [_, __, name] = weapon.split("/");
 	switch (name) {
 		case "GUN": return Weapon.Gun;
@@ -145,8 +149,8 @@ export function isKill(kill: any): kill is Kill {
 
 const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
 	[Aircraft.AV42c]: [],
-	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E],
-	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X],
+	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
+	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.CFIT],
 	[Aircraft.AH94]: [],
 	[Aircraft.Invalid]: []
 };

@@ -139,7 +139,7 @@ class ELOUpdater {
 		doUpdate = false
 	) {
 		const firstStart = Date.now();
-		const gen = this.internapBackUpdateElosWithMultipliers(usersDb, killsDb, deathsDb, doUpdate);
+		const gen = this.internalBackUpdateElosWithMultipliers(usersDb, killsDb, deathsDb, doUpdate);
 		let lastAwaitTime = Date.now();
 		let numPause = 0;
 		for await (const _ of gen) {
@@ -168,7 +168,7 @@ class ELOUpdater {
 		return invalid;
 	}
 
-	private async *internapBackUpdateElosWithMultipliers(
+	private async *internalBackUpdateElosWithMultipliers(
 		usersDb: CollectionManager<string, User>,
 		killsDb: CollectionManager<string, Kill>,
 		deathsDb: CollectionManager<string, Death>,
@@ -240,8 +240,16 @@ class ELOUpdater {
 				}
 
 				let metric = killMultipliers.find(m => m.killStr == killStr);
+				let info = "";
 				if (kill.weapon == Weapon.CFIT) {
-					metric = this.getCFITMultiplier(kill);
+					const { metric, extraInfo } = this.getCFITMultiplier(kill);
+					if (metric == null) {
+						this.log.info(`Target was too far away, so CFIT being dropped`);
+						victim.deaths++;
+						this.updateUserLogForDeath(timestamp, victim, 0);
+						continue;
+					}
+					info = extraInfo;
 				}
 				const eloSteal = this.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
 
@@ -251,7 +259,7 @@ class ELOUpdater {
 				killer.kills++;
 				victim.deaths++;
 
-				this.updateUserLogForKill(timestamp, killer, victim, metric, eloSteal);
+				this.updateUserLogForKill(timestamp, killer, victim, metric, eloSteal, killStr, info);
 				killer.eloHistory.push({ elo: killer.elo, time: e.time });
 				victim.eloHistory.push({ elo: victim.elo, time: e.time });
 
@@ -275,6 +283,7 @@ class ELOUpdater {
 				this.userLogs[action.userId] += `[${timestamp}] ${action.action}\n`;
 			}
 
+			// console.log(`Processed ${i + 1}/${events.length} events`);
 			yield i;
 		}
 
@@ -297,7 +306,7 @@ class ELOUpdater {
 			const last = users[users.length - 1];
 			console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
 			// console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
-			// fs.writeFileSync('../out-log.txt', this.userLogs["76561198017778651"]);
+			fs.writeFileSync('../out-log.txt', this.userLogs["76561197976066897"]);
 			// await createUserEloGraph(users.find(u => u.id == "76561198093124125"));
 			// console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
 			// console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
@@ -305,11 +314,11 @@ class ELOUpdater {
 		}
 	}
 
-	private updateUserLogForKill(timestamp: string, killer: User, victim: User, metric: KillMetric, eloSteal: number) {
+	private updateUserLogForKill(timestamp: string, killer: User, victim: User, metric: KillMetric, eloSteal: number, killStr: string, extraInfo: string = "") {
 		if (!this.userLogs[killer.id]) this.userLogs[killer.id] = "";
 		if (!this.userLogs[victim.id]) this.userLogs[victim.id] = "";
-		this.userLogs[killer.id] += `[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${metric?.killStr} (${metric?.multiplier.toFixed(1)}) Elo gained: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)} \n`;
-		this.userLogs[victim.id] += `[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${metric?.killStr} (${metric?.multiplier.toFixed(1)}) Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)} \n`;
+		this.userLogs[killer.id] += `[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${killStr} (${metric?.multiplier.toFixed(1)}) ${extraInfo} Elo gained: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)} \n`;
+		this.userLogs[victim.id] += `[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${killStr} (${metric?.multiplier.toFixed(1)}) ${extraInfo} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)} \n`;
 	}
 
 	private updateUserLogForDeath(timestamp: string, victim: User, eloSteal: number) {
@@ -351,8 +360,17 @@ class ELOUpdater {
 
 		const killStr = getKillStr(kill);
 		let metric = this.lastMultipliers.find(m => m.killStr == killStr);
+		let info = "";
 		if (kill.weapon == Weapon.CFIT) {
-			metric = this.getCFITMultiplier(kill);
+			const { metric, extraInfo } = this.getCFITMultiplier(kill);
+			if (metric == null) {
+				this.log.info(`Victim ${victim.pilotNames[0]} was too far away from ${killer.pilotNames[0]}, so CFIT being dropped`);
+				victim.deaths++;
+				this.updateUserLogForDeath(new Date().toISOString(), victim, 0);
+				await this.app.users.update(victim, victim.id);
+				return;
+			}
+			info = extraInfo;
 		}
 		const eloSteal = this.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
 
@@ -366,7 +384,7 @@ class ELOUpdater {
 		killer.elo += eloSteal;
 		victim.elo -= eloSteal;
 		victim.elo = Math.max(victim.elo, 1);
-		this.updateUserLogForKill(new Date().toISOString(), killer, victim, metric, eloSteal);
+		this.updateUserLogForKill(new Date().toISOString(), killer, victim, metric, eloSteal, killStr);
 
 		killer.kills++;
 		victim.deaths++;
@@ -417,34 +435,33 @@ class ELOUpdater {
 		await this.app.users.update(victim, victim.id);
 	}
 
-	private getCFITMultiplier(kill: Kill): KillMetric {
+	private getCFITMultiplier(kill: Kill): { metric: KillMetric, extraInfo: string; } {
 		const dist = Math.sqrt(Math.pow(kill.killerPosition.x - kill.victimPosition.x, 2) + Math.pow(kill.killerPosition.z - kill.victimPosition.z, 2));
 		const nm = 1852;
-		if (dist / nm > 30) {
-			return {
-				killStr: `${Aircraft[kill.killerAircraft]}->${Weapon[Weapon.CFIT]}->${Aircraft[kill.victimAircraft]}`,
-				multiplier: 0,
-				count: 0,
-				prec: 0
-			};
-		}
 
-		let metric: KillMetric;
-		let weaponEquivalent: Weapon;
+		let weaponEquivalent: Weapon = null;
 		if (dist / nm < 1) weaponEquivalent = Weapon.Gun;
 		else if (dist / nm < 5) weaponEquivalent = Weapon.AIM9;
 		else if (dist / nm < 10) weaponEquivalent = Weapon.AIM7;
 		else if (dist / nm < 20) weaponEquivalent = Weapon.AIM120;
 
-		if (weaponEquivalent) {
-			metric = this.lastMultipliers.find(km => km.killStr == `${Aircraft[kill.killerAircraft]}->${Weapon[weaponEquivalent]}->${Aircraft[kill.victimAircraft]}`);
+		if (weaponEquivalent != null) {
+			const metric = this.lastMultipliers.find(km => km.killStr == `${Aircraft[Aircraft.FA26b]}->${Weapon[weaponEquivalent]}->${Aircraft[Aircraft.FA26b]}`);
+			// if (metric == null) {
+			// 	console.log(`${Aircraft[Aircraft.FA26b]}->${Weapon[weaponEquivalent]}->${Aircraft[Aircraft.FA26b]}`);
+			// 	console.log(this.lastMultipliers);
+			// }
+			this.log.info(`CTIF kill distance: ${(dist / nm).toFixed(1)}nm is getting a multiplier of ${metric.multiplier} (${metric.killStr})`);
+			return { metric, extraInfo: "Distance: " + (dist / nm).toFixed(1) + "nm" };
 		} else {
-			metric = this.lastMultipliers.find(km => km.killStr == `${Aircraft[Aircraft.FA26b]}->${Weapon[Weapon.AIM120]}->${Aircraft[Aircraft.FA26b]}`);
+			// metric = this.lastMultipliers.find(km => km.killStr == `${Aircraft[Aircraft.FA26b]}->${Weapon[Weapon.AIM120]}->${Aircraft[Aircraft.FA26b]}`);
+			this.log.info(`CFIT kill distance: ${(dist / nm).toFixed(1)}nm is getting a multiplier of 0 (no equivalent weapon)`);
+			if (kill.victimId == "76561197976066897") {
+			}
+			return { metric: null, extraInfo: null };
 		}
 
 
-		this.log.info(`CTIF kill distance: ${(dist / nm).toFixed(1)}nm is getting a multiplier of ${metric.multiplier} (${metric.killStr})`);
-		return metric;
 	}
 
 	private calculateEloSteal(killerElo: number, victimElo: number, multiplier = 1) {

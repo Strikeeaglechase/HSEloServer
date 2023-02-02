@@ -103,13 +103,14 @@ class Stats extends Command {
 		embed.addFields([
 			{ name: "Metrics", value: `ELO: ${Math.floor(user.elo)}\nRank: ${rank || "No rank"}\nTop ${(rank / playersWithRank * 100).toFixed(0)}%`, inline: true },
 			{ name: "KDR", value: `K: ${user.kills} \nD: ${user.deaths} \nR: ${(user.kills / user.deaths).toFixed(2)}`, inline: true },
-			{ name: "Online time", value: `${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
+			// { name: "Online time", value: `${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
+			{ name: "Last Online", value: `<t:${Math.floor(user.loginTimes[user.loginTimes.length - 1] / 1000)}:R>`, inline: true },
 			{ name: "Kills with", value: `FA-26b: ${killsUsingFA26b.length}\nF-45A: ${killsUsingF45.length}`, inline: true },
 			{ name: "Kills against", value: `FA-26b: ${fa26bKills.length}\nF-45A: ${f45Kills.length}`, inline: true },
 			{ name: "Deaths against", value: `FA-26b: ${fa26bDeaths.length}\nF-45A: ${f45Deaths.length}`, inline: true },
 			{ name: "Weapons", value: weaponKillsStr || "<No Data>", inline: true },
 			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
-			{ name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
+			// { name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
 		]);
 		embed.setFooter({ text: `ID: ${user.id}` });
 		const path = await createUserEloGraph(user);

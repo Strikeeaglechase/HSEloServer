@@ -242,14 +242,15 @@ class ELOUpdater {
 				let metric = killMultipliers.find(m => m.killStr == killStr);
 				let info = "";
 				if (kill.weapon == Weapon.CFIT) {
-					const { metric, extraInfo } = this.getCFITMultiplier(kill);
-					if (metric == null) {
-						this.log.info(`Target was too far away, so CFIT being dropped`);
+					const { cfitMetric, extraInfo } = this.getCFITMultiplier(kill);
+					if (cfitMetric == null) {
+						// this.log.info(`Target was too far away, so CFIT being dropped`);
 						victim.deaths++;
 						this.updateUserLogForDeath(timestamp, victim, 0);
 						continue;
 					}
 					info = extraInfo;
+					metric = cfitMetric;
 				}
 				const eloSteal = this.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
 
@@ -259,7 +260,7 @@ class ELOUpdater {
 				killer.kills++;
 				victim.deaths++;
 
-				this.updateUserLogForKill(timestamp, killer, victim, metric, eloSteal, killStr, info);
+				this.updateUserLogForKill(timestamp, killer, victim, metric, eloSteal, killStr, info /*+ ` (${kill.id}) `*/);
 				killer.eloHistory.push({ elo: killer.elo, time: e.time });
 				victim.eloHistory.push({ elo: victim.elo, time: e.time });
 
@@ -306,7 +307,7 @@ class ELOUpdater {
 			const last = users[users.length - 1];
 			console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
 			// console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
-			fs.writeFileSync('../out-log.txt', this.userLogs["76561197976066897"]);
+			fs.writeFileSync('../out-log.txt', this.userLogs["76561197997932245"]);
 			// await createUserEloGraph(users.find(u => u.id == "76561198093124125"));
 			// console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
 			// console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
@@ -362,8 +363,8 @@ class ELOUpdater {
 		let metric = this.lastMultipliers.find(m => m.killStr == killStr);
 		let info = "";
 		if (kill.weapon == Weapon.CFIT) {
-			const { metric, extraInfo } = this.getCFITMultiplier(kill);
-			if (metric == null) {
+			const { cfitMetric, extraInfo } = this.getCFITMultiplier(kill);
+			if (cfitMetric == null) {
 				this.log.info(`Victim ${victim.pilotNames[0]} was too far away from ${killer.pilotNames[0]}, so CFIT being dropped`);
 				victim.deaths++;
 				this.updateUserLogForDeath(new Date().toISOString(), victim, 0);
@@ -371,6 +372,7 @@ class ELOUpdater {
 				return;
 			}
 			info = extraInfo;
+			metric = cfitMetric;
 		}
 		const eloSteal = this.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
 
@@ -435,7 +437,7 @@ class ELOUpdater {
 		await this.app.users.update(victim, victim.id);
 	}
 
-	private getCFITMultiplier(kill: Kill): { metric: KillMetric, extraInfo: string; } {
+	private getCFITMultiplier(kill: Kill): { cfitMetric: KillMetric, extraInfo: string; } {
 		const dist = Math.sqrt(Math.pow(kill.killerPosition.x - kill.victimPosition.x, 2) + Math.pow(kill.killerPosition.z - kill.victimPosition.z, 2));
 		const nm = 1852;
 
@@ -447,18 +449,9 @@ class ELOUpdater {
 
 		if (weaponEquivalent != null) {
 			const metric = this.lastMultipliers.find(km => km.killStr == `${Aircraft[Aircraft.FA26b]}->${Weapon[weaponEquivalent]}->${Aircraft[Aircraft.FA26b]}`);
-			// if (metric == null) {
-			// 	console.log(`${Aircraft[Aircraft.FA26b]}->${Weapon[weaponEquivalent]}->${Aircraft[Aircraft.FA26b]}`);
-			// 	console.log(this.lastMultipliers);
-			// }
-			this.log.info(`CTIF kill distance: ${(dist / nm).toFixed(1)}nm is getting a multiplier of ${metric.multiplier} (${metric.killStr})`);
-			return { metric, extraInfo: "Distance: " + (dist / nm).toFixed(1) + "nm" };
+			return { cfitMetric: metric, extraInfo: "Distance: " + (dist / nm).toFixed(1) + "nm" };
 		} else {
-			// metric = this.lastMultipliers.find(km => km.killStr == `${Aircraft[Aircraft.FA26b]}->${Weapon[Weapon.AIM120]}->${Aircraft[Aircraft.FA26b]}`);
-			this.log.info(`CFIT kill distance: ${(dist / nm).toFixed(1)}nm is getting a multiplier of 0 (no equivalent weapon)`);
-			if (kill.victimId == "76561197976066897") {
-			}
-			return { metric: null, extraInfo: null };
+			return { cfitMetric: null, extraInfo: null };
 		}
 
 

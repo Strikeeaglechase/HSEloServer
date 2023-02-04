@@ -67,6 +67,7 @@ class API {
 		this.registerRoute("GET", "online", this.getOnlineUsers, false);
 		this.registerRoute("GET", "graph/:id", this.getUserGraph, false);
 		this.registerRoute("GET", "graph/:id/:refreshId", this.getUserGraph, false);
+		this.registerRoute("GET", "log/:id", this.getUserLog, false);
 
 
 		this.registerRoute("POST", "users/:id/login", this.handleUserLogin, true);
@@ -123,6 +124,12 @@ class API {
 
 		const path = await createUserEloGraph(user);
 		res.sendFile(path);
+	}
+
+	private async getUserLog(req: express.Request, res: express.Response) {
+		const id = req.params.id;
+		const log = this.app.elo.getUserLogText(id);
+		res.send(log);
 	}
 
 	private async handleUserLogin(req: express.Request, res: express.Response) {

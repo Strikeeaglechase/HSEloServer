@@ -56,10 +56,14 @@ class ELOUpdater {
 	}
 
 	public getUserLog(userId: string) {
-		const log = this.userLogs[userId] ?? "No data";
+		const log = this.getUserLogText(userId);
 		if (!fs.existsSync("../userLogs")) fs.mkdirSync("../userLogs");
 		fs.writeFileSync(`../userLogs/${userId}.txt`, log);
 		return path.resolve(`../userLogs/${userId}.txt`);
+	}
+
+	public getUserLogText(userId: string) {
+		return this.userLogs[userId] ?? "No data";
 	}
 
 	public async init() {

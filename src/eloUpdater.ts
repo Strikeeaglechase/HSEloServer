@@ -462,9 +462,16 @@ class ELOUpdater {
 	}
 
 	private calculateEloSteal(killerElo: number, victimElo: number, multiplier = 1) {
-		const eloDiff = Math.abs(victimElo - killerElo);
-		const additionalStealConst = killerElo < victimElo ? stealPerEloGainedPoints : -stealPerEloLostPoints;
-		const eloSteal = Math.min(maxEloStealPoints, Math.max((baseEloStealPoints + (eloDiff * additionalStealConst)), minEloStealPoints) * multiplier);
+		let stealBase: number;
+		const diff = victimElo - killerElo;
+		calculate:{
+            if (diff<-1500) {stealBase = 2.5 * Math.exp((diff+1500)/500); break calculate;}
+            if (diff<0) {stealBase = baseEloStealPoints + diff * stealPerEloLostPoints; break calculate;}
+            if (diff<1500) {stealBase = baseEloStealPoints + diff * stealPerEloGainedPoints; break calculate;}
+            else stealBase = 30 - 5 * Math.exp((1500-diff)/500);
+        }
+
+		const eloSteal = Math.min(maxEloStealPoints, stealBase * multiplier);
 		return eloSteal;
 	}
 }

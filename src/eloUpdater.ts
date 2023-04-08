@@ -8,8 +8,11 @@ import Logger from "strike-discord-framework/dist/logger.js";
 
 import { Application } from "./application.js";
 import { shouldUserBeBanned } from "./banHandler.js";
-import { Aircraft, Death, isKillValid, Kill, User, Weapon } from "./structures.js";
+import { Aircraft, Death, isKillValid, Kill, Season, Spawn, User, Weapon } from "./structures.js";
 
+const produceEndOfSeasonData = true;
+const endOfSeasonTarget = 1;
+const backUpdateYieldAfter = 1000;
 const BASE_ELO = 2000;
 
 // Normal kill takes 10 points
@@ -39,17 +42,73 @@ interface KillMetric {
 }
 
 function getKillStr(kill: Kill) {
-	return `${Aircraft[kill.killerAircraft]}->${Weapon[kill.weapon]}->${Aircraft[kill.victimAircraft]}`;
+	return `${Aircraft[kill.killer.type]}->${Weapon[kill.weapon]}->${Aircraft[kill.victim.type]}`;
 }
+
+const maxCfitDist = 20 * 1852;
+
+function shouldKillBeCounted(kill: Kill) {
+	// If T-55, ignore
+	if (kill.killer.type == Aircraft.T55) return false;
+	if (kill.victim.type == Aircraft.T55) return false;
+
+	// If invalid, ignore
+	if (!isKillValid(kill)) return false;
+
+	// If CFIT, check distance
+	if (kill.weapon == Weapon.CFIT) {
+		const dist = Math.sqrt(
+			Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
+			Math.pow(kill.killer.position.z - kill.victim.position.z, 2)
+		);
+
+		if (dist > maxCfitDist) return false;
+	}
+
+	return true;
+}
+
+function shouldDeathBeCounted(death: Death, kill?: Kill) {
+	// If T-55, ignore
+	if (death.victim.type == Aircraft.T55) return false;
+	if (kill && kill.killer.type == Aircraft.T55) return false;
+
+	// If invalid, ignore
+	if (kill && !isKillValid(kill)) return false;
+
+	// If CFIT, check distance
+	if (kill && kill.weapon == Weapon.CFIT) {
+		const dist = Math.sqrt(
+			Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
+			Math.pow(kill.killer.position.z - kill.victim.position.z, 2)
+		);
+
+		if (dist > maxCfitDist) return false;
+	}
+
+	return true;
+}
+
+function userCanRank(user: User) {
+	return !user.isBanned && user.kills >= 10;
+}
+
 class ELOUpdater {
 	private log: Logger;
-	private prodDb: Database;
-	private prodUsers: CollectionManager<string, User>;
-	private prodKills: CollectionManager<string, Kill>;
-	private prodDeaths: CollectionManager<string, Death>;
+	public prodDb: Database;
+	public prodUsers: CollectionManager<string, User>;
+	public prodKills: CollectionManager<string, Kill>;
+	public prodDeaths: CollectionManager<string, Death>;
+	public prodSpawns: CollectionManager<string, Spawn>;
+	public prodSeasons: CollectionManager<number, Season>;
+
+	// public prodOldKills: CollectionManager<string, KillOld>;
+	// public prodOldDeaths: CollectionManager<string, DeathOld>;
+	// public prodOldSpawns: CollectionManager<string, SpawnOld>;
 
 	public lastMultipliers: KillMetric[] = [];
 	private userLogs: Record<string, string> = {};
+	public activeSeason: Season;
 
 	constructor(private app: Application) {
 		this.log = app.log;
@@ -71,10 +130,20 @@ class ELOUpdater {
 		await this.prodDb.init();
 
 		this.prodUsers = await this.prodDb.collection("users", false, "id");
-		this.prodKills = await this.prodDb.collection("kills", false, "id");
-		this.prodDeaths = await this.prodDb.collection("deaths", false, "id");
+		this.prodKills = await this.prodDb.collection("kills-v2", false, "id");
+		this.prodDeaths = await this.prodDb.collection("deaths-v2", false, "id");
+		this.prodSpawns = await this.prodDb.collection("spawns-v2", false, "id");
+		this.prodSeasons = await this.prodDb.collection("seasons", false, "id");
+
+		// this.prodOldKills = await this.prodDb.collection("kills", false, "id");
+		// this.prodOldDeaths = await this.prodDb.collection("deaths", false, "id");
+		// this.prodOldSpawns = await this.prodDb.collection("spawns", false, "id");
+
+		this.activeSeason = await this.app.getActiveSeason();
+
 		// this.checkSpawns();
-		// this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, false);
+		// this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
+		// this.backUpdateElosWithMultipliers(this.app.users, this.app.kills, this.app.deaths, this.app.seasons, false);
 	}
 
 	private checkSpawns() {
@@ -123,11 +192,15 @@ class ELOUpdater {
 		}
 
 		const relevantMetrics = killMetrics.sort((a, b) => b.count - a.count);//.filter(metric => metric.prec > 0.01);
-		if (relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b") == undefined) return [];
-		const expectPerc = 1 / relevantMetrics.length;
-		let normalizer = 1 / (expectPerc / relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b").prec);
+		// if (relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b") == undefined) return [];
+
+
+		const expectPrec = 1 / relevantMetrics.length;
+		const normalizerMetricPrec = relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b")?.prec ?? expectPrec;
+		// console.log(`AIM120 prec: ${relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b")?.prec}, normalizer: ${normalizerMetricPrec}`);
+		const normalizer = 1 / (expectPrec / normalizerMetricPrec);
 		relevantMetrics.forEach(metric => {
-			const multiplier = expectPerc / metric.prec * normalizer;
+			const multiplier = expectPrec / metric.prec * normalizer;
 			// console.log(`${metric.killStr} - ${metric.count} (${(metric.prec * 100).toFixed(1)}%) - ${(multiplier).toFixed(1)}x`);
 			metric.multiplier = Math.min(multiplier, maxWeaponMultiplier);
 		});
@@ -140,10 +213,11 @@ class ELOUpdater {
 		usersDb: CollectionManager<string, User>,
 		killsDb: CollectionManager<string, Kill>,
 		deathsDb: CollectionManager<string, Death>,
+		seasonsDb: CollectionManager<number, Season>,
 		doUpdate = false
 	) {
 		const firstStart = Date.now();
-		const gen = this.internalBackUpdateElosWithMultipliers(usersDb, killsDb, deathsDb, doUpdate);
+		const gen = this.internalBackUpdateElosWithMultipliers(usersDb, killsDb, deathsDb, seasonsDb, doUpdate);
 		let lastAwaitTime = Date.now();
 		let numPause = 0;
 		for await (const _ of gen) {
@@ -176,13 +250,25 @@ class ELOUpdater {
 		usersDb: CollectionManager<string, User>,
 		killsDb: CollectionManager<string, Kill>,
 		deathsDb: CollectionManager<string, Death>,
+		seasonsDb: CollectionManager<number, Season>,
 		doUpdate = false
 	) {
 		// let d = Date.now();
 
-		let users = await usersDb.get();
-		let kills = await killsDb.get();
-		let deaths = await deathsDb.get();
+		let season = await this.app.getActiveSeason(seasonsDb);
+		if (doUpdate || !this.activeSeason) this.activeSeason = season;
+
+		if (produceEndOfSeasonData) {
+			season = await this.app.getSeason(endOfSeasonTarget, seasonsDb);
+		}
+		this.log.info(`Active season: ${season.id} (${season.name})`);
+
+		let users = await usersDb.collection.find({}).toArray();
+		// console.log(users);
+		let kills = await killsDb.collection.find({ season: season.id }).toArray();
+		let deaths = await deathsDb.collection.find({ season: season.id }).toArray();
+		// console.log(`Active season: `, this.activeSeason);
+		this.log.info(`Loaded ${users.length} users, ${kills.length} kills, ${deaths.length} deaths`);
 		// console.log(`User load took ${Date.now() - d}ms`);
 		// d = Date.now();
 		this.backupUsers(users);
@@ -200,6 +286,7 @@ class ELOUpdater {
 
 		const killMultipliers = this.getEloMultipliers(kills);
 		const eloGainedPerWeapon: Record<string, Record<string, number>> = {};
+		// const checkUser = JSON.parse(JSON.stringify(users.find(u => u.id == "76561198162340088"))) as User;
 		users.forEach(u => {
 			u.elo = BASE_ELO;
 			u.kills = 0;
@@ -228,14 +315,14 @@ class ELOUpdater {
 			const timestamp = new Date(e.time).toISOString();
 			if (e.type == "kill") {
 				const kill = e.event as Kill;
-				const killer = users.find(u => u.id == kill.killerId);
-				const victim = users.find(u => u.id == kill.victimId);
+				const killer = users.find(u => u.id == kill.killer.ownerId);
+				const victim = users.find(u => u.id == kill.victim.ownerId);
 				const killStr = getKillStr(kill);
 
-				if (!killer || !victim) {
+				if (!killer || !victim || !shouldKillBeCounted(kill)) {
 					continue;
 				}
-				if (kill.killerTeam == kill.victimTeam) {
+				if (kill.killer.team == kill.victim.team) {
 					const loss = killer.elo * teamKillPenalty;
 					killer.elo -= loss;
 					this.updateUserLogForTK(timestamp, killer, victim, loss);
@@ -265,6 +352,11 @@ class ELOUpdater {
 				victim.deaths++;
 
 				this.updateUserLogForKill(timestamp, killer, victim, metric, eloSteal, killStr, info /*+ ` (${kill.id}) `*/);
+				// if (killer.id == checkUser.id) {
+				// const realEloHist = checkUser.eloHistory[killer.eloHistory.length];
+				// const delta = realEloHist.elo - killer.elo;
+				// console.log(`Delta at ${killer.eloHistory.length}: ${delta}`);
+				// }
 				killer.eloHistory.push({ elo: killer.elo, time: e.time });
 				victim.eloHistory.push({ elo: victim.elo, time: e.time });
 
@@ -273,8 +365,11 @@ class ELOUpdater {
 			} else if (e.type == "death") {
 				const death = e.event as Death;
 				if (death.killId) continue;
-				const victim = users.find(u => u.id == death.victimId);
+				const victim = users.find(u => u.id == death.victim.ownerId);
 				if (!victim) continue;
+				const kill = death.killId ? kills.find(k => k.id == death.killId) : null;
+				if (!shouldDeathBeCounted(death, kill)) continue;
+
 
 				const eloSteal = this.calculateEloSteal(BASE_ELO, victim.elo);
 				victim.elo -= eloSteal;
@@ -289,7 +384,7 @@ class ELOUpdater {
 			}
 
 			// console.log(`Processed ${i + 1}/${events.length} events`);
-			yield i;
+			if (i % backUpdateYieldAfter == 0) yield i;
 		}
 
 		// console.log(`Processing took ${Date.now() - d}ms`);
@@ -300,22 +395,46 @@ class ELOUpdater {
 			users.forEach(u => usersDb.update(u, u.id));
 		} else {
 			users = users.sort((a, b) => b.elo - a.elo);
-			// let ru = 0;
-			for (let i = 0; i < 40; i++) {
-				if (users[i].kills > 10) {
-					const totalGained = Object.values(eloGainedPerWeapon[users[i].id]).reduce((a, b) => a + b, 0);
-					const gainedWpnStr = Object.entries(eloGainedPerWeapon[users[i].id]).map(([wpn, elo]) => `${wpn}: ${Math.round(elo / totalGained * 100)}%`).join(", ");
-					console.log(`${users[i].pilotNames[0]} (${users[i].id}) - ${users[i].elo.toFixed(1)}  ${gainedWpnStr}`);
-				}
+			if (produceEndOfSeasonData) {
+				// Compute ranks
+				users.filter(u => userCanRank(u)).forEach((u, i) => u.rank = i + 1);
+
+				const ops = users.map(async user => {
+					if (!user.endOfSeasonStats) user.endOfSeasonStats = [];
+					user.endOfSeasonStats = user.endOfSeasonStats.filter(s => s.season != season.id);
+					user.endOfSeasonStats.push({
+						season: season.id,
+						elo: user.elo,
+						rank: user.rank,
+						teamKills: user.teamKills,
+						history: this.userLogs[user.id],
+					});
+
+					await usersDb.update(user, user.id);
+				});
+
+				await Promise.all(ops);
+
+				season.totalRankedUsers = users.filter(u => userCanRank(u)).length;
+				this.log.info(`Updated ${users.length} users and season ${season.id} with ${season.totalRankedUsers} ranked users`);
+				await seasonsDb.update(season, season.id);
 			}
-			const last = users[users.length - 1];
-			console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
+			// let ru = 0;
+			// for (let i = 0; i < 40; i++) {
+			// 	if (users[i].kills > 10) {
+			// 		const totalGained = Object.values(eloGainedPerWeapon[users[i].id]).reduce((a, b) => a + b, 0);
+			// 		const gainedWpnStr = Object.entries(eloGainedPerWeapon[users[i].id]).map(([wpn, elo]) => `${wpn}: ${Math.round(elo / totalGained * 100)}%`).join(", ");
+			// 		console.log(`${users[i].pilotNames[0]} (${users[i].id}) - ${users[i].elo.toFixed(1)}  ${gainedWpnStr}`);
+			// 	}
+			// }
+			// const last = users[users.length - 1];
+			// console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
 			// console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
-			fs.writeFileSync('../out-log.txt', this.userLogs["76561197997932245"]);
-			// await createUserEloGraph(users.find(u => u.id == "76561198093124125"));
+			// fs.writeFileSync('../out-log.txt', this.userLogs["76561198162340088"]);
+			// await createUserEloGraph(users.find(u => u.id == "76561198119758293"));
 			// console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
 			// console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
-			// process.exit();
+			process.exit();
 		}
 	}
 
@@ -339,20 +458,20 @@ class ELOUpdater {
 	}
 
 	public async updateELOForKill(kill: Kill) {
-		const killer = await this.app.users.get(kill.killerId);
-		const victim = await this.app.users.get(kill.victimId);
+		const killer = await this.app.users.get(kill.killer.ownerId);
+		const victim = await this.app.users.get(kill.victim.ownerId);
 
 		if (!killer) {
-			this.log.error(`Killer ${kill.killerId} not found!`);
+			this.log.error(`Killer ${kill.killer.ownerId} not found!`);
 			return;
 		}
 
 		if (!victim) {
-			this.log.error(`Victim ${kill.victimId} not found!`);
+			this.log.error(`Victim ${kill.victim.ownerId} not found!`);
 			return;
 		}
 
-		if (kill.killerTeam == kill.victimTeam) {
+		if (kill.killer.team == kill.victim.team) {
 			this.log.info(`User ${killer.pilotNames[0]} killed a teammate! Applying ELO penalty.`);
 			const loss = await this.updateELOForTeamKill(killer, victim);
 			return {
@@ -422,9 +541,9 @@ class ELOUpdater {
 	}
 
 	public async updateELOForDeath(death: Death) {
-		const victim = await this.app.users.get(death.victimId);
+		const victim = await this.app.users.get(death.victim.ownerId);
 		if (!victim) {
-			this.log.error(`Victim ${death.victimId} not found!`);
+			this.log.error(`Victim ${death.victim.ownerId} not found!`);
 			return;
 		}
 
@@ -442,7 +561,10 @@ class ELOUpdater {
 	}
 
 	private getCFITMultiplier(kill: Kill): { cfitMetric: KillMetric, extraInfo: string; } {
-		const dist = Math.sqrt(Math.pow(kill.killerPosition.x - kill.victimPosition.x, 2) + Math.pow(kill.killerPosition.z - kill.victimPosition.z, 2));
+		const dist = Math.sqrt(
+			Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
+			Math.pow(kill.killer.position.z - kill.victim.position.z, 2)
+		);
 		const nm = 1852;
 
 		let weaponEquivalent: Weapon = null;
@@ -469,4 +591,4 @@ class ELOUpdater {
 	}
 }
 
-export { ELOUpdater, BASE_ELO };
+export { ELOUpdater, BASE_ELO, shouldKillBeCounted, shouldDeathBeCounted, userCanRank };

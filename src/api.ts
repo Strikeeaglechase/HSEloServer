@@ -6,8 +6,9 @@ import { v4 as uuidv4 } from "uuid";
 import { Application } from "./application.js";
 import { createUserEloGraph } from "./graph/graph.js";
 import {
-	Aircraft, Death, Kill, logUser, parseAircraftString, parseTeamString, parseWeaponString, Spawn,
-	userToLimitedUser, Weapon
+	Aircraft, CurrentServerInformation, Death, Kill, logUser, parseAircraftString, parseTeamString,
+	parseTimeOfDayString, parseWeaponString, Spawn, UserAircraftInformation, userToLimitedUser,
+	Weapon
 } from "./structures.js";
 
 export const ENDPOINT_BASE = "/api/v1/";
@@ -34,6 +35,40 @@ function parseQuery(query: any, allowedQueries: string[]) {
 		result[key] = parseValue(query[key]);
 	}
 	return result;
+}
+
+interface APIUserAircraft {
+	ownerId: string;
+	occupants: string[];
+	position: { x: number, y: number, z: number; };
+	velocity: { x: number, y: number, z: number; };
+	team: string;
+	type: string;
+}
+
+interface APIServerInfo {
+	onlineUsers: string[];
+	timeOfDay: string;
+	missionId: string;
+}
+
+function parseAPIUserAircraft(apiUA: APIUserAircraft): UserAircraftInformation {
+	return {
+		ownerId: apiUA.ownerId,
+		occupants: apiUA.occupants,
+		position: apiUA.position,
+		velocity: apiUA.velocity,
+		team: parseTeamString(apiUA.team),
+		type: parseAircraftString(apiUA.type)
+	};
+}
+
+function parseAPIServerInfo(apiSI: APIServerInfo): CurrentServerInformation {
+	return {
+		onlineUsers: apiSI.onlineUsers,
+		timeOfDay: parseTimeOfDayString(apiSI.timeOfDay),
+		missionId: apiSI.missionId
+	};
 }
 
 class API {
@@ -68,6 +103,7 @@ class API {
 		this.registerRoute("GET", "graph/:id", this.getUserGraph, false);
 		this.registerRoute("GET", "graph/:id/:refreshId", this.getUserGraph, false);
 		this.registerRoute("GET", "log/:id", this.getUserLog, false);
+		this.registerRoute("GET", "multipliers", this.getMultipliers, false);
 
 
 		this.registerRoute("POST", "users/:id/login", this.handleUserLogin, true);
@@ -132,6 +168,10 @@ class API {
 		res.send(log);
 	}
 
+	private async getMultipliers(req: express.Request, res: express.Response) {
+		res.send(this.app.elo.lastMultipliers);
+	}
+
 	private async handleUserLogin(req: express.Request, res: express.Response) {
 		if (!req.params.id) return res.sendStatus(400);
 
@@ -173,50 +213,46 @@ class API {
 
 	private async handleKill(req: express.Request, res: express.Response) {
 		const killReq = req.body as {
-			victimAircraft: string;
-			killerAircraft: string;
-			weapon: string;
-			victimId: string;
-			killerId: string;
-			victimTeam: string;
-			killerTeam: string;
-			killerPosition: { x: number; y: number; z: number; };
-			victimPosition: { x: number; y: number; z: number; };
-			killerVelocity: { x: number; y: number; z: number; };
-			victimVelocity: { x: number; y: number; z: number; };
+			victim: APIUserAircraft,
+			killer: APIUserAircraft,
+			weapon: string,
+			serverInfo: APIServerInfo,
 		};
 		const kill: Kill = {
 			id: uuidv4(),
 			time: Date.now(),
-			victimAircraft: parseAircraftString(killReq.victimAircraft),
-			killerAircraft: parseAircraftString(killReq.killerAircraft),
 			weapon: parseWeaponString(killReq.weapon),
-			victimId: killReq.victimId,
-			killerId: killReq.killerId,
-			victimTeam: parseTeamString(killReq.victimTeam),
-			killerTeam: parseTeamString(killReq.killerTeam),
-			killerPosition: { x: req.body.killerPosition.x, y: req.body.killerPosition.y, z: req.body.killerPosition.z },
-			victimPosition: { x: req.body.victimPosition.x, y: req.body.victimPosition.y, z: req.body.victimPosition.z },
-			killerVelocity: { x: req.body.killerVelocity.x, y: req.body.killerVelocity.y, z: req.body.killerVelocity.z },
-			victimVelocity: { x: req.body.victimVelocity.x, y: req.body.victimVelocity.y, z: req.body.victimVelocity.z }
+			killer: parseAPIUserAircraft(killReq.killer),
+			victim: parseAPIUserAircraft(killReq.victim),
+			serverInfo: parseAPIServerInfo(killReq.serverInfo),
+			season: this.app.elo.activeSeason.id,
 		};
 
-		this.log.info(`Kill: ${kill.killerId} killed ${kill.victimId} with ${Weapon[kill.weapon]} in ${Aircraft[kill.killerAircraft]}`);
+		this.log.info(`Kill: ${kill.killer.ownerId} killed ${kill.victim.ownerId} with ${Weapon[kill.weapon]} in ${Aircraft[kill.killer.type]}`);
 
 		// Create the death
 		const death: Death = {
 			id: uuidv4(),
 			killId: kill.id,
-			victimId: kill.victimId,
-			victimAircraft: kill.victimAircraft,
 			time: Date.now(),
-			victimPosition: kill.victimPosition,
-			victimVelocity: kill.victimVelocity,
+			victim: kill.victim,
+			serverInfo: kill.serverInfo,
+			season: this.app.elo.activeSeason.id,
 		};
 		this.app.kills.add(kill);
 		this.app.deaths.add(death);
 
-		const { killer, victim, eloSteal } = await this.app.elo.updateELOForKill(kill);
+		const update = await this.app.elo.updateELOForKill(kill);
+		if (!update) {
+			res.send({
+				killerElo: 0,
+				victimElo: 0,
+				eloSteal: 0
+			});
+			return;
+		}
+
+		const { killer, victim, eloSteal } = update;
 		// res.sendStatus(200);
 		res.send({
 			killerElo: killer.elo,
@@ -227,21 +263,18 @@ class API {
 
 	private async handleDeath(req: express.Request, res: express.Response) {
 		const deathReq = req.body as {
-			victimId: string;
-			victimAircraft: string;
-			killerVelocity: { x: number; y: number; z: number; };
-			victimVelocity: { x: number; y: number; z: number; };
+			victim: APIUserAircraft,
+			serverInfo: APIServerInfo,
 		};
 		const death: Death = {
 			id: uuidv4(),
 			time: Date.now(),
-			victimId: deathReq.victimId,
-			victimAircraft: parseAircraftString(deathReq.victimAircraft),
-			victimPosition: { x: req.body.victimPosition.x, y: req.body.victimPosition.y, z: req.body.victimPosition.z },
-			victimVelocity: { x: req.body.victimVelocity.x, y: req.body.victimVelocity.y, z: req.body.victimVelocity.z }
+			victim: parseAPIUserAircraft(deathReq.victim),
+			serverInfo: parseAPIServerInfo(deathReq.serverInfo),
+			season: this.app.elo.activeSeason.id,
 		};
 
-		this.log.info(`Death: ${death.victimId} died in ${Weapon[death.victimAircraft]}`);
+		this.log.info(`Death: ${death.victim.ownerId} died in ${Weapon[death.victim.type]}`);
 
 		this.app.deaths.add(death);
 		this.app.elo.updateELOForDeath(death);
@@ -250,21 +283,33 @@ class API {
 	}
 
 	private async handleSpawn(req: express.Request, res: express.Response) {
-		const spawnReq = req.body as { userId: string, aircraft: string; };
+		const spawnReq = req.body as { user: APIUserAircraft, serverInfo: APIServerInfo; };
+		// console.log(req.body);
+		// console.log(typeof req.body);
 		const spawn: Spawn = {
 			id: uuidv4(),
 			time: Date.now(),
-			userId: spawnReq.userId,
-			aircraft: parseAircraftString(spawnReq.aircraft),
+			user: parseAPIUserAircraft(spawnReq.user),
+			serverInfo: parseAPIServerInfo(spawnReq.serverInfo),
+			season: this.app.elo.activeSeason.id,
 		};
 
-		this.log.info(`Spawn: ${spawn.userId} spawned in ${Aircraft[spawn.aircraft]}`);
+		this.log.info(`Spawn: ${spawn.user.ownerId} spawned in ${Aircraft[spawn.user.type]}`);
 		this.app.spawns.add(spawn);
 
-		const user = await this.app.users.get(spawn.userId);
+		const user = await this.app.users.get(spawn.user.ownerId);
 		if (!user) return res.sendStatus(400);
-		user.spawns[spawn.aircraft]++;
-		await this.app.users.update(user, user.id);
+		if (!user.spawns) user.spawns = {
+			[Aircraft.AV42c]: 0,
+			[Aircraft.FA26b]: 0,
+			[Aircraft.AH94]: 0,
+			[Aircraft.T55]: 0,
+			[Aircraft.F45A]: 0,
+			[Aircraft.Invalid]: 0,
+		};
+		if (!user.spawns[spawn.user.type]) user.spawns[spawn.user.type] = 0;
+		user.spawns[spawn.user.type]++;
+		await this.app.users.collection.updateOne({ id: user.id }, { $set: { spawns: user.spawns } });
 
 		res.sendStatus(200);
 	}

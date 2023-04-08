@@ -5,6 +5,7 @@ import { Command, CommandEvent } from "strike-discord-framework/dist/command.js"
 
 import { ENDPOINT_BASE, getHost } from "../../api.js";
 import { Application } from "../../application.js";
+import { shouldKillBeCounted } from "../../eloUpdater.js";
 import { createUserEloGraph } from "../../graph/graph.js";
 import { Aircraft, User, Weapon } from "../../structures.js";
 
@@ -51,11 +52,11 @@ class Stats extends Command {
 	allowDm = false;
 	help = {
 		msg: "Lists your or anthers stats",
-		usage: "<userid/name>",
+		usage: "<userid/name> <season #>",
 	};
 
 	@CommandRun
-	async run({ message, framework, app }: CommandEvent<Application>, @Arg({ optional: true }) userLookup: string) {
+	async run({ message, framework, app }: CommandEvent<Application>, @Arg({ optional: true }) userLookup: string, @Arg({ optional: true }) seasonResolver: number) {
 		let user: User;
 		if (userLookup) {
 			user = await lookupUser(app.users, userLookup);
@@ -66,16 +67,33 @@ class Stats extends Command {
 			user = linkedUser;
 		}
 
-		const timeOnServer = calculateTimeOnServer(user);
-		const kills = await app.kills.collection.find({ killerId: user.id }).toArray();
-		const deaths = await app.kills.collection.find({ victimId: user.id }).toArray();
+		const activeSeason = await app.getActiveSeason();
+		let targetSeason = activeSeason;
+		if (seasonResolver) {
+			targetSeason = await app.getSeason(seasonResolver);
+			if (!targetSeason) return framework.error(`Could not find that season`);
+		}
 
-		const f45Kills = kills.filter((k) => k.victimAircraft == Aircraft.F45A);
-		const f45Deaths = deaths.filter((k) => k.killerAircraft == Aircraft.F45A);
-		const fa26bKills = kills.filter((k) => k.victimAircraft == Aircraft.FA26b);
-		const fa26bDeaths = deaths.filter((k) => k.killerAircraft == Aircraft.FA26b);
-		const killsUsingF45 = kills.filter((k) => k.killerAircraft == Aircraft.F45A);
-		const killsUsingFA26b = kills.filter((k) => k.killerAircraft == Aircraft.FA26b);
+		const timeOnServer = calculateTimeOnServer(user);
+		let kills = await app.kills.collection.find({ "killer.ownerId": user.id, season: targetSeason.id }).toArray();
+		let deaths = await app.kills.collection.find({ "victim.ownerId": user.id, season: targetSeason.id }).toArray();
+		kills = kills.filter(k => shouldKillBeCounted(k));
+		deaths = deaths.filter(k => shouldKillBeCounted(k));
+
+		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A];
+		let killsWith = ``;
+		let killsAgainst = ``;
+		let deathsAgainst = ``;
+
+		aircraftMetrics.forEach(ac => {
+			const killsWithAc = kills.filter(k => k.killer.type == ac);
+			const killsAgainstAc = kills.filter(k => k.victim.type == ac);
+			const deathsAgainstAc = deaths.filter(k => k.killer.type == ac);
+
+			killsWith += `${Aircraft[ac]}: ${killsWithAc.length}\n`;
+			killsAgainst += `${Aircraft[ac]}: ${killsAgainstAc.length}\n`;
+			deathsAgainst += `${Aircraft[ac]}: ${deathsAgainstAc.length}\n`;
+		});
 
 		const usedWeapons: Record<Weapon, number> = {} as Record<Weapon, number>;
 		const diedToWeapons: Record<Weapon, number> = {} as Record<Weapon, number>;
@@ -95,30 +113,37 @@ class Stats extends Command {
 			.map(entry => entry[1] + " " + Weapon[entry[0]])
 			.join("\n");
 
-		const rawRank = app.getUserRank(user);
+		const rawRank = app.getUserRank(user, targetSeason);
 		const rank = rawRank == "N/A" ? 0 : rawRank;
-		const playersWithRank = app.getRankedUsers().length;
+		const playersWithRank = targetSeason.active ? app.getRankedUsers().length : targetSeason.totalRankedUsers;
+
 		const embed = new Discord.MessageEmbed();
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
 		embed.addFields([
 			{ name: "Metrics", value: `ELO: ${Math.floor(user.elo)}\nRank: ${rank || "No rank"}\nTop ${(rank / playersWithRank * 100).toFixed(0)}%`, inline: true },
-			{ name: "KDR", value: `K: ${user.kills} \nD: ${user.deaths} \nR: ${(user.kills / user.deaths).toFixed(2)}`, inline: true },
+			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
 			// { name: "Online time", value: `${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
 			{ name: "Last Online", value: `<t:${Math.floor(user.loginTimes[user.loginTimes.length - 1] / 1000)}:R>`, inline: true },
-			{ name: "Kills with", value: `FA-26b: ${killsUsingFA26b.length}\nF-45A: ${killsUsingF45.length}`, inline: true },
-			{ name: "Kills against", value: `FA-26b: ${fa26bKills.length}\nF-45A: ${f45Kills.length}`, inline: true },
-			{ name: "Deaths against", value: `FA-26b: ${fa26bDeaths.length}\nF-45A: ${f45Deaths.length}`, inline: true },
+			{ name: "Kills with", value: killsWith, inline: true },
+			{ name: "Kills against", value: killsAgainst, inline: true },
+			{ name: "Deaths against", value: deathsAgainst, inline: true },
 			{ name: "Weapons", value: weaponKillsStr || "<No Data>", inline: true },
 			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
 			// { name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
 		]);
-		embed.setFooter({ text: `ID: ${user.id}` });
-		const path = await createUserEloGraph(user);
-		const host = getHost();
-		embed.setImage(`${host}${ENDPOINT_BASE}public/graph/${user.id}/${Math.floor(Math.random() * 1000)}`);
+		embed.setFooter({ text: `${targetSeason.name} | ID: ${user.id}` });
 
-		const attachment = new Discord.MessageAttachment(app.elo.getUserLog(user.id), "history.txt");
-		message.channel.send({ embeds: [embed], files: [attachment] });
+		let files: Discord.MessageAttachment[] = [];
+		if (targetSeason.active) {
+			const path = await createUserEloGraph(user);
+			console.log(path);
+			const host = getHost();
+			embed.setImage(`${host}${ENDPOINT_BASE}public/graph/${user.id}/${Math.floor(Math.random() * 1000)}`);
+			const attachment = new Discord.MessageAttachment(app.elo.getUserLog(user.id), "history.txt");
+			files = [attachment];
+		}
+
+		message.channel.send({ embeds: [embed], files: files });
 	}
 }
 

@@ -5,8 +5,10 @@ import Logger from "strike-discord-framework/dist/logger";
 import { v4 as uuidv4 } from "uuid";
 
 import { API } from "./api.js";
-import { BASE_ELO, ELOUpdater } from "./eloUpdater.js";
-import { Aircraft, AllowedMod, Death, Kill, ScoreboardMessage, Spawn, User } from "./structures.js";
+import { BASE_ELO, ELOUpdater, userCanRank } from "./eloUpdater.js";
+import {
+	Aircraft, AllowedMod, Death, Kill, ScoreboardMessage, Season, Spawn, User
+} from "./structures.js";
 
 const SERVER_MAX_PLAYERS = 16;
 const USERS_PER_PAGE = 30;
@@ -21,12 +23,18 @@ function strCmpNoWhitespace(a: string, b: string) {
 class Application {
 	public log: Logger;
 
-	public scoreboardMessages: CollectionManager<string, ScoreboardMessage>;
 	public users: CollectionManager<string, User>;
+	// public killsOld: CollectionManager<string, KillOld>;
+	// public deathsOld: CollectionManager<string, DeathOld>;
+	// public spawnsOld: CollectionManager<string, SpawnOld>;
+
 	public kills: CollectionManager<string, Kill>;
 	public deaths: CollectionManager<string, Death>;
 	public spawns: CollectionManager<string, Spawn>;
+
+	public scoreboardMessages: CollectionManager<string, ScoreboardMessage>;
 	public allowedMods: CollectionManager<string, AllowedMod>;
+	public seasons: CollectionManager<number, Season>;
 
 	public api: API;
 	public elo: ELOUpdater;
@@ -45,10 +53,15 @@ class Application {
 		this.scoreboardMessages = await this.framework.database.collection("scoreboard-messages", false, "id");
 
 		this.users = await this.framework.database.collection("users", false, "id");
-		this.kills = await this.framework.database.collection("kills", false, "id");
-		this.deaths = await this.framework.database.collection("deaths", false, "id");
-		this.spawns = await this.framework.database.collection("spawns", false, "id");
+		// this.killsOld = await this.framework.database.collection("kills", false, "id");
+		// this.deathsOld = await this.framework.database.collection("deaths", false, "id");
+		// this.spawnsOld = await this.framework.database.collection("spawns", false, "id");
 		this.allowedMods = await this.framework.database.collection("allowed-mods", false, "id");
+
+		this.kills = await this.framework.database.collection("kills-v2", false, "id");
+		this.deaths = await this.framework.database.collection("deaths-v2", false, "id");
+		this.spawns = await this.framework.database.collection("spawns-v2", false, "id");
+		this.seasons = await this.framework.database.collection("seasons", false, "id");
 
 		await this.api.init();
 		await this.elo.init();
@@ -63,6 +76,7 @@ class Application {
 					[Aircraft.F45A]: 0,
 					[Aircraft.AH94]: 0,
 					[Aircraft.Invalid]: 0,
+					[Aircraft.T55]: 0
 				};
 				await this.users.update(user, user.id);
 				this.log.info(`Updated user ${user.id} with new spawns object`);
@@ -73,7 +87,175 @@ class Application {
 		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 30;
 		setInterval(() => this.updateScoreboards(), interval);
 		setInterval(() => this.updateEloMultipliers(), eloMultiplierUpdateRate);
+
+		// this.createSeason(2, "Season 2 (T-55)");
+		// this.migrateDb();
 	}
+
+	private async createSeason(seasonId: number, name: string) {
+		const seasonDb = await this.elo.prodDb.collection("seasons", false, "id");
+		const season: Season = {
+			id: seasonId,
+			started: new Date().toISOString(),
+			ended: null,
+			active: false,
+			name: name,
+			totalRankedUsers: 0
+		};
+
+		seasonDb.add(season);
+	}
+
+	public async getActiveSeason(seasonDb = this.seasons): Promise<Season> {
+		const activeSeason = await seasonDb.collection.findOne({ active: true });
+		if (!activeSeason) {
+			this.log.error(`Unable to find active season!`);
+			return {
+				id: -1,
+				started: "XX-XX-XXXX",
+				ended: null,
+				active: false,
+				name: "Invalid Season",
+				totalRankedUsers: 0
+			};
+		}
+
+		return activeSeason;
+	}
+
+	public async getSeason(id: number, seasonDb = this.seasons): Promise<Season> {
+		return seasonDb.get(id);
+	}
+
+	/*
+	public async migrateDb() {
+		this.log.info(`Initializing DB migration...`);
+		let oldKills = await this.killsOld.get();
+		let oldDeaths = await this.deathsOld.get();
+		let oldSpawns = await this.spawnsOld.get();
+		
+		const currentKills = await this.kills.get();
+		const currentDeaths = await this.deaths.get();
+		const currentSpawns = await this.spawns.get();
+
+
+		// this.log.info(`Getting old kills...`);
+		// let oldKills = await this.elo.prodOldKills.get();
+		// this.log.info(`Getting old deaths...`);
+		// let oldDeaths = await this.elo.prodOldDeaths.get();
+		// this.log.info(`Getting old spawns...`);
+		// let oldSpawns = await this.elo.prodOldSpawns.get();
+
+		this.log.info(`Getting current kills...`);
+		const currentKills = await this.elo.prodKills.get();
+		this.log.info(`Getting current deaths...`);
+		const currentDeaths = await this.elo.prodDeaths.get();
+		this.log.info(`Getting current spawns...`);
+		const currentSpawns = await this.elo.prodSpawns.get();
+
+		const currentKillIds = new Set(currentKills.map((kill) => kill.id));
+		const currentDeathIds = new Set(currentDeaths.map((death) => death.id));
+		const currentSpawnIds = new Set(currentSpawns.map((spawn) => spawn.id));
+
+		this.log.info(`Filtering...`);
+		// oldKills = oldKills.filter((kill) => !currentKills.find((currentKill) => currentKill.id == kill.id));
+		// oldDeaths = oldDeaths.filter((death) => !currentDeaths.find((currentDeath) => currentDeath.id == death.id));
+		// oldSpawns = oldSpawns.filter((spawn) => !currentSpawns.find((currentSpawn) => currentSpawn.id == spawn.id));
+		oldKills = oldKills.filter((kill) => !currentKillIds.has(kill.id));
+		oldDeaths = oldDeaths.filter((death) => !currentDeathIds.has(death.id));
+		oldSpawns = oldSpawns.filter((spawn) => !currentSpawnIds.has(spawn.id));
+
+
+		this.log.info(`About to migrate database`);
+		this.log.info(`Old kills: ${oldKills.length}`);
+		this.log.info(`Old deaths: ${oldDeaths.length}`);
+		this.log.info(`Old spawns: ${oldSpawns.length}`);
+		this.log.info(``);
+		this.log.info(`Current kills: ${currentKills.length}`);
+		this.log.info(`Current deaths: ${currentDeaths.length}`);
+		this.log.info(`Current spawns: ${currentSpawns.length}`);
+
+		this.log.info(`Migrating kills...`);
+		await this.elo.prodKills.collection.insertMany(
+			oldKills.map((kill: KillOld): Kill => {
+				return {
+					id: kill.id,
+					killer: {
+						ownerId: kill.killerId,
+						occupants: [kill.killerId],
+						type: kill.killerAircraft,
+						team: kill.killerTeam,
+						position: kill.killerPosition,
+						velocity: kill.killerVelocity,
+					},
+					victim: {
+						ownerId: kill.victimId,
+						occupants: [kill.victimId],
+						type: kill.victimAircraft,
+						team: kill.victimTeam,
+						position: kill.victimPosition,
+						velocity: kill.victimVelocity,
+					},
+					weapon: kill.weapon,
+					season: 1,
+					time: kill.time,
+					serverInfo: {
+						missionId: "A2A BVR Combat",
+						onlineUsers: [],
+						timeOfDay: TimeOfDay.Invalid
+					}
+				};
+			})
+		);
+		this.log.info(`Migrating deaths...`);
+		await this.elo.prodDeaths.collection.insertMany(
+			oldDeaths.map((death: DeathOld): Death => {
+				return {
+					id: death.id,
+					victim: {
+						ownerId: death.victimId,
+						occupants: [death.victimId],
+						type: death.victimAircraft,
+						team: Team.Invalid,
+						position: death.victimPosition,
+						velocity: death.victimVelocity,
+					},
+					season: 1,
+					time: death.time,
+					serverInfo: {
+						missionId: "A2A BVR Combat",
+						onlineUsers: [],
+						timeOfDay: TimeOfDay.Invalid
+					}
+				};
+			}));
+
+		this.log.info(`Migrating spawns...`);
+		await this.elo.prodSpawns.collection.insertMany(
+			oldSpawns.map((spawn: SpawnOld): Spawn => {
+				return {
+					id: spawn.id,
+					user: {
+						ownerId: spawn.userId,
+						occupants: [spawn.userId],
+						type: spawn.aircraft,
+						team: Team.Invalid,
+						position: { x: 0, y: 0, z: 0 },
+						velocity: { x: 0, y: 0, z: 0 }
+					},
+					season: 1,
+					time: spawn.time,
+					serverInfo: {
+						missionId: "A2A BVR Combat",
+						onlineUsers: [],
+						timeOfDay: TimeOfDay.Invalid
+					}
+				};
+			}));
+
+		this.log.info(`Done migrating database`);
+	}
+	*/
 
 	public async createNewUser(id: string) {
 		const user: User = {
@@ -89,12 +271,14 @@ class Application {
 				[Aircraft.F45A]: 0,
 				[Aircraft.AH94]: 0,
 				[Aircraft.Invalid]: 0,
+				[Aircraft.T55]: 0
 			},
 			elo: BASE_ELO,
 			eloHistory: [],
 			discordId: null,
 			isBanned: false,
-			teamKills: 0
+			teamKills: 0,
+			endOfSeasonStats: []
 		};
 		await this.users.add(user);
 		return user;
@@ -103,7 +287,7 @@ class Application {
 	public async updateSortedUsers() {
 		const users = await this.users.get();
 		this.cachedSortedUsers = users.sort((a, b) => b.elo - a.elo);
-		users.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).forEach((u, idx) => u.rank = idx + 1);
+		users.filter(u => userCanRank(u)).forEach((u, idx) => u.rank = idx + 1);
 		return this.cachedSortedUsers;
 	}
 
@@ -187,7 +371,8 @@ class Application {
 		await Promise.all(proms);
 	}
 
-	public getUserRank(user: User) {
+	public getUserRank(user: User, season: Season): number | "N/A" {
+		if (!season.active) return user.endOfSeasonStats.find(s => s.season == season.id)?.rank ?? "N/A";
 		const rankedUser = this.cachedSortedUsers.find(u => u.id == user.id);
 		if (!rankedUser || !rankedUser.rank) return "N/A";
 		return rankedUser.rank;
@@ -197,11 +382,14 @@ class Application {
 		const users = await this.users.collection.find({ discordId: { $ne: null } }).toArray();
 		const server = await this.framework.client.guilds.fetch(enableRankDisplayIn).catch(() => { });
 		if (!server) return this.log.error(`Unable to fetch server ${enableRankDisplayIn}`);
+		const season = await this.getActiveSeason();
+
 		const proms = users.map(async (user) => {
 			const member = await server.members.fetch(user.discordId).catch(() => { });
 			if (!member) return;
-			const rank = this.getUserRank(user);
-			if (rank == "N/A") return;
+			const rawRank = this.getUserRank(user, season);
+			if (rawRank == "N/A") return;
+			const rank = rawRank.toString().padStart(3, "0");
 			// Check to see if they already have a rank in their name
 			const displayNameParts = member.displayName.split(".").map(p => p.trim());
 			let nick: string;
@@ -221,7 +409,7 @@ class Application {
 	}
 
 	public async updateEloMultipliers() {
-		await this.elo.backUpdateElosWithMultipliers(this.users, this.kills, this.deaths, true);
+		await this.elo.backUpdateElosWithMultipliers(this.users, this.kills, this.deaths, this.seasons, true);
 	}
 
 	public async createNewBoard(message: Discord.Message) {

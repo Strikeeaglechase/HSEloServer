@@ -1,3 +1,38 @@
+export enum Aircraft {
+	AV42c,
+	FA26b,
+	F45A,
+	AH94,
+	Invalid,
+	T55
+}
+
+export enum Weapon {
+	Gun,
+	AIM120,
+	AIM9,
+	AIM7,
+	AIM9X,
+	AIRST,
+	HARM,
+	Invalid,
+	AIM9E,
+	CFIT
+}
+
+export enum Team {
+	Allied,
+	Enemy,
+	Invalid
+}
+
+export enum TimeOfDay {
+	Morning,
+	Day,
+	Night,
+	Invalid
+}
+
 export interface ScoreboardMessage {
 	messageId: string;
 	channelId: string;
@@ -19,6 +54,13 @@ export interface User {
 	discordId: string;
 	isBanned: boolean;
 	teamKills: number;
+	endOfSeasonStats: {
+		season: number;
+		rank: number;
+		elo: number;
+		teamKills: number;
+		history: string;
+	}[];
 }
 
 export interface LimitedUserData {
@@ -30,6 +72,7 @@ export interface LimitedUserData {
 	rank?: number;
 	discordId: string;
 	isBanned: boolean;
+	teamKills: number;
 }
 
 export function userToLimitedUser(user: User): LimitedUserData {
@@ -41,17 +84,11 @@ export function userToLimitedUser(user: User): LimitedUserData {
 		elo: user.elo,
 		rank: user.rank,
 		discordId: user.discordId,
-		isBanned: user.isBanned
+		isBanned: user.isBanned,
+		teamKills: user.teamKills
 	};
 }
 
-export enum Aircraft {
-	AV42c,
-	FA26b,
-	F45A,
-	AH94,
-	Invalid
-}
 
 export function parseAircraftString(aircraft: string): Aircraft {
 	const [_, name] = aircraft.split("/");
@@ -60,6 +97,7 @@ export function parseAircraftString(aircraft: string): Aircraft {
 		case "FA-26B": return Aircraft.FA26b;
 		case "SEVTF": return Aircraft.F45A;
 		case "AH-94": return Aircraft.AH94;
+		case "T-55": return Aircraft.T55;
 		default: {
 			console.error(`Unknown aircraft: ${aircraft}`);
 			return Aircraft.Invalid;
@@ -67,18 +105,6 @@ export function parseAircraftString(aircraft: string): Aircraft {
 	}
 }
 
-export enum Weapon {
-	Gun,
-	AIM120,
-	AIM9,
-	AIM7,
-	AIM9X,
-	AIRST,
-	HARM,
-	Invalid,
-	AIM9E,
-	CFIT
-}
 
 export function parseWeaponString(weapon: string): Weapon {
 	// Special weapons
@@ -104,12 +130,6 @@ export function parseWeaponString(weapon: string): Weapon {
 	}
 }
 
-export enum Team {
-	Allied,
-	Enemy,
-	Invalid
-}
-
 export function parseTeamString(team: string): Team {
 	switch (team) {
 		case "Allied": return Team.Allied;
@@ -121,7 +141,19 @@ export function parseTeamString(team: string): Team {
 	}
 }
 
-export interface Kill {
+export function parseTimeOfDayString(time: string): TimeOfDay {
+	switch (time) {
+		case "Morning": return TimeOfDay.Morning;
+		case "Day": return TimeOfDay.Day;
+		case "Night": return TimeOfDay.Night;
+		default: {
+			console.error(`Unknown time of day: ${time}`);
+			return TimeOfDay.Invalid;
+		}
+	}
+}
+
+export interface KillOld {
 	killerId: string;
 	victimId: string;
 	victimTeam: Team;
@@ -139,7 +171,7 @@ export interface Kill {
 	victimVelocity: { x: number, y: number, z: number; };
 }
 
-export function isKill(kill: any): kill is Kill {
+export function isKillOld(kill: any): kill is KillOld {
 	return typeof kill.killerId == "string" &&
 		typeof kill.victimId == "string" &&
 		typeof kill.killerAircraft == "number" &&
@@ -147,22 +179,61 @@ export function isKill(kill: any): kill is Kill {
 		typeof kill.weapon == "number";
 }
 
+
+
+export interface UserAircraftInformation {
+	ownerId: string;
+	occupants: string[];
+	position: { x: number, y: number, z: number; };
+	velocity: { x: number, y: number, z: number; };
+	team: Team;
+	type: Aircraft;
+}
+
+export interface CurrentServerInformation {
+	onlineUsers: string[];
+	timeOfDay: TimeOfDay;
+	missionId: string;
+}
+
+export interface Kill {
+	killer: UserAircraftInformation;
+	victim: UserAircraftInformation;
+	serverInfo: CurrentServerInformation;
+
+	weapon: Weapon;
+	time: number;
+	id: string;
+	season: number;
+}
+
 const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
 	[Aircraft.AV42c]: [],
 	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
 	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.CFIT],
 	[Aircraft.AH94]: [],
-	[Aircraft.Invalid]: []
+	[Aircraft.Invalid]: [],
+	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
 };
 export function isKillValid(kill: Kill) {
-	if (kill.victimAircraft == Aircraft.Invalid) return false;
-	if (kill.killerAircraft == Aircraft.Invalid) return false;
+	if (kill.victim.type == Aircraft.Invalid) return false;
+	if (kill.killer.type == Aircraft.Invalid) return false;
 	if (kill.weapon == Weapon.Invalid) return false;
-	const loadout = aircraftLoadoutMap[kill.killerAircraft];
+	const loadout = aircraftLoadoutMap[kill.killer.type];
 	return loadout.includes(kill.weapon);
 }
 
 export interface Death {
+	victim: UserAircraftInformation;
+	serverInfo: CurrentServerInformation;
+
+	time: number;
+	killId?: string;
+	id: string;
+	season: number;
+}
+
+export interface DeathOld {
 	victimId: string;
 	time: number;
 	victimAircraft: Aircraft;
@@ -173,19 +244,29 @@ export interface Death {
 	victimVelocity: { x: number, y: number, z: number; };
 }
 
-export function isDeath(death: any): death is Death {
+
+export function isDeath(death: any): death is DeathOld {
 	return typeof death.victimId == "string" &&
 		typeof death.victimAircraft == "number";
 }
 
 export interface Spawn {
+	user: UserAircraftInformation;
+	serverInfo: CurrentServerInformation;
+
+	time: number;
+	id: string;
+	season: number;
+}
+
+export interface SpawnOld {
 	userId: string;
 	time: number;
 	aircraft: Aircraft;
 	id: string;
 }
 
-export function isSpawn(spawn: any): spawn is Spawn {
+export function isSpawn(spawn: any): spawn is SpawnOld {
 	return typeof spawn.userId == "string" &&
 		typeof spawn.aircraft == "number";
 }
@@ -198,4 +279,13 @@ export interface AllowedMod {
 	name: string;
 	id: string;
 	hash: string;
+}
+
+export interface Season {
+	name: string;
+	id: number;
+	started: string;
+	ended: string;
+	active: boolean;
+	totalRankedUsers: number;
 }

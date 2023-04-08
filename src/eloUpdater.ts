@@ -12,6 +12,7 @@ import { Aircraft, Death, isKillValid, Kill, Season, Spawn, User, Weapon } from 
 
 const produceEndOfSeasonData = true;
 const endOfSeasonTarget = 1;
+
 const backUpdateYieldAfter = 1000;
 const BASE_ELO = 2000;
 
@@ -68,6 +69,11 @@ function shouldKillBeCounted(kill: Kill) {
 	return true;
 }
 
+function shouldKillContributeToMultipliers(kill: Kill) {
+	if (kill.weapon == Weapon.CFIT) return false;
+	return shouldKillBeCounted(kill);
+}
+
 function shouldDeathBeCounted(death: Death, kill?: Kill) {
 	// If T-55, ignore
 	if (death.victim.type == Aircraft.T55) return false;
@@ -114,15 +120,18 @@ class ELOUpdater {
 		this.log = app.log;
 	}
 
-	public getUserLog(userId: string) {
-		const log = this.getUserLogText(userId);
+	public async getUserLog(userId: string, season: Season) {
+		const log = await this.getUserLogText(userId, season);
 		if (!fs.existsSync("../userLogs")) fs.mkdirSync("../userLogs");
-		fs.writeFileSync(`../userLogs/${userId}.txt`, log);
-		return path.resolve(`../userLogs/${userId}.txt`);
+		fs.writeFileSync(`../userLogs/${userId}-S${season.id}.txt`, log);
+		return path.resolve(`../userLogs/${userId}-S${season.id}.txt`);
 	}
 
-	public getUserLogText(userId: string) {
-		return this.userLogs[userId] ?? "No data";
+	public async getUserLogText(userId: string, season: Season) {
+		if (season.active) return this.userLogs[userId] ?? "No data";
+		const user = await this.app.users.get(userId);
+		if (!user) return "No data";
+		return user.endOfSeasonStats.find(s => s.season == season.id)?.history ?? "No data";
 	}
 
 	public async init() {
@@ -142,7 +151,7 @@ class ELOUpdater {
 		this.activeSeason = await this.app.getActiveSeason();
 
 		// this.checkSpawns();
-		// this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
+		this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
 		// this.backUpdateElosWithMultipliers(this.app.users, this.app.kills, this.app.deaths, this.app.seasons, false);
 	}
 
@@ -176,6 +185,7 @@ class ELOUpdater {
 	}
 
 	private getEloMultipliers(kills: Kill[]) {
+		kills = kills.filter(k => shouldKillContributeToMultipliers(k));
 		if (kills.length == 0) return;
 		const killCounts: Record<KillString, number> = {};
 
@@ -300,9 +310,25 @@ class ELOUpdater {
 		let events: { event: Kill | Death | Action, time: number, type: "kill" | "death" | "action"; }[] = [];
 		kills.forEach(kill => events.push({ event: kill, time: kill.time, type: "kill" }));
 		deaths.forEach(death => events.push({ event: death, time: death.time, type: "death" }));
+
+		const seasonStartTime = new Date(season.started).getTime();
+		const seasonEndTime = new Date(season.ended).getTime();
 		users.forEach(user => {
-			user.loginTimes.forEach(login => events.push({ event: { action: "Login", userId: user.id }, time: login, type: "action" }));
-			user.logoutTimes.forEach(logout => events.push({ event: { action: "Logout", userId: user.id }, time: logout, type: "action" }));
+			const validLoginTimes = user.loginTimes.filter(t =>
+				(seasonStartTime == 0 || t >= seasonStartTime) &&
+				(seasonEndTime == 0 || t <= seasonEndTime)
+			);
+
+			const validLogoutTimes = user.logoutTimes.filter(t =>
+				(seasonStartTime == 0 || t >= seasonStartTime) &&
+				(seasonEndTime == 0 || t <= seasonEndTime)
+			);
+
+			validLoginTimes.forEach(login => events.push({ event: { action: "Login", userId: user.id }, time: login, type: "action" }));
+			validLogoutTimes.forEach(logout => events.push({ event: { action: "Logout", userId: user.id }, time: logout, type: "action" }));
+
+			// user.loginTimes.forEach(login => events.push({ event: { action: "Login", userId: user.id }, time: login, type: "action" }));
+			// user.logoutTimes.forEach(logout => events.push({ event: { action: "Logout", userId: user.id }, time: logout, type: "action" }));
 		});
 
 		events = events.sort((a, b) => a.time - b.time);

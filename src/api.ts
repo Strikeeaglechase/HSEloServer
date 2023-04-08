@@ -164,7 +164,7 @@ class API {
 
 	private async getUserLog(req: express.Request, res: express.Response) {
 		const id = req.params.id;
-		const log = this.app.elo.getUserLogText(id);
+		const log = await this.app.elo.getUserLogText(id, await this.app.getActiveSeason());
 		res.send(log);
 	}
 

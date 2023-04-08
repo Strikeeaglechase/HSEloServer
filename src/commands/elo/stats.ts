@@ -79,8 +79,9 @@ class Stats extends Command {
 		let deaths = await app.kills.collection.find({ "victim.ownerId": user.id, season: targetSeason.id }).toArray();
 		kills = kills.filter(k => shouldKillBeCounted(k));
 		deaths = deaths.filter(k => shouldKillBeCounted(k));
+		console.log(targetSeason, kills);
 
-		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A];
+		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55];
 		let killsWith = ``;
 		let killsAgainst = ``;
 		let deathsAgainst = ``;
@@ -133,15 +134,15 @@ class Stats extends Command {
 		]);
 		embed.setFooter({ text: `${targetSeason.name} | ID: ${user.id}` });
 
-		let files: Discord.MessageAttachment[] = [];
+		// let files: Discord.MessageAttachment[] = [];
 		if (targetSeason.active) {
 			const path = await createUserEloGraph(user);
-			console.log(path);
+			// console.log(path);
 			const host = getHost();
 			embed.setImage(`${host}${ENDPOINT_BASE}public/graph/${user.id}/${Math.floor(Math.random() * 1000)}`);
-			const attachment = new Discord.MessageAttachment(app.elo.getUserLog(user.id), "history.txt");
-			files = [attachment];
 		}
+		const attachment = new Discord.MessageAttachment(await app.elo.getUserLog(user.id, targetSeason), "history.txt");
+		const files = [attachment];
 
 		message.channel.send({ embeds: [embed], files: files });
 	}

@@ -151,7 +151,7 @@ class ELOUpdater {
 		this.activeSeason = await this.app.getActiveSeason();
 
 		// this.checkSpawns();
-		this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
+		// this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
 		// this.backUpdateElosWithMultipliers(this.app.users, this.app.kills, this.app.deaths, this.app.seasons, false);
 	}
 

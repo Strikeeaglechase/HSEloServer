@@ -90,6 +90,7 @@ class Application {
 
 		// this.createSeason(2, "Season 2 (T-55)");
 		// this.migrateDb();
+		// this.clearAllUserStats();
 	}
 
 	private async createSeason(seasonId: number, name: string) {
@@ -104,6 +105,32 @@ class Application {
 		};
 
 		seasonDb.add(season);
+	}
+
+	private async clearAllUserStats() {
+		console.log(`Clearing all user stats...`);
+		const users = await this.elo.prodUsers.get();
+
+		const proms = users.map(async (user) => {
+			user.kills = 0;
+			user.deaths = 0;
+			user.spawns = {
+				[Aircraft.AV42c]: 0,
+				[Aircraft.FA26b]: 0,
+				[Aircraft.F45A]: 0,
+				[Aircraft.AH94]: 0,
+				[Aircraft.Invalid]: 0,
+				[Aircraft.T55]: 0
+			};
+			user.elo = BASE_ELO;
+			user.eloHistory = [];
+			if (!user.isBanned) user.teamKills = 0;
+			await this.elo.prodUsers.update(user, user.id);
+		});
+		console.log(`Waiting for ${proms.length} promises to resolve...`);
+		await Promise.all(proms);
+
+		console.log(`Done, reset ${users.length} users!`);
 	}
 
 	public async getActiveSeason(seasonDb = this.seasons): Promise<Season> {
@@ -167,13 +194,13 @@ class Application {
 
 
 		this.log.info(`About to migrate database`);
-		this.log.info(`Old kills: ${oldKills.length}`);
-		this.log.info(`Old deaths: ${oldDeaths.length}`);
-		this.log.info(`Old spawns: ${oldSpawns.length}`);
+		this.log.info(`Old kills: ${ oldKills.length }`);
+		this.log.info(`Old deaths: ${ oldDeaths.length }`);
+		this.log.info(`Old spawns: ${ oldSpawns.length }`);
 		this.log.info(``);
-		this.log.info(`Current kills: ${currentKills.length}`);
-		this.log.info(`Current deaths: ${currentDeaths.length}`);
-		this.log.info(`Current spawns: ${currentSpawns.length}`);
+		this.log.info(`Current kills: ${ currentKills.length }`);
+		this.log.info(`Current deaths: ${ currentDeaths.length }`);
+		this.log.info(`Current spawns: ${ currentSpawns.length }`);
 
 		this.log.info(`Migrating kills...`);
 		await this.elo.prodKills.collection.insertMany(
@@ -300,7 +327,7 @@ class Application {
 		await this.updateSortedUsers();
 		const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
 
-		// ```ansi
+		// ```ansi;
 		// Offline player
 		// Offline player
 		// [1;2m[1;37mOnline player[0m[0m
@@ -389,15 +416,17 @@ class Application {
 			if (!member) return;
 			const rawRank = this.getUserRank(user, season);
 			if (rawRank == "N/A") return;
-			const rank = rawRank.toString().padStart(3, "0");
+			let rank = rawRank.toString().padStart(3, "0") + ". ";
+			if (rawRank > 999) rank = "";
+
 			// Check to see if they already have a rank in their name
 			const displayNameParts = member.displayName.split(".").map(p => p.trim());
 			let nick: string;
 			if (member.displayName != member.user.username && !isNaN(parseInt(displayNameParts[0]))) {
 				const name = displayNameParts.slice(1).join(".");
-				nick = `${rank}. ${name}`;
+				nick = `${rank}${name}`.substring(0, 32);
 			} else {
-				nick = `${rank}. ${member.displayName}`;
+				nick = `${rank}${member.displayName}`.substring(0, 32);
 			}
 
 			if (member.displayName != nick) {

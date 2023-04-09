@@ -10,7 +10,7 @@ import { Application } from "./application.js";
 import { shouldUserBeBanned } from "./banHandler.js";
 import { Aircraft, Death, isKillValid, Kill, Season, Spawn, User, Weapon } from "./structures.js";
 
-const produceEndOfSeasonData = true;
+const produceEndOfSeasonData = false;
 const endOfSeasonTarget = 1;
 
 const backUpdateYieldAfter = 1000;

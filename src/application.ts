@@ -86,7 +86,9 @@ class Application {
 		const interval = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60;
 		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 30;
 		setInterval(() => this.updateScoreboards(), interval);
-		setInterval(() => this.updateEloMultipliers(), eloMultiplierUpdateRate);
+		setInterval(() => this.runBackUpdate(), eloMultiplierUpdateRate);
+
+		this.runBackUpdate(); // Run it once on startup
 
 		// this.createSeason(2, "Season 2 (T-55)");
 		// this.migrateDb();
@@ -437,7 +439,7 @@ class Application {
 		await Promise.all(proms);
 	}
 
-	public async updateEloMultipliers() {
+	public async runBackUpdate() {
 		await this.elo.backUpdateElosWithMultipliers(this.users, this.kills, this.deaths, this.seasons, true);
 	}
 

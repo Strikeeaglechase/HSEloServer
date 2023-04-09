@@ -317,11 +317,13 @@ class Application {
 		const users = await this.users.get();
 		this.cachedSortedUsers = users.sort((a, b) => b.elo - a.elo);
 		users.filter(u => userCanRank(u)).forEach((u, idx) => u.rank = idx + 1);
+		users.filter(u => !userCanRank(u)).forEach(u => u.rank = 0);
 		return this.cachedSortedUsers;
 	}
 
 	public getRankedUsers() {
-		return this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK);
+		// return this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK);
+		return this.cachedSortedUsers.filter(u => userCanRank(u));
 	}
 
 	private async createScoreboardMessage() {

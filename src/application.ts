@@ -417,13 +417,13 @@ class Application {
 			const member = await server.members.fetch(user.discordId).catch(() => { });
 			if (!member) return;
 			const rawRank = this.getUserRank(user, season);
-			if (rawRank == "N/A") return;
 			let rank = rawRank.toString().padStart(3, "0") + ". ";
-			if (rawRank > 999) rank = "";
+			if (rawRank == "N/A") rank = "";
+			else if (rawRank > 999) rank = "";
 
 			// Check to see if they already have a rank in their name
-			const displayNameParts = member.displayName.split(".").map(p => p.trim());
 			let nick: string;
+			const displayNameParts = member.displayName.split(".").map(p => p.trim());
 			if (member.displayName != member.user.username && !isNaN(parseInt(displayNameParts[0]))) {
 				const name = displayNameParts.slice(1).join(".");
 				nick = `${rank}${name}`.substring(0, 32);

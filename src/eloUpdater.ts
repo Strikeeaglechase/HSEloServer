@@ -508,6 +508,8 @@ class ELOUpdater {
 			};
 		}
 
+		if (!shouldKillBeCounted(kill)) return;
+
 		const killStr = getKillStr(kill);
 		let metric = this.lastMultipliers.find(m => m.killStr == killStr);
 		let info = "";

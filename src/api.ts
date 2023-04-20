@@ -113,6 +113,7 @@ class API {
 		this.registerRoute("POST", "spawns", this.handleSpawn, true);
 		this.registerRoute("POST", "online", this.updateOnlineUsers, true);
 		this.registerRoute("GET", "mods", this.getAllowedMods, true);
+		this.registerRoute("GET", "liveryUpdate", this.handleLiveryUpdate, true);
 		// this.registerRoute("GET", "")
 
 
@@ -312,6 +313,21 @@ class API {
 		await this.app.users.collection.updateOne({ id: user.id }, { $set: { spawns: user.spawns } });
 
 		res.sendStatus(200);
+	}
+
+	private async handleLiveryUpdate(req: express.Request, res: express.Response) {
+		const userId = req.query.userId as string;
+		const aircraft = req.query.aircraft as string;
+		const liveryId = req.query.liveryId as string;
+
+		const user = await this.app.users.get(userId);
+		if (!user) return res.sendStatus(200);
+		if (user.kills < 10) return res.sendStatus(200);
+
+		this.log.info(`Livery Update: ${user.id} updated their ${aircraft} livery to ${liveryId}`);
+		const id = await this.app.liveryUpdater.addTask(user, parseAircraftString(aircraft), liveryId, user.kills);
+		this.log.info(`Got livery ${id} for ${user.id}`);
+		res.send(id);
 	}
 
 	private async getAllowedMods(req: express.Request, res: express.Response) {

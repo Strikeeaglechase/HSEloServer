@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { API } from "./api.js";
 import { BASE_ELO, ELOUpdater, userCanRank } from "./eloUpdater.js";
+import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
 	Aircraft, AllowedMod, Death, Kill, ScoreboardMessage, Season, Spawn, User
 } from "./structures.js";
@@ -38,6 +39,7 @@ class Application {
 
 	public api: API;
 	public elo: ELOUpdater;
+	public liveryUpdater: LiveryModifierManager;
 
 	public onlineUsers: { name: string, id: string; team: string; }[] = [];
 	public cachedSortedUsers: User[] = [];
@@ -46,6 +48,7 @@ class Application {
 		this.log = framework.log;
 		this.api = new API(this);
 		this.elo = new ELOUpdater(this);
+		this.liveryUpdater = new LiveryModifierManager(this);
 	}
 
 	public async init() {

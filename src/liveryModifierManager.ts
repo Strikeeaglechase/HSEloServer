@@ -17,7 +17,8 @@ interface LiveryModifierTask {
 
 class LiveryModifierManager {
 	private tasks: LiveryModifierTask[] = [];
-	private cache: LiveryModifierManager[] = [];
+	private cache: LiveryModifierTask[] = [];
+	private runningTask: LiveryModifierTask;
 
 	constructor(private app: Application) {
 		this.process();
@@ -27,24 +28,41 @@ class LiveryModifierManager {
 		if (this.tasks.length == 0) return setTimeout(() => this.process(), 250);
 
 		const task = this.tasks.shift();
+		this.runningTask = task;
 		this.app.log.info(`Processing livery modification for ${task.user.pilotNames[0]} (${task.user.id})...`);
 		await new Promise<void>(res => {
 			const child = fork("./liveryModifier.js", [
+				process.env.STEAM_USER,
+				process.env.STEAM_PASS,
 				task.user.pilotNames[0],
 				task.user.id,
 				task.liveryId,
 				Aircraft[task.aircraft],
 				task.kills.toString()
-			]);
+			], {
+				stdio: ["pipe", "pipe", "pipe", "ipc"]
+			});
 
+			let hasRes = false;
 			child.stdout.on("data", data => {
 				const msg = (data.toString() as string).trim();
 				this.app.log.info(`[LiveryModifier] ${msg}`);
-				if (msg.startsWith("RESULT: ")) {
-					const resultId = msg.substring(8);
+				if (msg.includes("RESULT: ")) {
+					const resultId = msg.match(/RESULT: (\d+)/)[1];
 					task.resultId = resultId;
 					task.resolver(resultId);
+					this.runningTask = null;
+					this.cache.push(task);
+					this.app.log.info(`Livery modification for ${task.user.pilotNames[0]} (${task.user.id}) finished with result ID ${resultId}`);
+					hasRes = true;
 					res();
+				}
+			});
+
+			child.on("close", () => {
+				if (!hasRes) {
+					res();
+					hasRes = true;
 				}
 			});
 		});
@@ -54,7 +72,12 @@ class LiveryModifierManager {
 	}
 
 	public addTask(user: User, aircraft: Aircraft, liveryId: string, kills: number): Promise<string> {
-		const existing = this.tasks.find(t => t.user.id === user.id && t.liveryId === liveryId);
+		if (this.runningTask && this.runningTask.user.id == user.id) {
+			console.log(`Skipping livery modification for ${user.pilotNames[0]} (${user.id}) because it's already running`);
+			return;
+		}
+
+		const existing = this.cache.find(t => t.user.id === user.id && t.liveryId === liveryId);
 		if (existing) {
 			const td = Date.now() - existing.time;
 			if (td < cacheTime) {
@@ -75,3 +98,5 @@ class LiveryModifierManager {
 		});
 	}
 }
+
+export { LiveryModifierManager };

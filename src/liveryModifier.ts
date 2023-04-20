@@ -1,10 +1,13 @@
 import { spawn } from "child_process";
-import { config } from "dotenv";
+// import { config } from "dotenv";
 import fs from "fs";
 import Jimp from "jimp";
 import path from "path";
 
-config();
+// config();
+let steamUser = "";
+let steamPass = "";
+
 const VTOL_ID = "667970";
 const outputPath = "../liv-mod-output";
 if (!fs.existsSync(outputPath)) fs.mkdirSync(outputPath);
@@ -50,7 +53,7 @@ function colors(image: Jimp, index: number) {
 async function getFromSteam(id: string) {
 	const command = [
 		"+force_install_dir", basePath,
-		"+login", process.env.STEAM_USER, process.env.STEAM_PASS,
+		"+login", steamUser, steamPass,
 		// "+workshop_status", VTOL_ID,
 		"+workshop_download_item", VTOL_ID, id,
 		"+quit"
@@ -285,7 +288,7 @@ async function upload(user: string, userId: string, itemId: string, kills: numbe
 
 	const command = [
 		"+force_install_dir", basePath,
-		"+login", process.env.STEAM_USER, process.env.STEAM_PASS,
+		"+login", steamUser, steamPass,
 		// "+workshop_status", VTOL_ID,
 		"+workshop_build_item", vdfPath,
 		"+quit"
@@ -324,7 +327,9 @@ function parseAircraft(name: string) {
 }
 
 async function run() {
-	const [user, userId, workshopId, aircraft, kills] = process.argv;
+	const [, , sUser, sPass, user, userId, workshopId, aircraft, kills] = process.argv;
+	steamUser = sUser;
+	steamPass = sPass;
 	const id = await modify(user, userId, workshopId, parseAircraft(aircraft), parseInt(kills));
 	console.log(`RESULT: ${id}`);
 }

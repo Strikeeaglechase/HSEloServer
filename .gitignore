@@ -12,6 +12,8 @@ out-log.txt
 out.*
 log.txt
 dist
+liv-mod-output
+steamapps
 
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

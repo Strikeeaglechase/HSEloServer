@@ -378,7 +378,7 @@ class Application {
 		return embed;
 	}
 
-	private table(data: (string | number)[][], tEntryMaxLen = 16) {
+	public table(data: (string | number)[][], tEntryMaxLen = 16) {
 		const widths = data[0].map((_, i) => Math.max(...data.map(row => String(row[i]).length)));
 		return data.map(row => row.map((val, i) => String(val).padEnd(widths[i]).substring(0, tEntryMaxLen)).join(" "));
 	}

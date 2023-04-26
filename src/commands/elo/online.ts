@@ -13,9 +13,6 @@ class Online extends Command {
 
 	@CommandRun
 	async run({ message, framework, app }: CommandEvent<Application>) {
-		app.onlineUsers = [
-			{ id: "76561198985917972", name: "Hello", team: "Allied" }
-		];
 		const onlineUsers = await Promise.all(app.onlineUsers.map(async user => app.users.get(user.id)));
 		const elos: number[] = [];
 

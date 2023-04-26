@@ -13,6 +13,7 @@ class Online extends Command {
 
 	@CommandRun
 	async run({ message, framework, app }: CommandEvent<Application>) {
+		if (app.onlineUsers.length == 0) return framework.error(`No users online!`);
 		const onlineUsers = await Promise.all(app.onlineUsers.map(async user => app.users.get(user.id)));
 		const elos: number[] = [];
 

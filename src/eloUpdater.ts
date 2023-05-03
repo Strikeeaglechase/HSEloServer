@@ -8,6 +8,7 @@ import Logger from "strike-discord-framework/dist/logger.js";
 
 import { Application } from "./application.js";
 import { shouldUserBeBanned } from "./banHandler.js";
+import { createUserEloGraph } from "./graph/graph.js";
 import { Aircraft, Death, isKillValid, Kill, Season, Spawn, User, Weapon } from "./structures.js";
 
 const produceEndOfSeasonData = false;
@@ -28,6 +29,10 @@ const stealPerEloGainedPoints = 1 / 100;
 const stealPerEloLostPoints = 0.5 / 100;
 // Loose 0% of ELO for a team kill
 const teamKillPenalty = 0.00;
+// Loose 25 points if you die to a T-55
+const t55Penalty = 25;
+// Only loose elo from a t55 if above 2500 elo
+const t55PenaltyThreshold = 2500;
 
 // Maximum multiplier for an aircraft/weapon combo (limited by maxEloStealPrec)
 const maxWeaponMultiplier = Infinity;
@@ -50,7 +55,7 @@ const maxCfitDist = 20 * 1852;
 
 function shouldKillBeCounted(kill: Kill) {
 	// If T-55, ignore
-	if (kill.killer.type == Aircraft.T55) return false;
+	// if (kill.killer.type == Aircraft.T55) return false;
 	if (kill.victim.type == Aircraft.T55) return false;
 
 	// If invalid, ignore
@@ -71,6 +76,8 @@ function shouldKillBeCounted(kill: Kill) {
 
 function shouldKillContributeToMultipliers(kill: Kill) {
 	if (kill.weapon == Weapon.CFIT) return false;
+	if (kill.killer.type == Aircraft.T55) return false;
+	if (kill.victim.type == Aircraft.T55) return false;
 	return shouldKillBeCounted(kill);
 }
 
@@ -151,7 +158,7 @@ class ELOUpdater {
 		this.activeSeason = await this.app.getActiveSeason();
 
 		// this.checkSpawns();
-		// this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
+		this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
 		// this.backUpdateElosWithMultipliers(this.app.users, this.app.kills, this.app.deaths, this.app.seasons, false);
 	}
 
@@ -348,11 +355,21 @@ class ELOUpdater {
 				if (!killer || !victim || !shouldKillBeCounted(kill)) {
 					continue;
 				}
+
 				if (kill.killer.team == kill.victim.team) {
 					const loss = killer.elo * teamKillPenalty;
 					killer.elo -= loss;
 					this.updateUserLogForTK(timestamp, killer, victim, loss);
 					killer.eloHistory.push({ elo: killer.elo, time: e.time });
+					continue;
+				}
+
+				if (kill.killer.type == Aircraft.T55) {
+					if (victim.elo < t55Penalty) continue;
+					const loss = t55Penalty;
+					victim.elo -= loss;
+					this.updateUserLogForT55(timestamp, killer, victim, loss);
+					victim.eloHistory.push({ elo: killer.elo, time: e.time });
 					continue;
 				}
 
@@ -445,19 +462,19 @@ class ELOUpdater {
 				this.log.info(`Updated ${users.length} users and season ${season.id} with ${season.totalRankedUsers} ranked users`);
 				await seasonsDb.update(season, season.id);
 			}
-			// let ru = 0;
-			// for (let i = 0; i < 40; i++) {
-			// 	if (users[i].kills > 10) {
-			// 		const totalGained = Object.values(eloGainedPerWeapon[users[i].id]).reduce((a, b) => a + b, 0);
-			// 		const gainedWpnStr = Object.entries(eloGainedPerWeapon[users[i].id]).map(([wpn, elo]) => `${wpn}: ${Math.round(elo / totalGained * 100)}%`).join(", ");
-			// 		console.log(`${users[i].pilotNames[0]} (${users[i].id}) - ${users[i].elo.toFixed(1)}  ${gainedWpnStr}`);
-			// 	}
-			// }
-			// const last = users[users.length - 1];
-			// console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
-			// console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
-			// fs.writeFileSync('../out-log.txt', this.userLogs["76561198162340088"]);
-			// await createUserEloGraph(users.find(u => u.id == "76561198119758293"));
+			let ru = 0;
+			for (let i = 0; i < 40; i++) {
+				if (users[i].kills > 10) {
+					const totalGained = Object.values(eloGainedPerWeapon[users[i].id]).reduce((a, b) => a + b, 0);
+					const gainedWpnStr = Object.entries(eloGainedPerWeapon[users[i].id]).map(([wpn, elo]) => `${wpn}: ${Math.round(elo / totalGained * 100)}%`).join(", ");
+					console.log(`${users[i].pilotNames[0]} (${users[i].id}) - ${users[i].elo.toFixed(1)}  ${gainedWpnStr}`);
+				}
+			}
+			const last = users[users.length - 1];
+			console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
+			console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
+			fs.writeFileSync('../out-log.txt', this.userLogs["76561198065598224"]);
+			await createUserEloGraph(users.find(u => u.id == "76561198065598224"));
 			// console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
 			// console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
 			process.exit();
@@ -481,6 +498,13 @@ class ELOUpdater {
 		if (!this.userLogs[victim.id]) this.userLogs[victim.id] = "";
 		this.userLogs[killer.id] += `[${timestamp}] Teamkill ${victim.pilotNames[0]} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)} \n`;
 		this.userLogs[victim.id] += `[${timestamp}] Death to teamkill from ${killer.pilotNames[0]} no elo lost \n`;
+	}
+
+	public async updateUserLogForT55(timestamp: string, killer: User, victim: User, eloSteal: number) {
+		if (!this.userLogs[killer.id]) this.userLogs[killer.id] = "";
+		if (!this.userLogs[victim.id]) this.userLogs[victim.id] = "";
+		this.userLogs[killer.id] += `[${timestamp}] Kill ${victim.pilotNames[0]} with T-55 (no elo gained) \n`;
+		this.userLogs[victim.id] += `[${timestamp}] Death from ${killer.pilotNames[0]} with T-55 lost ${eloSteal} elo \n`;
 	}
 
 	public async updateELOForKill(kill: Kill) {

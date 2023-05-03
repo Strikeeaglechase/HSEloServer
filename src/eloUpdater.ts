@@ -368,7 +368,7 @@ class ELOUpdater {
 					const loss = t55Penalty;
 					victim.elo -= loss;
 					this.updateUserLogForT55(timestamp, killer, victim, loss);
-					victim.eloHistory.push({ elo: killer.elo, time: e.time });
+					victim.eloHistory.push({ elo: victim.elo, time: e.time });
 					continue;
 				}
 

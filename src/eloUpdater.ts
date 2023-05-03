@@ -8,7 +8,6 @@ import Logger from "strike-discord-framework/dist/logger.js";
 
 import { Application } from "./application.js";
 import { shouldUserBeBanned } from "./banHandler.js";
-import { createUserEloGraph } from "./graph/graph.js";
 import { Aircraft, Death, isKillValid, Kill, Season, Spawn, User, Weapon } from "./structures.js";
 
 const produceEndOfSeasonData = false;
@@ -158,7 +157,7 @@ class ELOUpdater {
 		this.activeSeason = await this.app.getActiveSeason();
 
 		// this.checkSpawns();
-		this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
+		// this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
 		// this.backUpdateElosWithMultipliers(this.app.users, this.app.kills, this.app.deaths, this.app.seasons, false);
 	}
 
@@ -462,21 +461,21 @@ class ELOUpdater {
 				this.log.info(`Updated ${users.length} users and season ${season.id} with ${season.totalRankedUsers} ranked users`);
 				await seasonsDb.update(season, season.id);
 			}
-			let ru = 0;
-			for (let i = 0; i < 40; i++) {
-				if (users[i].kills > 10) {
-					const totalGained = Object.values(eloGainedPerWeapon[users[i].id]).reduce((a, b) => a + b, 0);
-					const gainedWpnStr = Object.entries(eloGainedPerWeapon[users[i].id]).map(([wpn, elo]) => `${wpn}: ${Math.round(elo / totalGained * 100)}%`).join(", ");
-					console.log(`${users[i].pilotNames[0]} (${users[i].id}) - ${users[i].elo.toFixed(1)}  ${gainedWpnStr}`);
-				}
-			}
-			const last = users[users.length - 1];
-			console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
-			console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
-			fs.writeFileSync('../out-log.txt', this.userLogs["76561198065598224"]);
-			await createUserEloGraph(users.find(u => u.id == "76561198065598224"));
-			// console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
-			// console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
+			// let ru = 0;
+			// for (let i = 0; i < 40; i++) {
+			// 	if (users[i].kills > 10) {
+			// 		const totalGained = Object.values(eloGainedPerWeapon[users[i].id]).reduce((a, b) => a + b, 0);
+			// 		const gainedWpnStr = Object.entries(eloGainedPerWeapon[users[i].id]).map(([wpn, elo]) => `${wpn}: ${Math.round(elo / totalGained * 100)}%`).join(", ");
+			// 		console.log(`${users[i].pilotNames[0]} (${users[i].id}) - ${users[i].elo.toFixed(1)}  ${gainedWpnStr}`);
+			// 	}
+			// }
+			// const last = users[users.length - 1];
+			// console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
+			// console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
+			// fs.writeFileSync('../out-log.txt', this.userLogs["76561198065598224"]);
+			// await createUserEloGraph(users.find(u => u.id == "76561198065598224"));
+			// // console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
+			// // console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
 			process.exit();
 		}
 	}

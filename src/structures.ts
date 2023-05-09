@@ -289,3 +289,11 @@ export interface Season {
 	active: boolean;
 	totalRankedUsers: number;
 }
+
+export interface Tracking {
+	type: string;
+	id: string;
+	time: number;
+	season: number;
+	args: any[];
+}

@@ -8,7 +8,7 @@ import { API } from "./api.js";
 import { BASE_ELO, ELOUpdater, userCanRank } from "./eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
-	Aircraft, AllowedMod, Death, Kill, ScoreboardMessage, Season, Spawn, User
+	Aircraft, AllowedMod, Death, Kill, ScoreboardMessage, Season, Spawn, Tracking, User
 } from "./structures.js";
 
 const SERVER_MAX_PLAYERS = 16;
@@ -36,6 +36,7 @@ class Application {
 	public scoreboardMessages: CollectionManager<string, ScoreboardMessage>;
 	public allowedMods: CollectionManager<string, AllowedMod>;
 	public seasons: CollectionManager<number, Season>;
+	public tracking: CollectionManager<string, Tracking>;
 
 	public api: API;
 	public elo: ELOUpdater;
@@ -65,6 +66,7 @@ class Application {
 		this.deaths = await this.framework.database.collection("deaths-v2", false, "id");
 		this.spawns = await this.framework.database.collection("spawns-v2", false, "id");
 		this.seasons = await this.framework.database.collection("seasons", false, "id");
+		this.tracking = await this.framework.database.collection("tracking", false, "id");
 
 		await this.api.init();
 		await this.elo.init();

@@ -7,8 +7,8 @@ import { Application } from "./application.js";
 import { createUserEloGraph } from "./graph/graph.js";
 import {
 	Aircraft, CurrentServerInformation, Death, Kill, logUser, parseAircraftString, parseTeamString,
-	parseTimeOfDayString, parseWeaponString, Spawn, UserAircraftInformation, userToLimitedUser,
-	Weapon
+	parseTimeOfDayString, parseWeaponString, Spawn, Tracking, UserAircraftInformation,
+	userToLimitedUser, Weapon
 } from "./structures.js";
 
 export const ENDPOINT_BASE = "/api/v1/";
@@ -112,8 +112,10 @@ class API {
 		this.registerRoute("POST", "deaths", this.handleDeath, true);
 		this.registerRoute("POST", "spawns", this.handleSpawn, true);
 		this.registerRoute("POST", "online", this.updateOnlineUsers, true);
+		this.registerRoute("POST", "tracking", this.handleTracking, true);
 		this.registerRoute("GET", "mods", this.getAllowedMods, true);
 		this.registerRoute("GET", "liveryUpdate", this.handleLiveryUpdate, true);
+
 		// this.registerRoute("GET", "")
 
 
@@ -311,6 +313,23 @@ class API {
 		if (!user.spawns[spawn.user.type]) user.spawns[spawn.user.type] = 0;
 		user.spawns[spawn.user.type]++;
 		await this.app.users.collection.updateOne({ id: user.id }, { $set: { spawns: user.spawns } });
+
+		res.sendStatus(200);
+	}
+
+	private async handleTracking(req: express.Request, res: express.Response) {
+		const type = req.query.type as string;
+		const args = req.body as any[];
+		this.log.info(`Tracking: ${type} ${args.join(', ')}`);
+
+		const trackingObject: Tracking = {
+			id: uuidv4(),
+			time: Date.now(),
+			type: type,
+			args: args,
+			season: this.app.elo.activeSeason.id,
+		};
+		await this.app.tracking.add(trackingObject);
 
 		res.sendStatus(200);
 	}

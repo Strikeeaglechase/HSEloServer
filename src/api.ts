@@ -106,6 +106,7 @@ class API {
 		this.registerRoute("GET", "log/:id", this.getUserLog, false);
 		this.registerRoute("GET", "multipliers", this.getMultipliers, false);
 		this.registerRoute("GET", "blocklist", this.getBlockList, false);
+		this.registerRoute("GET", "bannedUsers", this.getBannedUsers, false);
 
 
 		this.registerRoute("POST", "users/:id/login", this.handleUserLogin, true);
@@ -366,8 +367,8 @@ class API {
 
 	private async getBlockList(req: express.Request, res: express.Response) {
 		// https://hs.vtolvr.live/api/v1/public/users
-		const users = await this.app.users.get();
-		const bannedUsers = users.filter(u => u.isBanned);
+		const bannedUsers = await this.app.users.collection.find({ isBanned: true }).toArray();
+		// const bannedUsers = users.filter(u => u.isBanned);
 
 		let text = `NODE\n{`;
 		bannedUsers.forEach(user => {
@@ -384,6 +385,11 @@ class API {
 
 		// res.send(text);
 		res.sendFile(path.resolve("../banlist.txt"));
+	}
+
+	private async getBannedUsers(req: express.Request, res: express.Response) {
+		const bannedUsers = await this.app.users.collection.find({ isBanned: true }).toArray();
+		res.send(bannedUsers);
 	}
 
 	private registerRoute(verb: "GET" | "POST" | "PUT" | "DELETE", path: string, handler: (req: express.Request, res: express.Response) => unknown, auth: boolean = true) {

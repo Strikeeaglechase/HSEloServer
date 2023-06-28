@@ -19,6 +19,7 @@
 		"jimp": "^0.22.7",
 		"sharp": "^0.31.3",
 		"strike-discord-framework": "^1.4.13",
+		"typescript": "^4.8.4",
 		"uuid": "^8.3.2",
 		"vega": "^5.22.1"
 	},

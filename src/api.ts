@@ -1,5 +1,7 @@
 import bodyParser from "body-parser";
 import express from "express";
+import fs from "fs";
+import path from "path";
 import Logger from "strike-discord-framework/dist/logger.js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -16,7 +18,6 @@ export function getHost() {
 	// return process.env.IS_DEV == "true" ? `` : `https://hs.vtolvr.live`;
 	return "https://hs.vtolvr.live";
 }
-
 const nums = "0123456789";
 const isNum = (str: string) => str.split("").every(c => nums.includes(c)) && str.length < 5;
 function parseValue(str: string) {
@@ -104,6 +105,7 @@ class API {
 		this.registerRoute("GET", "graph/:id/:refreshId", this.getUserGraph, false);
 		this.registerRoute("GET", "log/:id", this.getUserLog, false);
 		this.registerRoute("GET", "multipliers", this.getMultipliers, false);
+		this.registerRoute("GET", "blocklist", this.getBlockList, false);
 
 
 		this.registerRoute("POST", "users/:id/login", this.handleUserLogin, true);
@@ -360,6 +362,28 @@ class API {
 
 	private async getOnlineUsers(req: express.Request, res: express.Response) {
 		res.send(this.app.onlineUsers);
+	}
+
+	private async getBlockList(req: express.Request, res: express.Response) {
+		// https://hs.vtolvr.live/api/v1/public/users
+		const users = await this.app.users.get();
+		const bannedUsers = users.filter(u => u.isBanned);
+
+		let text = `NODE\n{`;
+		bannedUsers.forEach(user => {
+			text += `\n    USER\n    {\n`;
+			text += `        id = ${user.id}\n`;
+			text += `        steamName = ${user.pilotNames[0]}\n`;
+			text += `        pilotName = ${user.pilotNames[0]}\n`;
+			text += `    }\n`;
+		});
+
+		text += `\n}`;
+
+		fs.writeFileSync("../banlist.txt", text);
+
+		// res.send(text);
+		res.sendFile(path.resolve("../banlist.txt"));
 	}
 
 	private registerRoute(verb: "GET" | "POST" | "PUT" | "DELETE", path: string, handler: (req: express.Request, res: express.Response) => unknown, auth: boolean = true) {

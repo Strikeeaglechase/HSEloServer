@@ -37,6 +37,7 @@ const t55PenaltyThreshold = 2500;
 const maxWeaponMultiplier = Infinity;
 
 const userBackupPath = "../users/";
+const hourlyReportPath = "../hourlyReport/";
 
 type KillString = `${string}->${string}->${string}`;
 interface KillMetric {
@@ -52,7 +53,7 @@ function getKillStr(kill: Kill) {
 
 const maxCfitDist = 20 * 1852;
 
-function shouldKillBeCounted(kill: Kill) {
+function shouldKillBeCounted(kill: Kill, killerUser?: User, victimUser?: User) {
 	// If T-55, ignore
 	// if (kill.killer.type == Aircraft.T55) return false;
 	if (kill.victim.type == Aircraft.T55) return false;
@@ -243,7 +244,7 @@ class ELOUpdater {
 				numPause++;
 			}
 		}
-		console.log(`Back update process completed, took ${Date.now() - firstStart}ms, paused for ${numPause * 100}ms`);
+		this.log.info(`Back update process completed, took ${Date.now() - firstStart}ms, paused for ${numPause * 100}ms`);
 	}
 
 	private checkInvalidUsers(users: User[]) {
@@ -280,9 +281,13 @@ class ELOUpdater {
 		this.log.info(`Active season: ${season.id} (${season.name})`);
 
 		let users = await usersDb.collection.find({}).toArray();
+		const usersMap: Record<string, User> = {};
 		// console.log(users);
 		let kills = await killsDb.collection.find({ season: season.id }).toArray();
 		let deaths = await deathsDb.collection.find({ season: season.id }).toArray();
+
+		this.recordHourlyReport(kills, deaths);
+
 		// console.log(`Active season: `, this.activeSeason);
 		this.log.info(`Loaded ${users.length} users, ${kills.length} kills, ${deaths.length} deaths`);
 		// console.log(`User load took ${Date.now() - d}ms`);
@@ -310,6 +315,8 @@ class ELOUpdater {
 			u.eloHistory = [];
 			this.userLogs[u.id] = "";
 			eloGainedPerWeapon[u.id] = {};
+
+			usersMap[u.id] = u;
 		});
 
 		type Action = { action: "Login" | "Logout"; userId: string; };
@@ -347,11 +354,11 @@ class ELOUpdater {
 			const timestamp = new Date(e.time).toISOString();
 			if (e.type == "kill") {
 				const kill = e.event as Kill;
-				const killer = users.find(u => u.id == kill.killer.ownerId);
-				const victim = users.find(u => u.id == kill.victim.ownerId);
+				const killer = usersMap[kill.killer.ownerId];
+				const victim = usersMap[kill.victim.ownerId];
 				const killStr = getKillStr(kill);
 
-				if (!killer || !victim || !shouldKillBeCounted(kill)) {
+				if (!killer || !victim || !shouldKillBeCounted(kill, killer, victim)) {
 					continue;
 				}
 
@@ -480,6 +487,22 @@ class ELOUpdater {
 		}
 	}
 
+	private recordHourlyReport(kills: Kill[], deaths: Death[]) {
+		if (!fs.existsSync(hourlyReportPath)) fs.mkdirSync(hourlyReportPath);
+
+		if (fs.existsSync(`${hourlyReportPath}/kills.json`)) fs.rmSync(`${hourlyReportPath}/kills.json`);
+		const killsStream = fs.createWriteStream(`${hourlyReportPath}/kills.json`);
+		kills.forEach(k => killsStream.write(JSON.stringify(k) + "\n"));
+		killsStream.end();
+		this.log.info(`Wrote ${kills.length} kills to ${hourlyReportPath}/kills.json`);
+
+		if (fs.existsSync(`${hourlyReportPath}/deaths.json`)) fs.rmSync(`${hourlyReportPath}/deaths.json`);
+		const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);
+		deaths.forEach(d => deathsStream.write(JSON.stringify(d) + "\n"));
+		deathsStream.end();
+		this.log.info(`Wrote ${deaths.length} deaths to ${hourlyReportPath}/deaths.json`);
+	}
+
 	private updateUserLogForKill(timestamp: string, killer: User, victim: User, metric: KillMetric, eloSteal: number, killStr: string, extraInfo: string = "") {
 		if (!this.userLogs[killer.id]) this.userLogs[killer.id] = "";
 		if (!this.userLogs[victim.id]) this.userLogs[victim.id] = "";
@@ -531,7 +554,7 @@ class ELOUpdater {
 			};
 		}
 
-		if (!shouldKillBeCounted(kill)) return;
+		if (!shouldKillBeCounted(kill, killer, victim)) return;
 
 		const killStr = getKillStr(kill);
 		let metric = this.lastMultipliers.find(m => m.killStr == killStr);
@@ -642,4 +665,4 @@ class ELOUpdater {
 	}
 }
 
-export { ELOUpdater, BASE_ELO, shouldKillBeCounted, shouldDeathBeCounted, userCanRank };
+export { ELOUpdater, BASE_ELO, shouldKillBeCounted, shouldDeathBeCounted, userCanRank, hourlyReportPath };

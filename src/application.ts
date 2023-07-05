@@ -312,7 +312,8 @@ class Application {
 			discordId: null,
 			isBanned: false,
 			teamKills: 0,
-			endOfSeasonStats: []
+			endOfSeasonStats: [],
+			eloFreeze: false
 		};
 		await this.users.add(user);
 		return user;

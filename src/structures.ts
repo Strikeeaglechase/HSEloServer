@@ -61,6 +61,7 @@ export interface User {
 		teamKills: number;
 		history: string;
 	}[];
+	eloFreeze: boolean;
 }
 
 export interface LimitedUserData {

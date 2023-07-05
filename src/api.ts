@@ -4,8 +4,11 @@ import fs from "fs";
 import path from "path";
 import Logger from "strike-discord-framework/dist/logger.js";
 import { v4 as uuidv4 } from "uuid";
+import WebSocket from "ws";
 
 import { Application } from "./application.js";
+import { Client } from "./client.js";
+import { hourlyReportPath } from "./eloUpdater.js";
 import { createUserEloGraph } from "./graph/graph.js";
 import {
 	Aircraft, CurrentServerInformation, Death, Kill, logUser, parseAircraftString, parseTeamString,
@@ -74,7 +77,10 @@ function parseAPIServerInfo(apiSI: APIServerInfo): CurrentServerInformation {
 
 class API {
 	private server: express.Express = express();
+	private websocketServer: WebSocket.Server;
 	private log: Logger;
+
+	public clients: Client[] = [];
 
 	constructor(private app: Application) {
 		this.log = app.log;
@@ -100,6 +106,7 @@ class API {
 		this.registerRoute("GET", "users/:id", this.getUser, false);
 		this.registerRoute("GET", "kills", this.getKills, false);
 		this.registerRoute("GET", "deaths", this.getDeaths, false);
+
 		this.registerRoute("GET", "online", this.getOnlineUsers, false);
 		this.registerRoute("GET", "graph/:id", this.getUserGraph, false);
 		this.registerRoute("GET", "graph/:id/:refreshId", this.getUserGraph, false);
@@ -109,13 +116,13 @@ class API {
 		this.registerRoute("GET", "bannedUsers", this.getBannedUsers, false);
 
 
-		this.registerRoute("POST", "users/:id/login", this.handleUserLogin, true);
-		this.registerRoute("POST", "users/:id/logout", this.handleUserLogout, true);
-		this.registerRoute("POST", "kills", this.handleKill, true);
-		this.registerRoute("POST", "deaths", this.handleDeath, true);
-		this.registerRoute("POST", "spawns", this.handleSpawn, true);
-		this.registerRoute("POST", "online", this.updateOnlineUsers, true);
-		this.registerRoute("POST", "tracking", this.handleTracking, true);
+		// this.registerRoute("POST", "users/:id/login", this.handleUserLogin, true);
+		// this.registerRoute("POST", "users/:id/logout", this.handleUserLogout, true);
+		// this.registerRoute("POST", "kills", this.handleKill, true);
+		// this.registerRoute("POST", "deaths", this.handleDeath, true);
+		// this.registerRoute("POST", "spawns", this.handleSpawn, true);
+		// this.registerRoute("POST", "online", this.updateOnlineUsers, true);
+		// this.registerRoute("POST", "tracking", this.handleTracking, true);
 		this.registerRoute("GET", "mods", this.getAllowedMods, true);
 		this.registerRoute("GET", "liveryUpdate", this.handleLiveryUpdate, true);
 
@@ -123,9 +130,20 @@ class API {
 
 
 
-		this.server.listen(port, () => {
+		const httpServer = this.server.listen(port, () => {
 			this.log.info(`ELO API listening on port ${port}`);
 		});
+
+		this.websocketServer = new WebSocket.Server({ server: httpServer });
+		this.websocketServer.on("connection", (ws) => {
+			this.clients.push(new Client(this.app, ws));
+		});
+
+		setInterval(() => this.updateClients(), 100);
+	}
+
+	private updateClients() {
+		this.clients = this.clients.filter(c => c.alive);
 	}
 
 	private async getUserStats(req: express.Request, res: express.Response) {
@@ -147,17 +165,13 @@ class API {
 	}
 
 	private async getKills(req: express.Request, res: express.Response) {
-		const allowedQueries = ["id", "victimId", "killerId", "killerTeam", "victimTeam", "weapon", "killerAircraft", "victimAircraft"];
-		const dbQuery = parseQuery(req.query, allowedQueries);
-		const kills = await this.app.kills.collection.find(dbQuery).toArray();
-		res.send(kills);
+		if (fs.existsSync(`${hourlyReportPath}/kills.json`)) res.sendFile(path.resolve(`${hourlyReportPath}/kills.json`));
+		else res.sendStatus(425);
 	}
 
 	private async getDeaths(req: express.Request, res: express.Response) {
-		const allowedQueries = ["id", "victimId", "victimAircraft", "killId"];
-		const dbQuery = parseQuery(req.query, allowedQueries);
-		const deaths = await this.app.deaths.collection.find(dbQuery).toArray();
-		res.send(deaths);
+		if (fs.existsSync(`${hourlyReportPath}/kills.json`)) res.sendFile(path.resolve(`${hourlyReportPath}/kills.json`));
+		else res.sendStatus(425);
 	}
 
 	private async getUserGraph(req: express.Request, res: express.Response) {
@@ -178,21 +192,21 @@ class API {
 		res.send(this.app.elo.lastMultipliers);
 	}
 
-	private async handleUserLogin(req: express.Request, res: express.Response) {
-		if (!req.params.id) return res.sendStatus(400);
+	public async handleUserLogin(userId: string, pilotName: string) {
+		if (!userId) return 400;
 
-		let user = await this.app.users.get(req.params.id);
-		if (!user) user = await this.app.createNewUser(req.params.id);
+		let user = await this.app.users.get(userId);
+		if (!user) user = await this.app.createNewUser(userId);
 
-		if (user.pilotNames.length == 0 || user.pilotNames[0] != req.body.pilotName) {
-			this.log.info(`New pilot name for user ${logUser(user)}: ${req.body.pilotName}`);
+		if (user.pilotNames.length == 0 || user.pilotNames[0] != pilotName) {
+			this.log.info(`New pilot name for user ${logUser(user)}: ${pilotName}`);
 			// user.pilotNames.unshift(req.body.pilotName);
 			// Preform unshift
 			await this.app.users.collection.updateOne({ id: user.id },
 				{
 					$push: {
 						pilotNames: {
-							$each: [req.body.pilotName],
+							$each: [pilotName],
 							$position: 0
 						}
 					}
@@ -202,28 +216,27 @@ class API {
 		this.log.info(`User ${logUser(user)} logged in`);
 		await this.app.users.collection.updateOne({ id: user.id }, { $push: { loginTimes: Date.now() } });
 		// await this.app.users.update(user, user.id);
-		res.sendStatus(200);
+		return 200;
 	}
 
-	private async handleUserLogout(req: express.Request, res: express.Response) {
-		if (!req.params.id) return res.sendStatus(400);
+	public async handleUserLogout(userId: string) {
+		if (!userId) return 400;
 
-		let user = await this.app.users.get(req.params.id);
-		if (!user) user = await this.app.createNewUser(req.params.id);
+		let user = await this.app.users.get(userId);
+		if (!user) user = await this.app.createNewUser(userId);
 
 		this.log.info(`User ${logUser(user)} logged out`);
 		user.logoutTimes.push(Date.now());
 		await this.app.users.update(user, user.id);
-		res.sendStatus(200);
+		return 200;
 	}
 
-	private async handleKill(req: express.Request, res: express.Response) {
-		const killReq = req.body as {
-			victim: APIUserAircraft,
-			killer: APIUserAircraft,
-			weapon: string,
-			serverInfo: APIServerInfo,
-		};
+	public async handleKill(killReq: {
+		victim: APIUserAircraft,
+		killer: APIUserAircraft,
+		weapon: string,
+		serverInfo: APIServerInfo,
+	}) {
 		const kill: Kill = {
 			id: uuidv4(),
 			time: Date.now(),
@@ -250,28 +263,27 @@ class API {
 
 		const update = await this.app.elo.updateELOForKill(kill);
 		if (!update) {
-			res.send({
+			return {
 				killerElo: 0,
 				victimElo: 0,
 				eloSteal: 0
-			});
+			};
 			return;
 		}
 
 		const { killer, victim, eloSteal } = update;
 		// res.sendStatus(200);
-		res.send({
+		return {
 			killerElo: killer.elo,
 			victimElo: victim.elo,
 			eloSteal: eloSteal
-		});
+		};
 	}
 
-	private async handleDeath(req: express.Request, res: express.Response) {
-		const deathReq = req.body as {
-			victim: APIUserAircraft,
-			serverInfo: APIServerInfo,
-		};
+	public async handleDeath(deathReq: {
+		victim: APIUserAircraft,
+		serverInfo: APIServerInfo,
+	}) {
 		const death: Death = {
 			id: uuidv4(),
 			time: Date.now(),
@@ -285,11 +297,10 @@ class API {
 		this.app.deaths.add(death);
 		this.app.elo.updateELOForDeath(death);
 
-		res.sendStatus(200);
+		return 200;
 	}
 
-	private async handleSpawn(req: express.Request, res: express.Response) {
-		const spawnReq = req.body as { user: APIUserAircraft, serverInfo: APIServerInfo; };
+	public async handleSpawn(spawnReq: { user: APIUserAircraft, serverInfo: APIServerInfo; }) {
 		// console.log(req.body);
 		// console.log(typeof req.body);
 		const spawn: Spawn = {
@@ -304,7 +315,7 @@ class API {
 		this.app.spawns.add(spawn);
 
 		const user = await this.app.users.get(spawn.user.ownerId);
-		if (!user) return res.sendStatus(400);
+		if (!user) return 400;
 		if (!user.spawns) user.spawns = {
 			[Aircraft.AV42c]: 0,
 			[Aircraft.FA26b]: 0,
@@ -317,12 +328,10 @@ class API {
 		user.spawns[spawn.user.type]++;
 		await this.app.users.collection.updateOne({ id: user.id }, { $set: { spawns: user.spawns } });
 
-		res.sendStatus(200);
+		return 200;
 	}
 
-	private async handleTracking(req: express.Request, res: express.Response) {
-		const type = req.query.type as string;
-		const args = req.body as any[];
+	public async handleTracking(type: string, args: any[]) {
 		this.log.info(`Tracking: ${type} ${args.join(', ')}`);
 
 		const trackingObject: Tracking = {
@@ -334,7 +343,7 @@ class API {
 		};
 		await this.app.tracking.add(trackingObject);
 
-		res.sendStatus(200);
+		return 200;
 	}
 
 	private async handleLiveryUpdate(req: express.Request, res: express.Response) {
@@ -356,9 +365,13 @@ class API {
 		res.send(await this.app.allowedMods.get());
 	}
 
-	private async updateOnlineUsers(req: express.Request, res: express.Response) {
-		this.app.onlineUsers = req.body;
-		res.sendStatus(200);
+	public async updateOnlineUsers(users: {
+		name: string;
+		id: string;
+		team: string;
+	}[]) {
+		this.app.onlineUsers = users;
+		return 200;
 	}
 
 	private async getOnlineUsers(req: express.Request, res: express.Response) {

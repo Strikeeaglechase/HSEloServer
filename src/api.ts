@@ -113,6 +113,7 @@ class API {
 		this.registerRoute("GET", "log/:id", this.getUserLog, false);
 		this.registerRoute("GET", "multipliers", this.getMultipliers, false);
 		this.registerRoute("GET", "blocklist", this.getBlockList, false);
+		this.registerRoute("GET", "bannedraw", this.getBannedUsersRaw, false);
 		this.registerRoute("GET", "bannedUsers", this.getBannedUsers, false);
 
 
@@ -376,6 +377,16 @@ class API {
 
 	private async getOnlineUsers(req: express.Request, res: express.Response) {
 		res.send(this.app.onlineUsers);
+	}
+
+	private async getBannedUsersRaw(req: express.Request, res: express.Response) {
+		const bannedUsers = await this.app.users.collection.find({ isBanned: true }).toArray();
+		let result = "";
+		bannedUsers.forEach(user => {
+			result += `${user.id},${user.pilotNames[0] ?? "Unknown"}\n`;
+		});
+
+		res.send(result);
 	}
 
 	private async getBlockList(req: express.Request, res: express.Response) {

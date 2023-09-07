@@ -13,25 +13,7 @@ config();
 const userBackupPath = "../users/";
 const userChunkSize = 100; // Send 100 users at a time
 
-function loadFileStreamed<T>(path: string): Promise<T[]> {
-	const readStream = fs.createReadStream(path);
-	return new Promise((res) => {
-		let remaining = "";
-		const result: T[] = [];
 
-		readStream.on("data", data => {
-			const parts = (remaining + data).split("\n");
-			remaining = parts.pop();
-
-			parts.forEach(part => result.push(JSON.parse(part)));
-		});
-
-		readStream.on("end", () => {
-			if (remaining.length > 0) result.push(JSON.parse(remaining));
-			res(result);
-		});
-	});
-}
 
 function shouldKillContributeToMultipliers(kill: Kill) {
 	if (kill.weapon == Weapon.CFIT) return false;
@@ -49,25 +31,25 @@ type IPCMessage = { users: UserResult[]; type: "users"; } | { type: "mults", mul
 // type UserLogsObj = Record<string, string>;
 type Action = { action: "Login" | "Logout"; userId: string; };
 class EloBackUpdater {
-	private db: Database;
-	private userDb: CollectionManager<User>;
-	private seasons: CollectionManager<Season>;
-	// private userLogs: UserLogsObj = {};
+	protected db: Database;
+	protected userDb: CollectionManager<User>;
+	protected seasons: CollectionManager<Season>;
+	// protected userLogs: UserLogsObj = {};
 
-	private kills: Kill[] = [];
-	private killsMap: Record<string, Kill> = {};
-	private deaths: Death[] = [];
+	protected kills: Kill[] = [];
+	protected killsMap: Record<string, Kill> = {};
+	protected deaths: Death[] = [];
 
-	private killMultipliers: KillMetric[] = [];
+	protected killMultipliers: KillMetric[] = [];
 
-	private users: User[] = [];
-	private usersMap: Record<string, User> = {};
+	protected users: User[] = [];
+	protected usersMap: Record<string, User> = {};
 
-	private season: Season;
+	protected season: Season;
 
-	private events: { event: Kill | Death | Action, time: number, type: "kill" | "death" | "action"; }[] = [];
+	protected events: { event: Kill | Death | Action, time: number, type: "kill" | "death" | "action"; }[] = [];
 
-	private async loadDb() {
+	protected async loadDb() {
 		this.db = new Database({
 			databaseName: "vtol-server-elo" + (process.env.IS_DEV == "true" ? "-dev" : ""),
 			url: process.env.DB_URL
@@ -78,15 +60,35 @@ class EloBackUpdater {
 		this.seasons = await this.db.collection("seasons", false, "id");
 	}
 
-	private async loadFromHourlyReport() {
+	protected loadFileStreamed<T>(path: string): Promise<T[]> {
+		const readStream = fs.createReadStream(path);
+		return new Promise((res) => {
+			let remaining = "";
+			const result: T[] = [];
+
+			readStream.on("data", data => {
+				const parts = (remaining + data).split("\n");
+				remaining = parts.pop();
+
+				parts.forEach(part => result.push(JSON.parse(part)));
+			});
+
+			readStream.on("end", () => {
+				if (remaining.length > 0) result.push(JSON.parse(remaining));
+				res(result);
+			});
+		});
+	}
+
+	protected async loadFromHourlyReport() {
 		console.log(`Loading from hourly report...`);
-		this.kills = await loadFileStreamed<Kill>("../hourlyReport/kills.json");
-		this.deaths = await loadFileStreamed<Death>("../hourlyReport/deaths.json");
+		this.kills = await this.loadFileStreamed<Kill>("../hourlyReport/kills.json");
+		this.deaths = await this.loadFileStreamed<Death>("../hourlyReport/deaths.json");
 
 		console.log(`Loaded ${this.kills.length} kills and ${this.deaths.length} deaths.`);
 	}
 
-	private calculateEloMultipliers() {
+	protected calculateEloMultipliers() {
 		const killCounts: Record<KillString, number> = {};
 		let totalCountedKills = 0;
 		this.kills.forEach(kill => {
@@ -114,15 +116,17 @@ class EloBackUpdater {
 		});
 
 		this.killMultipliers = relevantMetrics;
+
+		console.log(`Calculated ${this.killMultipliers.length} kill multipliers`);
 	}
 
-	private backupUsers(users: User[]) {
+	protected backupUsers(users: User[]) {
 		if (!fs.existsSync(userBackupPath)) fs.mkdirSync(userBackupPath);
 		const ts = new Date().toISOString().replace(/:/g, "-");
 		fs.writeFileSync(`${userBackupPath}${ts}.json`, JSON.stringify(users));
 	}
 
-	private async loadUsers() {
+	protected async loadUsers() {
 		const usersMap: Record<string, User> = {};
 		const users = await this.userDb.collection.find({}).toArray();
 		this.backupUsers(users);
@@ -143,15 +147,17 @@ class EloBackUpdater {
 		console.log(`Loaded ${users.length} users.`);
 	}
 
-	private async loadKillsAndDeaths() {
+	protected async loadKillsAndDeaths() {
 		await this.loadFromHourlyReport();
 		this.kills = this.kills.filter(kill => kill.season == this.season.id && isKillValid(kill)).sort((a, b) => a.time - b.time);
 		this.deaths = this.deaths.filter(kill => kill.season == this.season.id).sort((a, b) => a.time - b.time);
 
 		this.kills.forEach(kill => this.killsMap[kill.id] = kill);
+
+		console.log(`After filtering for season ${this.season.id}, there are ${this.kills.length} kills and ${this.deaths.length} deaths.`);
 	}
 
-	private loadEvents() {
+	protected loadEvents() {
 		this.kills.forEach(kill => this.events.push({ event: kill, time: kill.time, type: "kill" }));
 		this.deaths.forEach(death => this.events.push({ event: death, time: death.time, type: "death" }));
 
@@ -173,10 +179,13 @@ class EloBackUpdater {
 		});
 
 		this.events = this.events.sort((a, b) => a.time - b.time);
+
+		console.log(`Loaded ${this.events.length} events.`);
 	}
 
 	public async runBackUpdate() {
 		await this.loadDb();
+		const start = Date.now();
 		this.season = await this.seasons.collection.findOne({ active: true });
 		console.log(`Active season: ${this.season.id} (${this.season.name})`);
 
@@ -264,6 +273,8 @@ class EloBackUpdater {
 				user.history.push(`[${timestamp}] ${action.action}`);
 			}
 		}
+
+		console.log(`Primary back update calculations done! Took ${Date.now() - start}ms`);
 	}
 
 	public async storeResults() {
@@ -315,4 +326,4 @@ process.on("message", async (msg) => {
 });
 
 
-export { IPCMessage };
+export { IPCMessage, EloBackUpdater };

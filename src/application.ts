@@ -88,7 +88,7 @@ class Application {
 		const interval = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60;
 		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 30;
 		setInterval(() => this.updateScoreboards(), interval);
-		// setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
+		setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
 
 		this.runHourlyTasks(); // Run it once on startup
 

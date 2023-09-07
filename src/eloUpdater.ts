@@ -144,7 +144,7 @@ class ELOUpdater {
 	}
 
 	public async runHourlyTasks() {
-		this.writeHourlyReport();
+		await this.writeHourlyReport();
 
 		const start = Date.now();
 		const backUpdateProcess = fork("./eloBackUpdater.js", { stdio: ["pipe", "pipe", "pipe", "ipc"] });

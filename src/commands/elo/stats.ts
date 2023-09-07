@@ -79,7 +79,6 @@ class Stats extends Command {
 		let deaths = await app.kills.collection.find({ "victim.ownerId": user.id, season: targetSeason.id }).toArray();
 		kills = kills.filter(k => shouldKillBeCounted(k));
 		deaths = deaths.filter(k => shouldKillBeCounted(k));
-		console.log(targetSeason, kills);
 
 		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55];
 		let killsWith = ``;
@@ -116,7 +115,7 @@ class Stats extends Command {
 
 		const rawRank = app.getUserRank(user, targetSeason);
 		const rank = rawRank == "N/A" ? 0 : rawRank;
-		const playersWithRank = targetSeason.active ? app.getRankedUsers().length : targetSeason.totalRankedUsers;
+		const playersWithRank = targetSeason.totalRankedUsers;
 
 		const embed = new Discord.MessageEmbed();
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);

@@ -117,18 +117,8 @@ class API {
 		this.registerRoute("GET", "bannedUsers", this.getBannedUsers, false);
 
 
-		// this.registerRoute("POST", "users/:id/login", this.handleUserLogin, true);
-		// this.registerRoute("POST", "users/:id/logout", this.handleUserLogout, true);
-		// this.registerRoute("POST", "kills", this.handleKill, true);
-		// this.registerRoute("POST", "deaths", this.handleDeath, true);
-		// this.registerRoute("POST", "spawns", this.handleSpawn, true);
-		// this.registerRoute("POST", "online", this.updateOnlineUsers, true);
-		// this.registerRoute("POST", "tracking", this.handleTracking, true);
 		this.registerRoute("GET", "mods", this.getAllowedMods, true);
 		this.registerRoute("GET", "liveryUpdate", this.handleLiveryUpdate, true);
-
-		// this.registerRoute("GET", "")
-
 
 
 		const httpServer = this.server.listen(port, () => {
@@ -148,8 +138,7 @@ class API {
 	}
 
 	private async getUserStats(req: express.Request, res: express.Response) {
-		const users = await this.app.updateSortedUsers();
-
+		const users = await this.app.users.get();
 		res.send(users.map(u => userToLimitedUser(u)));
 	}
 
@@ -158,10 +147,7 @@ class API {
 		if (!user) {
 			user = await this.app.createNewUser(req.params.id);
 		}
-		this.app.cachedSortedUsers.forEach((u, idx) => {
-			if (user.id == u.id) user.rank = idx + 1;
-		});
-		if (user.rank == undefined) user.rank = 0;
+		if (user.rank == undefined || user.rank == null) user.rank = 0;
 		res.send(user);
 	}
 

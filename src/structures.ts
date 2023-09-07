@@ -50,7 +50,8 @@ export interface User {
 	spawns: Record<Aircraft, number>;
 	elo: number;
 	eloHistory: { time: number, elo: number; }[];
-	rank?: number;
+	rank: number;
+	history: string[];
 	discordId: string;
 	isBanned: boolean;
 	teamKills: number;

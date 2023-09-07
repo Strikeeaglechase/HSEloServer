@@ -1,45 +1,40 @@
-// import glickoPkg from "glicko2-lite";
-import e from "express";
+import { fork } from "child_process";
 import fs from "fs";
 import path from "path";
-import { CollectionManager } from "strike-discord-framework/dist/collectionManager.js";
-import Database from "strike-discord-framework/dist/database.js";
 import Logger from "strike-discord-framework/dist/logger.js";
 
 import { Application } from "./application.js";
 import { shouldUserBeBanned } from "./banHandler.js";
-import { Aircraft, Death, isKillValid, Kill, Season, Spawn, User, Weapon } from "./structures.js";
+import { IPCMessage } from "./eloBackUpdater.js";
+import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "./structures.js";
 
-const produceEndOfSeasonData = false;
-const endOfSeasonTarget = 1;
+// ELO CONFIG:
 
-const backUpdateYieldAfter = 1000;
+// Starting elo
 const BASE_ELO = 2000;
-
 // Normal kill takes 10 points
-const baseEloStealPoints = 10;
+export const baseEloStealPoints = 10;
 // Always take at least 0.1 points
-const minEloStealPoints = 0.1;
+export const minEloStealPoints = 0.1;
 // Take at most 150 points
-const maxEloStealPoints = 150;
+export const maxEloStealPoints = 150;
 // For every 100 points apart, take 1 point more, assuming the victim has more ELO than the killer
-const stealPerEloGainedPoints = 1 / 100;
+export const stealPerEloGainedPoints = 1 / 100;
 // For every 100 points apart, take 0.5 points less, assuming the victim has less ELO than the killer
-const stealPerEloLostPoints = 0.5 / 100;
+export const stealPerEloLostPoints = 0.5 / 100;
 // Loose 0% of ELO for a team kill
-const teamKillPenalty = 0.00;
+export const teamKillPenalty = 0.00;
 // Loose 25 points if you die to a T-55
-const t55Penalty = 25;
+export const t55Penalty = 25;
 // Only loose elo from a t55 if above 2500 elo
-const t55PenaltyThreshold = 2500;
-
+export const t55PenaltyThreshold = 2500;
 // Maximum multiplier for an aircraft/weapon combo (limited by maxEloStealPrec)
-const maxWeaponMultiplier = Infinity;
+export const maxWeaponMultiplier = Infinity;
 
-const userBackupPath = "../users/";
 const hourlyReportPath = "../hourlyReport/";
 
 type KillString = `${string}->${string}->${string}`;
+type UserLogsObj = Record<string, string>;
 interface KillMetric {
 	killStr: KillString;
 	count: number;
@@ -52,6 +47,7 @@ function getKillStr(kill: Kill) {
 }
 
 const maxCfitDist = 20 * 1852;
+const maxCfitDistSq = maxCfitDist * maxCfitDist;
 
 function shouldKillBeCounted(kill: Kill, killerUser?: User, victimUser?: User) {
 	// If T-55, ignore
@@ -63,22 +59,13 @@ function shouldKillBeCounted(kill: Kill, killerUser?: User, victimUser?: User) {
 
 	// If CFIT, check distance
 	if (kill.weapon == Weapon.CFIT) {
-		const dist = Math.sqrt(
-			Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
-			Math.pow(kill.killer.position.z - kill.victim.position.z, 2)
-		);
+		const dist = Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
+			Math.pow(kill.killer.position.z - kill.victim.position.z, 2);
 
-		if (dist > maxCfitDist) return false;
+		if (dist > maxCfitDistSq) return false;
 	}
 
 	return true;
-}
-
-function shouldKillContributeToMultipliers(kill: Kill) {
-	if (kill.weapon == Weapon.CFIT) return false;
-	if (kill.killer.type == Aircraft.T55) return false;
-	if (kill.victim.type == Aircraft.T55) return false;
-	return shouldKillBeCounted(kill);
 }
 
 function shouldDeathBeCounted(death: Death, kill?: Kill) {
@@ -91,12 +78,11 @@ function shouldDeathBeCounted(death: Death, kill?: Kill) {
 
 	// If CFIT, check distance
 	if (kill && kill.weapon == Weapon.CFIT) {
-		const dist = Math.sqrt(
+		const dist =
 			Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
-			Math.pow(kill.killer.position.z - kill.victim.position.z, 2)
-		);
+			Math.pow(kill.killer.position.z - kill.victim.position.z, 2);
 
-		if (dist > maxCfitDist) return false;
+		if (dist > maxCfitDistSq) return false;
 	}
 
 	return true;
@@ -108,19 +94,8 @@ function userCanRank(user: User) {
 
 class ELOUpdater {
 	private log: Logger;
-	public prodDb: Database;
-	public prodUsers: CollectionManager<string, User>;
-	public prodKills: CollectionManager<string, Kill>;
-	public prodDeaths: CollectionManager<string, Death>;
-	public prodSpawns: CollectionManager<string, Spawn>;
-	public prodSeasons: CollectionManager<number, Season>;
-
-	// public prodOldKills: CollectionManager<string, KillOld>;
-	// public prodOldDeaths: CollectionManager<string, DeathOld>;
-	// public prodOldSpawns: CollectionManager<string, SpawnOld>;
 
 	public lastMultipliers: KillMetric[] = [];
-	private userLogs: Record<string, string> = {};
 	public activeSeason: Season;
 
 	constructor(private app: Application) {
@@ -135,31 +110,14 @@ class ELOUpdater {
 	}
 
 	public async getUserLogText(userId: string, season: Season) {
-		if (season.active) return this.userLogs[userId] ?? "No data";
 		const user = await this.app.users.get(userId);
-		if (!user) return "No data";
-		return user.endOfSeasonStats.find(s => s.season == season.id)?.history ?? "No data";
+		if (!user) return "No data (user not found)";
+		if (season.active) return user.history.join("\n") ?? "No data";
+		return user.endOfSeasonStats.find(s => s.season == season.id)?.history ?? "No data (user joined after season end)";
 	}
 
 	public async init() {
-		this.prodDb = new Database({ databaseName: "vtol-server-elo", url: process.env.PROD_DB_URL }, this.log);
-		await this.prodDb.init();
-
-		this.prodUsers = await this.prodDb.collection("users", false, "id");
-		this.prodKills = await this.prodDb.collection("kills-v2", false, "id");
-		this.prodDeaths = await this.prodDb.collection("deaths-v2", false, "id");
-		this.prodSpawns = await this.prodDb.collection("spawns-v2", false, "id");
-		this.prodSeasons = await this.prodDb.collection("seasons", false, "id");
-
-		// this.prodOldKills = await this.prodDb.collection("kills", false, "id");
-		// this.prodOldDeaths = await this.prodDb.collection("deaths", false, "id");
-		// this.prodOldSpawns = await this.prodDb.collection("spawns", false, "id");
-
 		this.activeSeason = await this.app.getActiveSeason();
-
-		// this.checkSpawns();
-		// this.backUpdateElosWithMultipliers(this.prodUsers, this.prodKills, this.prodDeaths, this.prodSeasons, false);
-		// this.backUpdateElosWithMultipliers(this.app.users, this.app.kills, this.app.deaths, this.app.seasons, false);
 	}
 
 	private checkSpawns() {
@@ -185,69 +143,46 @@ class ELOUpdater {
 		console.log(spawns);
 	}
 
-	private backupUsers(users: User[]) {
-		if (!fs.existsSync(userBackupPath)) fs.mkdirSync(userBackupPath);
-		const ts = new Date().toISOString().replace(/:/g, "-");
-		fs.writeFileSync(`${userBackupPath}${ts}.json`, JSON.stringify(users));
-	}
+	public async runHourlyTasks() {
+		this.writeHourlyReport();
 
-	private getEloMultipliers(kills: Kill[]) {
-		kills = kills.filter(k => shouldKillContributeToMultipliers(k));
-		if (kills.length == 0) return;
-		const killCounts: Record<KillString, number> = {};
+		const start = Date.now();
+		const backUpdateProcess = fork("./eloBackUpdater.js", { stdio: ["pipe", "pipe", "pipe", "ipc"] });
 
-		kills.forEach(kill => {
-			const str = getKillStr(kill);
-			killCounts[str] = (killCounts[str] || 0) + 1;
+		backUpdateProcess.on("spawn", () => {
+			this.log.info(`Started eloBackUpdater process`);
+			backUpdateProcess.send("start");
 		});
 
-		const killMetrics: KillMetric[] = [];
+		backUpdateProcess.on("message", (message: IPCMessage) => {
+			if (message.type == "mults") {
+				this.lastMultipliers = message.mults;
+				this.log.info(`Received ${message.mults.length} multipliers from eloBackUpdater process`);
+			} else if (message.type == "users") {
 
-		for (const [killStr, count] of Object.entries(killCounts)) {
-			// console.log(`${killStr} - ${count} (${(count / kills.length * 100).toFixed(1)}%)`);
-			killMetrics.push({ killStr: killStr as KillString, count, prec: count / kills.length, multiplier: 1 });
-		}
-
-		const relevantMetrics = killMetrics.sort((a, b) => b.count - a.count);//.filter(metric => metric.prec > 0.01);
-		// if (relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b") == undefined) return [];
-
-
-		const expectPrec = 1 / relevantMetrics.length;
-		const normalizerMetricPrec = relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b")?.prec ?? expectPrec;
-		// console.log(`AIM120 prec: ${relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b")?.prec}, normalizer: ${normalizerMetricPrec}`);
-		const normalizer = 1 / (expectPrec / normalizerMetricPrec);
-		relevantMetrics.forEach(metric => {
-			const multiplier = expectPrec / metric.prec * normalizer;
-			// console.log(`${metric.killStr} - ${metric.count} (${(metric.prec * 100).toFixed(1)}%) - ${(multiplier).toFixed(1)}x`);
-			metric.multiplier = Math.min(multiplier, maxWeaponMultiplier);
-		});
-
-		this.lastMultipliers = relevantMetrics;
-		return relevantMetrics;
-	}
-
-	public async backUpdateElosWithMultipliers(
-		usersDb: CollectionManager<string, User>,
-		killsDb: CollectionManager<string, Kill>,
-		deathsDb: CollectionManager<string, Death>,
-		seasonsDb: CollectionManager<number, Season>,
-		doUpdate = false
-	) {
-		const firstStart = Date.now();
-		const gen = this.internalBackUpdateElosWithMultipliers(usersDb, killsDb, deathsDb, seasonsDb, doUpdate);
-		let lastAwaitTime = Date.now();
-		let numPause = 0;
-		for await (const _ of gen) {
-			if (Date.now() - lastAwaitTime > 250) {
-				lastAwaitTime = Date.now();
-				await new Promise(res => setTimeout(res, 100));
-				numPause++;
 			}
-		}
-		this.log.info(`Back update process completed, took ${Date.now() - firstStart}ms, paused for ${numPause * 100}ms`);
+		});
+
+		backUpdateProcess.stdout.on("data", (data) => {
+			(data.toString() as string)
+				.split("\n")
+				.filter(l => l.length > 0)
+				.forEach(l => this.log.info(`[BackUpdater] ${l}`));
+		});
+
+		backUpdateProcess.stderr.on("data", (data) => {
+			(data.toString() as string)
+				.split("\n")
+				.filter(l => l.length > 0)
+				.forEach(l => this.log.error(`[BackUpdater] ${l}`));
+		});
+
+
+		const retCode = await new Promise(res => backUpdateProcess.on("exit", (code) => res(code)));
+		this.log.info(`eloBackUpdater process finished with code ${retCode} in ${Date.now() - start}ms`);
 	}
 
-	private checkInvalidUsers(users: User[]) {
+	public static checkInvalidUsers(users: User[]) {
 		const valid = new Set<string>();
 		const invalid: string[] = [];
 		users.forEach(u => {
@@ -263,270 +198,44 @@ class ELOUpdater {
 		return invalid;
 	}
 
-	private async *internalBackUpdateElosWithMultipliers(
-		usersDb: CollectionManager<string, User>,
-		killsDb: CollectionManager<string, Kill>,
-		deathsDb: CollectionManager<string, Death>,
-		seasonsDb: CollectionManager<number, Season>,
-		doUpdate = false
-	) {
-		// let d = Date.now();
-
-		let season = await this.app.getActiveSeason(seasonsDb);
-		if (doUpdate || !this.activeSeason) this.activeSeason = season;
-
-		if (produceEndOfSeasonData) {
-			season = await this.app.getSeason(endOfSeasonTarget, seasonsDb);
-		}
-		this.log.info(`Active season: ${season.id} (${season.name})`);
-
-		let users = await usersDb.collection.find({}).toArray();
-		const usersMap: Record<string, User> = {};
-		// console.log(users);
-		let kills = await killsDb.collection.find({ season: season.id }).toArray();
-		let deaths = await deathsDb.collection.find({ season: season.id }).toArray();
-
-		this.recordHourlyReport(kills, deaths);
-
-		// console.log(`Active season: `, this.activeSeason);
-		this.log.info(`Loaded ${users.length} users, ${kills.length} kills, ${deaths.length} deaths`);
-		// console.log(`User load took ${Date.now() - d}ms`);
-		// d = Date.now();
-		this.backupUsers(users);
-		const invalid = this.checkInvalidUsers(users);
-		invalid.forEach(invalidUid => {
-			usersDb.collection.deleteOne({ _id: invalidUid });
-			// @ts-ignore
-			users = users.filter(u => u._id != invalidUid);
-		});
-		// console.log(`User backup took ${Date.now() - d}ms`);
-		// d = Date.now();
-
-		kills = kills.filter(k => isKillValid(k)).sort((a, b) => a.time - b.time);
-		deaths = deaths.sort((a, b) => a.time - b.time);
-
-		const killMultipliers = this.getEloMultipliers(kills);
-		const eloGainedPerWeapon: Record<string, Record<string, number>> = {};
-		// const checkUser = JSON.parse(JSON.stringify(users.find(u => u.id == "76561198162340088"))) as User;
-		users.forEach(u => {
-			u.elo = BASE_ELO;
-			u.kills = 0;
-			u.deaths = 0;
-			u.eloHistory = [];
-			this.userLogs[u.id] = "";
-			eloGainedPerWeapon[u.id] = {};
-
-			usersMap[u.id] = u;
-		});
-
-		type Action = { action: "Login" | "Logout"; userId: string; };
-		let events: { event: Kill | Death | Action, time: number, type: "kill" | "death" | "action"; }[] = [];
-		kills.forEach(kill => events.push({ event: kill, time: kill.time, type: "kill" }));
-		deaths.forEach(death => events.push({ event: death, time: death.time, type: "death" }));
-
-		const seasonStartTime = new Date(season.started).getTime();
-		const seasonEndTime = new Date(season.ended).getTime();
-		users.forEach(user => {
-			const validLoginTimes = user.loginTimes.filter(t =>
-				(seasonStartTime == 0 || t >= seasonStartTime) &&
-				(seasonEndTime == 0 || t <= seasonEndTime)
-			);
-
-			const validLogoutTimes = user.logoutTimes.filter(t =>
-				(seasonStartTime == 0 || t >= seasonStartTime) &&
-				(seasonEndTime == 0 || t <= seasonEndTime)
-			);
-
-			validLoginTimes.forEach(login => events.push({ event: { action: "Login", userId: user.id }, time: login, type: "action" }));
-			validLogoutTimes.forEach(logout => events.push({ event: { action: "Logout", userId: user.id }, time: logout, type: "action" }));
-
-			// user.loginTimes.forEach(login => events.push({ event: { action: "Login", userId: user.id }, time: login, type: "action" }));
-			// user.logoutTimes.forEach(logout => events.push({ event: { action: "Logout", userId: user.id }, time: logout, type: "action" }));
-		});
-
-		events = events.sort((a, b) => a.time - b.time);
-		// console.log(`Setup took ${Date.now() - d}ms`);
-		// d = Date.now();
-
-		for (let i = 0; i < events.length; i++) {
-			const e = events[i];
-
-			const timestamp = new Date(e.time).toISOString();
-			if (e.type == "kill") {
-				const kill = e.event as Kill;
-				const killer = usersMap[kill.killer.ownerId];
-				const victim = usersMap[kill.victim.ownerId];
-				const killStr = getKillStr(kill);
-
-				if (!killer || !victim || !shouldKillBeCounted(kill, killer, victim)) {
-					continue;
-				}
-
-				if (kill.killer.team == kill.victim.team) {
-					const loss = killer.elo * teamKillPenalty;
-					killer.elo -= loss;
-					this.updateUserLogForTK(timestamp, killer, victim, loss);
-					killer.eloHistory.push({ elo: killer.elo, time: e.time });
-					continue;
-				}
-
-				if (kill.killer.type == Aircraft.T55) {
-					if (victim.elo < t55Penalty) continue;
-					const loss = t55Penalty;
-					victim.elo -= loss;
-					this.updateUserLogForT55(timestamp, killer, victim, loss);
-					victim.eloHistory.push({ elo: victim.elo, time: e.time });
-					continue;
-				}
-
-				let metric = killMultipliers.find(m => m.killStr == killStr);
-				let info = "";
-				if (kill.weapon == Weapon.CFIT) {
-					const { cfitMetric, extraInfo } = this.getCFITMultiplier(kill);
-					if (cfitMetric == null) {
-						// this.log.info(`Target was too far away, so CFIT being dropped`);
-						victim.deaths++;
-						this.updateUserLogForDeath(timestamp, victim, 0);
-						continue;
-					}
-					info = extraInfo;
-					metric = cfitMetric;
-				}
-				const eloSteal = this.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
-
-				killer.elo += eloSteal;
-				victim.elo -= eloSteal;
-				victim.elo = Math.max(victim.elo, 1);
-				killer.kills++;
-				victim.deaths++;
-
-				this.updateUserLogForKill(timestamp, killer, victim, metric, eloSteal, killStr, info /*+ ` (${kill.id}) `*/);
-				// if (killer.id == checkUser.id) {
-				// const realEloHist = checkUser.eloHistory[killer.eloHistory.length];
-				// const delta = realEloHist.elo - killer.elo;
-				// console.log(`Delta at ${killer.eloHistory.length}: ${delta}`);
-				// }
-				killer.eloHistory.push({ elo: killer.elo, time: e.time });
-				victim.eloHistory.push({ elo: victim.elo, time: e.time });
-
-				if (!eloGainedPerWeapon[killer.id][Weapon[kill.weapon]]) eloGainedPerWeapon[killer.id][Weapon[kill.weapon]] = 0;
-				eloGainedPerWeapon[killer.id][Weapon[kill.weapon]] += eloSteal;
-			} else if (e.type == "death") {
-				const death = e.event as Death;
-				if (death.killId) continue;
-				const victim = users.find(u => u.id == death.victim.ownerId);
-				if (!victim) continue;
-				const kill = death.killId ? kills.find(k => k.id == death.killId) : null;
-				if (!shouldDeathBeCounted(death, kill)) continue;
-
-
-				const eloSteal = this.calculateEloSteal(BASE_ELO, victim.elo);
-				victim.elo -= eloSteal;
-				victim.elo = Math.max(victim.elo, 1);
-				victim.deaths++;
-
-				this.updateUserLogForDeath(timestamp, victim, eloSteal);
-				victim.eloHistory.push({ elo: victim.elo, time: e.time });
-			} else if (e.type == "action") {
-				const action = e.event as Action;
-				this.userLogs[action.userId] += `[${timestamp}] ${action.action}\n`;
-			}
-
-			// console.log(`Processed ${i + 1}/${events.length} events`);
-			if (i % backUpdateYieldAfter == 0) yield i;
-		}
-
-		// console.log(`Processing took ${Date.now() - d}ms`);
-		// d = Date.now();
-
-		if (doUpdate) {
-			this.log.info(`Updating ${users.length} users...`);
-			users.forEach(u => usersDb.update(u, u.id));
-		} else {
-			users = users.sort((a, b) => b.elo - a.elo);
-			if (produceEndOfSeasonData) {
-				// Compute ranks
-				users.filter(u => userCanRank(u)).forEach((u, i) => u.rank = i + 1);
-
-				const ops = users.map(async user => {
-					if (!user.endOfSeasonStats) user.endOfSeasonStats = [];
-					user.endOfSeasonStats = user.endOfSeasonStats.filter(s => s.season != season.id);
-					user.endOfSeasonStats.push({
-						season: season.id,
-						elo: user.elo,
-						rank: user.rank,
-						teamKills: user.teamKills,
-						history: this.userLogs[user.id],
-					});
-
-					await usersDb.update(user, user.id);
-				});
-
-				await Promise.all(ops);
-
-				season.totalRankedUsers = users.filter(u => userCanRank(u)).length;
-				this.log.info(`Updated ${users.length} users and season ${season.id} with ${season.totalRankedUsers} ranked users`);
-				await seasonsDb.update(season, season.id);
-			}
-			// let ru = 0;
-			// for (let i = 0; i < 40; i++) {
-			// 	if (users[i].kills > 10) {
-			// 		const totalGained = Object.values(eloGainedPerWeapon[users[i].id]).reduce((a, b) => a + b, 0);
-			// 		const gainedWpnStr = Object.entries(eloGainedPerWeapon[users[i].id]).map(([wpn, elo]) => `${wpn}: ${Math.round(elo / totalGained * 100)}%`).join(", ");
-			// 		console.log(`${users[i].pilotNames[0]} (${users[i].id}) - ${users[i].elo.toFixed(1)}  ${gainedWpnStr}`);
-			// 	}
-			// }
-			// const last = users[users.length - 1];
-			// console.log(`${last.pilotNames[0]} (${last.id}) - ${last.elo.toFixed(1)}`);
-			// console.log(users.filter(u => u.elo < 1000).map(u => { return { id: u.id, pilotName: u.pilotNames }; }));
-			// fs.writeFileSync('../out-log.txt', this.userLogs["76561198065598224"]);
-			// await createUserEloGraph(users.find(u => u.id == "76561198065598224"));
-			// // console.log(`Loss due to death: ${lossDueToDeath.toFixed(0)}`);
-			// // console.log(`Loss due to teamkill: ${lossDueToTk.toFixed(0)}`);
-			process.exit();
-		}
-	}
-
-	private recordHourlyReport(kills: Kill[], deaths: Death[]) {
+	private async writeHourlyReport() {
 		if (!fs.existsSync(hourlyReportPath)) fs.mkdirSync(hourlyReportPath);
-
 		if (fs.existsSync(`${hourlyReportPath}/kills.json`)) fs.rmSync(`${hourlyReportPath}/kills.json`);
-		const killsStream = fs.createWriteStream(`${hourlyReportPath}/kills.json`);
-		kills.forEach(k => killsStream.write(JSON.stringify(k) + "\n"));
-		killsStream.end();
-		this.log.info(`Wrote ${kills.length} kills to ${hourlyReportPath}/kills.json`);
-
 		if (fs.existsSync(`${hourlyReportPath}/deaths.json`)) fs.rmSync(`${hourlyReportPath}/deaths.json`);
+		this.log.info(`Writing hourly report to ${hourlyReportPath}`);
+
+		const killsStream = fs.createWriteStream(`${hourlyReportPath}/kills.json`);
 		const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);
-		deaths.forEach(d => deathsStream.write(JSON.stringify(d) + "\n"));
-		deathsStream.end();
-		this.log.info(`Wrote ${deaths.length} deaths to ${hourlyReportPath}/deaths.json`);
+		const proms = [
+			new Promise(res => killsStream.on("finish", res)),
+			new Promise(res => deathsStream.on("finish", res))
+		];
+
+		this.app.kills.collection.find({}).stream().on("data", (kill) => killsStream.write(JSON.stringify(kill) + "\n")).on("end", () => killsStream.end());
+		this.app.deaths.collection.find({}).stream().on("data", (death) => deathsStream.write(JSON.stringify(death) + "\n")).on("end", () => deathsStream.end());
+
+		await Promise.all(proms);
+
+		this.log.info(`Wrote hourly report finished!`);
 	}
 
-	private updateUserLogForKill(timestamp: string, killer: User, victim: User, metric: KillMetric, eloSteal: number, killStr: string, extraInfo: string = "") {
-		if (!this.userLogs[killer.id]) this.userLogs[killer.id] = "";
-		if (!this.userLogs[victim.id]) this.userLogs[victim.id] = "";
-		this.userLogs[killer.id] += `[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${killStr} (${metric?.multiplier.toFixed(1)}) ${extraInfo} Elo gained: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)} \n`;
-		this.userLogs[victim.id] += `[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${killStr} (${metric?.multiplier.toFixed(1)}) ${extraInfo} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)} \n`;
+	public static updateUserLogForKill(timestamp: string, killer: User, victim: User, metric: KillMetric, eloSteal: number, killStr: string, extraInfo: string = "") {
+		killer.history.push(`[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${killStr} (${metric?.multiplier.toFixed(1)}) ${extraInfo} Elo gained: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)}`);
+		victim.history.push(`[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${killStr} (${metric?.multiplier.toFixed(1)}) ${extraInfo} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)}`);
 	}
 
-	private updateUserLogForDeath(timestamp: string, victim: User, eloSteal: number) {
-		if (!this.userLogs[victim.id]) this.userLogs[victim.id] = "";
-		this.userLogs[victim.id] += `[${timestamp}] Death (unknown) Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)} \n`;
+	public static updateUserLogForDeath(timestamp: string, victim: User, eloSteal: number) {
+		victim.history.push(`[${timestamp}] Death (unknown) Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)}`);
 	}
 
-	private updateUserLogForTK(timestamp: string, killer: User, victim: User, eloSteal: number) {
-		if (!this.userLogs[killer.id]) this.userLogs[killer.id] = "";
-		if (!this.userLogs[victim.id]) this.userLogs[victim.id] = "";
-		this.userLogs[killer.id] += `[${timestamp}] Teamkill ${victim.pilotNames[0]} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)} \n`;
-		this.userLogs[victim.id] += `[${timestamp}] Death to teamkill from ${killer.pilotNames[0]} no elo lost \n`;
+	public static updateUserLogForTK(timestamp: string, killer: User, victim: User, eloSteal: number) {
+		killer.history.push(`[${timestamp}] Teamkill ${victim.pilotNames[0]} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)}`);
+		victim.history.push(`[${timestamp}] Death to teamkill from ${killer.pilotNames[0]} no elo lost`);
 	}
 
-	public async updateUserLogForT55(timestamp: string, killer: User, victim: User, eloSteal: number) {
-		if (!this.userLogs[killer.id]) this.userLogs[killer.id] = "";
-		if (!this.userLogs[victim.id]) this.userLogs[victim.id] = "";
-		this.userLogs[killer.id] += `[${timestamp}] Kill ${victim.pilotNames[0]} with T-55 (no elo gained) \n`;
-		this.userLogs[victim.id] += `[${timestamp}] Death from ${killer.pilotNames[0]} with T-55 lost ${eloSteal} elo \n`;
+	public static updateUserLogForT55(timestamp: string, killer: User, victim: User, eloSteal: number) {
+		killer.history.push(`[${timestamp}] Kill ${victim.pilotNames[0]} with T-55 (no elo gained)`);
+		victim.history.push(`[${timestamp}] Death from ${killer.pilotNames[0]} with T-55 lost ${eloSteal} elo`);
 	}
 
 	public async updateELOForKill(kill: Kill) {
@@ -560,18 +269,18 @@ class ELOUpdater {
 		let metric = this.lastMultipliers.find(m => m.killStr == killStr);
 		let info = "";
 		if (kill.weapon == Weapon.CFIT) {
-			const { cfitMetric, extraInfo } = this.getCFITMultiplier(kill);
+			const { cfitMetric, extraInfo } = ELOUpdater.getCFITMultiplier(kill, this.lastMultipliers);
 			if (cfitMetric == null) {
 				this.log.info(`Victim ${victim.pilotNames[0]} was too far away from ${killer.pilotNames[0]}, so CFIT being dropped`);
 				victim.deaths++;
-				this.updateUserLogForDeath(new Date().toISOString(), victim, 0);
+				ELOUpdater.updateUserLogForDeath(new Date().toISOString(), victim, 0);
 				await this.app.users.update(victim, victim.id);
 				return;
 			}
 			info = extraInfo;
 			metric = cfitMetric;
 		}
-		const eloSteal = this.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
+		const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
 
 		this.log.info(`Killer ${killer.pilotNames[0]} (${killer.elo}) killed victim ${victim.pilotNames[0]} (${victim.elo}) for ${eloSteal.toFixed(1)} ELO`);
 		this.log.info(` -> ${killer.pilotNames[0]} ELO: ${killer.elo} -> ${killer.elo + eloSteal}`);
@@ -583,7 +292,7 @@ class ELOUpdater {
 		killer.elo += eloSteal;
 		victim.elo -= eloSteal;
 		victim.elo = Math.max(victim.elo, 1);
-		this.updateUserLogForKill(new Date().toISOString(), killer, victim, metric, eloSteal, killStr);
+		ELOUpdater.updateUserLogForKill(new Date().toISOString(), killer, victim, metric, eloSteal, killStr);
 
 		killer.kills++;
 		victim.deaths++;
@@ -601,7 +310,7 @@ class ELOUpdater {
 		killer.eloHistory.push({ time: Date.now(), elo: killer.elo });
 		killer.elo -= eloSteal;
 		killer.elo = Math.max(killer.elo, 1);
-		this.updateUserLogForTK(new Date().toISOString(), killer, victim, eloSteal);
+		ELOUpdater.updateUserLogForTK(new Date().toISOString(), killer, victim, eloSteal);
 
 		await this.app.users.update(killer, killer.id);
 		await this.app.users.collection.updateOne({ id: killer.id }, { $inc: { teamKills: 1 } });
@@ -621,7 +330,7 @@ class ELOUpdater {
 			return;
 		}
 
-		const eloSteal = this.calculateEloSteal(BASE_ELO, victim.elo);
+		const eloSteal = ELOUpdater.calculateEloSteal(BASE_ELO, victim.elo);
 		this.log.info(`User ${victim.pilotNames[0]} died and lost ${eloSteal.toFixed(1)} ELO`);
 		this.log.info(` -> ${victim.pilotNames[0]} ELO: ${victim.elo} -> ${victim.elo - eloSteal}`);
 
@@ -629,12 +338,12 @@ class ELOUpdater {
 		victim.elo -= eloSteal;
 		victim.elo = Math.max(victim.elo, 1);
 		victim.deaths++;
-		this.updateUserLogForDeath(new Date().toISOString(), victim, eloSteal);
+		ELOUpdater.updateUserLogForDeath(new Date().toISOString(), victim, eloSteal);
 
 		await this.app.users.update(victim, victim.id);
 	}
 
-	private getCFITMultiplier(kill: Kill): { cfitMetric: KillMetric, extraInfo: string; } {
+	public static getCFITMultiplier(kill: Kill, multipliers: KillMetric[]): { cfitMetric: KillMetric, extraInfo: string; } {
 		const dist = Math.sqrt(
 			Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
 			Math.pow(kill.killer.position.z - kill.victim.position.z, 2)
@@ -648,16 +357,14 @@ class ELOUpdater {
 		else if (dist / nm < 20) weaponEquivalent = Weapon.AIM120;
 
 		if (weaponEquivalent != null) {
-			const metric = this.lastMultipliers.find(km => km.killStr == `${Aircraft[Aircraft.FA26b]}->${Weapon[weaponEquivalent]}->${Aircraft[Aircraft.FA26b]}`);
+			const metric = multipliers.find(km => km.killStr == `${Aircraft[Aircraft.FA26b]}->${Weapon[weaponEquivalent]}->${Aircraft[Aircraft.FA26b]}`);
 			return { cfitMetric: metric, extraInfo: "Distance: " + (dist / nm).toFixed(1) + "nm" };
 		} else {
 			return { cfitMetric: null, extraInfo: null };
 		}
-
-
 	}
 
-	private calculateEloSteal(killerElo: number, victimElo: number, multiplier = 1) {
+	public static calculateEloSteal(killerElo: number, victimElo: number, multiplier = 1) {
 		const eloDiff = Math.abs(victimElo - killerElo);
 		const additionalStealConst = killerElo < victimElo ? stealPerEloGainedPoints : -stealPerEloLostPoints;
 		const eloSteal = Math.min(maxEloStealPoints, Math.max((baseEloStealPoints + (eloDiff * additionalStealConst)), minEloStealPoints) * multiplier);
@@ -665,4 +372,4 @@ class ELOUpdater {
 	}
 }
 
-export { ELOUpdater, BASE_ELO, shouldKillBeCounted, shouldDeathBeCounted, userCanRank, hourlyReportPath };
+export { ELOUpdater, BASE_ELO, shouldKillBeCounted, shouldDeathBeCounted, userCanRank, getKillStr, KillString, KillMetric, hourlyReportPath };

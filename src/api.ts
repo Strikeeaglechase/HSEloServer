@@ -56,6 +56,21 @@ interface APIServerInfo {
 	missionId: string;
 }
 
+interface DaemonReport {
+	seenSmLeaveMessage: boolean;
+	seenLobbyCreationFailedMessage: boolean;
+	lastHighAverageTick: number;
+	exceptionSeen: boolean;
+	lastRestart: number;
+	lastUserJoinAttempt: number;
+	lastUserJoinSuccess: number;
+	lastLogMessage: number;
+
+	lastCommandedServerStart: number;
+	lastServerStop: number;
+}
+
+
 function parseAPIUserAircraft(apiUA: APIUserAircraft): UserAircraftInformation {
 	return {
 		ownerId: apiUA.ownerId,
@@ -79,7 +94,7 @@ class API {
 	private server: express.Express = express();
 	private websocketServer: WebSocket.Server;
 	private log: Logger;
-
+	public daemonReportCb: (report: DaemonReport) => void;
 	public clients: Client[] = [];
 
 	constructor(private app: Application) {
@@ -131,6 +146,26 @@ class API {
 		});
 
 		setInterval(() => this.updateClients(), 100);
+	}
+
+	public sendDaemonReportRequest() {
+		const daemonClient = this.clients.find(c => c.isAuthedDaemon);
+		if (!daemonClient) {
+			this.log.warn(`Unable to find daemon client to send report request`);
+			return;
+		}
+
+		daemonClient.send({ type: "daemon_report_request" });
+	}
+
+	public sendRestartRequest() {
+		const daemonClient = this.clients.find(c => c.isAuthedDaemon);
+		if (!daemonClient) {
+			this.log.warn(`Unable to find daemon client to send report request`);
+			return;
+		}
+
+		daemonClient.send({ type: "daemon_restart" });
 	}
 
 	private updateClients() {
@@ -358,7 +393,14 @@ class API {
 		team: string;
 	}[]) {
 		this.app.onlineUsers = users;
+		this.app.lastOnlineUserUpdateAt = Date.now();
 		return 200;
+	}
+
+	public handleDaemonReport(report: DaemonReport) {
+		this.log.info(`Daemon Report: ${JSON.stringify(report)}`);
+		if (this.daemonReportCb) this.daemonReportCb(report);
+		else this.log.warn(`No daemon report callback`);
 	}
 
 	private async getOnlineUsers(req: express.Request, res: express.Response) {
@@ -409,4 +451,4 @@ class API {
 	}
 }
 
-export { API };
+export { API, DaemonReport };

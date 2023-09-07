@@ -14,7 +14,8 @@ const validLookupChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01
 
 class Client {
 	public alive = true;
-	public isAuthenticated = false;
+	public isAuthedHs = false;
+	public isAuthedDaemon = false;
 	public id: string;
 
 	private api: API;
@@ -47,10 +48,12 @@ class Client {
 			case "pong": this.lastPingReply = Date.now(); break;
 			case "lookup": this.handleLookup(message); break;
 
+			case "authenticate_daemon":
 			case "authenticate": {
 				const valid = message.data.token == process.env.AUTH_TOKEN;
 				if (valid) {
-					this.isAuthenticated = true;
+					if (message.type == "authenticate") this.isAuthedHs = true;
+					else this.isAuthedDaemon = true;
 					this.app.log.info(`client ${this.id} authenticated`);
 				} else {
 					this.app.log.warn(`client ${this.id} failed to authenticate. They sent token: ${message.data.token}`);
@@ -58,6 +61,7 @@ class Client {
 				}
 				break;
 			}
+
 
 			default:
 				this.handleAuthenticatedMessage(message);
@@ -85,7 +89,10 @@ class Client {
 	}
 
 	private handleAuthenticatedMessage<T extends Packet>(packet: T) {
-		if (!this.isAuthenticated) return;
+		if (!this.isAuthedHs && !this.isAuthedDaemon) {
+			console.log(`Unauthenticated client ${this.id} tried to send message ${packet.type} (${JSON.stringify(packet)})`);
+			return;
+		}
 
 		// Retransmit packet to all clients
 		this.app.api.clients.forEach((client) => {
@@ -101,6 +108,7 @@ class Client {
 			case "spawn": this.exec(this.api.handleSpawn(packet.data), packet); break;
 			case "tracking": this.exec(this.api.handleTracking(packet.data.trackingType, packet.data.trackingData), packet); break;
 			case "online": this.exec(this.api.updateOnlineUsers(packet.data), packet); break;
+			case "daemon_report": this.api.handleDaemonReport(packet.data); break;
 
 			default:
 				this.app.log.warn(`client ${this.id} sent unknown packet type: ${packet.type}`);

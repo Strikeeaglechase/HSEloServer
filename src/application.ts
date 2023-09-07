@@ -43,6 +43,7 @@ class Application {
 	public liveryUpdater: LiveryModifierManager;
 
 	public onlineUsers: { name: string, id: string; team: string; }[] = [];
+	public lastOnlineUserUpdateAt = 0;
 
 	constructor(public framework: FrameworkClient) {
 		this.log = framework.log;
@@ -293,7 +294,7 @@ class Application {
 			}
 
 			if (member.displayName != nick) {
-				this.log.info(`Updating ${member.displayName} to ${nick}`);
+				// this.log.info(`Updating ${member.displayName} to ${nick}`);
 				if (process.env.IS_DEV != "true") await member.setNickname(nick).catch((e) => this.log.error(`Unable to set nickname for ${member.displayName}: ${e}`));
 			}
 		});

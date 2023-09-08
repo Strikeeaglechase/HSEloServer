@@ -351,7 +351,7 @@ process.on("message", async (msg) => {
 	await updater.runBackUpdate();
 	await updater.sendResult();
 	await updater.storeResults();
-
+	console.log(`Back update process completely done!`);
 	process.exit();
 });
 

@@ -5,7 +5,7 @@ import Logger from "strike-discord-framework/dist/logger";
 import { v4 as uuidv4 } from "uuid";
 
 import { API } from "./api.js";
-import { BASE_ELO, ELOUpdater } from "./eloUpdater.js";
+import { BASE_ELO, ELOUpdater } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
 	Aircraft, AllowedMod, Death, Kill, ScoreboardMessage, Season, Spawn, Tracking, User
@@ -168,6 +168,7 @@ class Application {
 			deaths: 0,
 			rank: null,
 			history: [],
+			ignoreKillsAgainstUsers: [],
 			spawns: {
 				[Aircraft.AV42c]: 0,
 				[Aircraft.FA26b]: 0,

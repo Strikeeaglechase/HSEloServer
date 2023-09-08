@@ -1,13 +1,13 @@
 import { config } from "dotenv";
 import fs from "fs";
 
-import { CollectionManager } from "./db/collectionManager.js";
-import Database from "./db/database.js";
+import { CollectionManager } from "../db/collectionManager.js";
+import Database from "../db/database.js";
+import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
 import {
 	BASE_ELO, ELOUpdater, getKillStr, KillMetric, KillString, maxWeaponMultiplier,
 	shouldDeathBeCounted, shouldKillBeCounted, t55Penalty, teamKillPenalty, userCanRank
 } from "./eloUpdater.js";
-import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "./structures.js";
 
 config();
 const userBackupPath = "../users/";
@@ -30,6 +30,26 @@ type IPCMessage = { users: UserResult[]; type: "users"; } | { type: "mults", mul
 
 // type UserLogsObj = Record<string, string>;
 type Action = { action: "Login" | "Logout"; userId: string; };
+interface EloKillEvent {
+	event: Kill;
+	time: number;
+	type: "kill";
+}
+
+interface EloDeathEvent {
+	event: Death;
+	time: number;
+	type: "death";
+}
+
+interface EloActionEvent {
+	event: Action;
+	time: number;
+	type: "action";
+}
+
+type EloEvent = EloKillEvent | EloDeathEvent | EloActionEvent;
+
 class EloBackUpdater {
 	protected db: Database;
 	protected userDb: CollectionManager<User>;
@@ -47,7 +67,7 @@ class EloBackUpdater {
 
 	protected season: Season;
 
-	protected events: { event: Kill | Death | Action, time: number, type: "kill" | "death" | "action"; }[] = [];
+	protected events: EloEvent[] = [];
 
 	protected async loadDb() {
 		this.db = new Database({
@@ -226,6 +246,8 @@ class EloBackUpdater {
 					continue;
 				}
 
+				if (killer.ignoreKillsAgainstUsers && killer.ignoreKillsAgainstUsers.includes(victim.id)) continue;
+
 				let metric = this.killMultipliers.find(m => m.killStr == killStr);
 				let info = "";
 				if (kill.weapon == Weapon.CFIT) {
@@ -250,6 +272,8 @@ class EloBackUpdater {
 				ELOUpdater.updateUserLogForKill(timestamp, killer, victim, metric, eloSteal, killStr, info);
 				killer.eloHistory.push({ elo: killer.elo, time: e.time });
 				victim.eloHistory.push({ elo: victim.elo, time: e.time });
+				this.onUserUpdate(killer, e, eloSteal);
+				this.onUserUpdate(victim, e, eloSteal);
 			} else if (e.type == "death") {
 				const death = e.event as Death;
 				if (death.killId) continue;
@@ -266,16 +290,20 @@ class EloBackUpdater {
 
 				ELOUpdater.updateUserLogForDeath(timestamp, victim, eloSteal);
 				victim.eloHistory.push({ elo: victim.elo, time: e.time });
+				this.onUserUpdate(victim, e, eloSteal);
 			} else if (e.type == "action") {
 				const action = e.event as Action;
 				const user = this.usersMap[action.userId];
 				if (!user) continue;
 				user.history.push(`[${timestamp}] ${action.action}`);
+				this.onUserUpdate(user, e, 0);
 			}
 		}
 
 		console.log(`Primary back update calculations done! Took ${Date.now() - start}ms`);
 	}
+
+	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) { }
 
 	public async storeResults() {
 		const rankedUsers = this.users.filter(u => userCanRank(u)).sort((a, b) => b.elo - a.elo);
@@ -326,4 +354,4 @@ process.on("message", async (msg) => {
 });
 
 
-export { IPCMessage, EloBackUpdater };
+export { IPCMessage, EloBackUpdater, EloEvent };

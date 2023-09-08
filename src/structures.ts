@@ -55,6 +55,7 @@ export interface User {
 	discordId: string;
 	isBanned: boolean;
 	teamKills: number;
+	ignoreKillsAgainstUsers: string[];
 	endOfSeasonStats: {
 		season: number;
 		rank: number;

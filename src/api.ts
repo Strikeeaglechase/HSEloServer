@@ -8,7 +8,7 @@ import WebSocket from "ws";
 
 import { Application } from "./application.js";
 import { Client } from "./client.js";
-import { hourlyReportPath } from "./eloUpdater.js";
+import { hourlyReportPath } from "./elo/eloUpdater.js";
 import { createUserEloGraph } from "./graph/graph.js";
 import {
 	Aircraft, CurrentServerInformation, Death, Kill, logUser, parseAircraftString, parseTeamString,

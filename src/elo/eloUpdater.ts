@@ -3,10 +3,10 @@ import fs from "fs";
 import path from "path";
 import Logger from "strike-discord-framework/dist/logger.js";
 
-import { Application } from "./application.js";
-import { shouldUserBeBanned } from "./banHandler.js";
+import { Application } from "../application.js";
+import { shouldUserBeBanned } from "../banHandler.js";
+import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
 import { IPCMessage } from "./eloBackUpdater.js";
-import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "./structures.js";
 
 // ELO CONFIG:
 
@@ -31,7 +31,7 @@ export const t55PenaltyThreshold = 2500;
 // Maximum multiplier for an aircraft/weapon combo (limited by maxEloStealPrec)
 export const maxWeaponMultiplier = Infinity;
 
-const hourlyReportPath = "../hourlyReport/";
+const hourlyReportPath = "../../hourlyReport/";
 
 type KillString = `${string}->${string}->${string}`;
 type UserLogsObj = Record<string, string>;

@@ -5,7 +5,7 @@ import { Command, CommandEvent } from "strike-discord-framework/dist/command.js"
 
 import { ENDPOINT_BASE, getHost } from "../../api.js";
 import { Application } from "../../application.js";
-import { shouldKillBeCounted } from "../../eloUpdater.js";
+import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
 import { createUserEloGraph } from "../../graph/graph.js";
 import { Aircraft, User, Weapon } from "../../structures.js";
 

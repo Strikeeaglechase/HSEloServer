@@ -31,7 +31,7 @@ export const t55PenaltyThreshold = 2500;
 // Maximum multiplier for an aircraft/weapon combo (limited by maxEloStealPrec)
 export const maxWeaponMultiplier = Infinity;
 
-const hourlyReportPath = "../../hourlyReport/";
+const hourlyReportPath = "../hourlyReport/";
 
 type KillString = `${string}->${string}->${string}`;
 type UserLogsObj = Record<string, string>;

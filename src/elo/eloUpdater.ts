@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import Logger from "strike-discord-framework/dist/logger.js";
 
-import { Application } from "../application.js";
+import { Application, KILLS_TO_RANK } from "../application.js";
 import { shouldUserBeBanned } from "../banHandler.js";
 import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
 import { IPCMessage } from "./eloBackUpdater.js";
@@ -89,7 +89,7 @@ function shouldDeathBeCounted(death: Death, kill?: Kill) {
 }
 
 function userCanRank(user: User) {
-	return !user.isBanned && user.kills >= 10;
+	return !user.isBanned && user.kills >= KILLS_TO_RANK;
 }
 
 class ELOUpdater {
@@ -147,7 +147,7 @@ class ELOUpdater {
 		await this.writeHourlyReport();
 
 		const start = Date.now();
-		const backUpdateProcess = fork("./eloBackUpdater.js", { stdio: ["pipe", "pipe", "pipe", "ipc"] });
+		const backUpdateProcess = fork("./elo/eloBackUpdater.js", { stdio: ["pipe", "pipe", "pipe", "ipc"] });
 
 		backUpdateProcess.on("spawn", () => {
 			this.log.info(`Started eloBackUpdater process`);

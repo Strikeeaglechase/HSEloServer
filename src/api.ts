@@ -6,7 +6,7 @@ import Logger from "strike-discord-framework/dist/logger.js";
 import { v4 as uuidv4 } from "uuid";
 import WebSocket from "ws";
 
-import { Application } from "./application.js";
+import { Application, IAchievementManager } from "./application.js";
 import { Client } from "./client.js";
 import { hourlyReportPath } from "./elo/eloUpdater.js";
 import { createUserEloGraph } from "./graph/graph.js";
@@ -97,8 +97,10 @@ class API {
 	public daemonReportCb: (report: DaemonReport) => void;
 	public clients: Client[] = [];
 
+	private achievementManager: IAchievementManager;
 	constructor(private app: Application) {
 		this.log = app.log;
+		this.achievementManager = this.app.achievementManager;
 	}
 
 	public async init() {
@@ -282,6 +284,8 @@ class API {
 		};
 		this.app.kills.add(kill);
 		this.app.deaths.add(death);
+		this.achievementManager.onKill(kill);
+		this.achievementManager.onDeath(death);
 
 		const update = await this.app.elo.updateELOForKill(kill);
 		if (!update) {
@@ -290,11 +294,10 @@ class API {
 				victimElo: 0,
 				eloSteal: 0
 			};
-			return;
 		}
 
 		const { killer, victim, eloSteal } = update;
-		// res.sendStatus(200);
+
 		return {
 			killerElo: killer.elo,
 			victimElo: victim.elo,
@@ -318,6 +321,7 @@ class API {
 
 		this.app.deaths.add(death);
 		this.app.elo.updateELOForDeath(death);
+		this.achievementManager.onDeath(death);
 
 		return 200;
 	}
@@ -364,6 +368,8 @@ class API {
 			season: this.app.elo.activeSeason.id,
 		};
 		await this.app.tracking.add(trackingObject);
+
+		this.achievementManager.onTrackingEvent(trackingObject);
 
 		return 200;
 	}

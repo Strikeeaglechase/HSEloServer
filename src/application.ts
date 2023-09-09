@@ -1,11 +1,13 @@
 import Discord from "discord.js";
+import fs from "fs";
 import FrameworkClient from "strike-discord-framework";
 import { CollectionManager } from "strike-discord-framework/dist/collectionManager.js";
 import Logger from "strike-discord-framework/dist/logger";
 import { v4 as uuidv4 } from "uuid";
 
 import { API } from "./api.js";
-import { BASE_ELO, ELOUpdater } from "./elo/eloUpdater.js";
+import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
+import { EventEmitter } from "./eventEmitter.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
 	Aircraft, AllowedMod, Death, Kill, ScoreboardMessage, Season, Spawn, Tracking, User
@@ -19,6 +21,20 @@ const enableRankDisplayIn = "1015729793733492756"; // Did I just hardcode a serv
 
 function strCmpNoWhitespace(a: string, b: string) {
 	return a.replace(/\s/g, "") == b.replace(/\s/g, "");
+}
+
+interface IAchievementManager extends EventEmitter {
+	init(): Promise<void>;
+	onKill(kill: Kill): void;
+	onDeath(death: Death): void;
+	onTrackingEvent(tracking: Tracking): void;
+}
+
+class DummyAchievementManager extends EventEmitter implements IAchievementManager {
+	async init() { }
+	onKill(kill: Kill) { }
+	onDeath(death: Death) { }
+	onTrackingEvent(tracking: Tracking) { }
 }
 
 class Application {
@@ -38,6 +54,8 @@ class Application {
 	public seasons: CollectionManager<number, Season>;
 	public tracking: CollectionManager<string, Tracking>;
 
+	public achievementManager: IAchievementManager = new DummyAchievementManager();
+
 	public api: API;
 	public elo: ELOUpdater;
 	public liveryUpdater: LiveryModifierManager;
@@ -50,6 +68,18 @@ class Application {
 		this.api = new API(this);
 		this.elo = new ELOUpdater(this);
 		this.liveryUpdater = new LiveryModifierManager(this);
+	}
+
+	private async loadAchievementManager() {
+		if (fs.existsSync("./achievementSystem/achievementManager.js")) {
+			this.log.info(`Loading achievement manager`);
+			const { AchievementManager } = await import("./achievementSystem/achievementManager.js");
+			this.achievementManager = new AchievementManager(this);
+			await this.achievementManager.init();
+		} else {
+			this.log.warn(`Unable to find achievementManager.js`);
+			return;
+		}
 	}
 
 	public async init() {
@@ -67,6 +97,7 @@ class Application {
 
 		await this.api.init();
 		await this.elo.init();
+		await this.loadAchievementManager();
 		await this.updateScoreboards();
 
 		const users = await this.users.get();
@@ -88,7 +119,7 @@ class Application {
 		const interval = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60;
 		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 30;
 		setInterval(() => this.updateScoreboards(), interval);
-		setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
+		if (process.env.IS_DEV != "true") setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
 
 		this.runHourlyTasks(); // Run it once on startup
 
@@ -244,6 +275,7 @@ class Application {
 	}
 
 	private async updateScoreboards() {
+		await this.preformUserRankUpdate();
 		const scoreboards = await this.scoreboardMessages.get();
 		const embed = await this.createScoreboardMessage();
 		const proms = scoreboards.map(async (scoreboard) => {
@@ -259,6 +291,22 @@ class Application {
 
 			if (scoreboard.guildId == enableRankDisplayIn) {
 				await this.updateUserRankDisplay();
+			}
+		});
+
+		await Promise.all(proms);
+	}
+
+	private async preformUserRankUpdate() {
+		const users = await this.users.collection.find({ kills: { $gt: KILLS_TO_RANK } }).toArray();
+		const usersThatCanRank = users.filter(u => userCanRank(u));
+		usersThatCanRank.sort((a, b) => b.elo - a.elo);
+
+		const proms = usersThatCanRank.map(async (user, idx) => {
+			const newUserRank = idx + 1;
+			if (user.rank != newUserRank) {
+				user.rank = newUserRank;
+				await this.users.update(user, user.id);
 			}
 		});
 
@@ -344,4 +392,4 @@ class Application {
 	}
 }
 
-export { Application };
+export { Application, IAchievementManager, KILLS_TO_RANK };

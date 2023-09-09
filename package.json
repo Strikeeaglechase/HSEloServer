@@ -16,6 +16,8 @@
 		"dotenv": "^16.0.2",
 		"express": "^4.18.1",
 		"glicko2-lite": "^2.0.1",
+		"google-auth-library": "^8.9.0",
+		"google-spreadsheet": "^4.0.3",
 		"jimp": "^0.22.7",
 		"sharp": "^0.31.3",
 		"strike-discord-framework": "^1.4.13",

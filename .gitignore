@@ -5,6 +5,8 @@ steamapps
 banlist.txt
 *ourlyReport
 testCache
+*-creds.json
+achievementSystem
 
 # Logs
 logs

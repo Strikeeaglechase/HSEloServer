@@ -306,18 +306,42 @@ class EloBackUpdater {
 	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) { }
 
 	public async storeResults() {
+		console.log(`Beginning store results`);
 		const rankedUsers = this.users.filter(u => userCanRank(u)).sort((a, b) => b.elo - a.elo);
 		this.seasons.collection.updateOne({ id: this.season.id }, { $set: { totalRankedUsers: rankedUsers.length } });
+		console.log(`Updated total ranked users to ${rankedUsers.length}`);
 
 		rankedUsers.forEach((user, i) => user.rank = i + 1);
 		this.users.filter(u => !userCanRank(u)).forEach(user => user.rank = null); // Un-rank users
+		console.log(`Calculated user ranks`);
 
-		// Update all the users
-		const proms = this.users.map(user => {
-			this.userDb.update(user, user.id);
-		});
+		const batchSize = 1000;
 
-		await Promise.all(proms);
+		for (let i = 0; i < this.users.length; i += batchSize) {
+			const chunk = this.users.slice(i, i + batchSize);
+			// const proms = chunk.map(user => this.userDb.update(user, user.id));
+			const updateActions = chunk.map(user => {
+				return {
+					updateOne: {
+						filter: { id: user.id },
+						update: {
+							$set: {
+								elo: user.elo,
+								kills: user.kills,
+								deaths: user.deaths,
+								eloHistory: user.eloHistory,
+								history: user.history,
+								rank: user.rank
+							}
+						}
+					}
+				};
+			});
+
+			console.log(`Starting bulk update for ${i} - ${i + batchSize}`);
+			await this.userDb.collection.bulkWrite(updateActions, { ordered: false });
+			console.log(`Finished bulk update for ${i} - ${i + batchSize}`);
+		}
 	}
 
 	public async sendResult() {
@@ -336,8 +360,10 @@ class EloBackUpdater {
 
 		// console.log(`Done sending users`);
 
+		console.log(`About to send`);
 		const message: IPCMessage = { type: "mults", mults: this.killMultipliers };
 		process.send(message);
+		console.log(`Sent`);
 	}
 }
 

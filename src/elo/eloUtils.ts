@@ -41,8 +41,8 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 			}
 		});
 
-		const u = this.usersMap["76561198087132420"];
-		fs.writeFileSync("../out-log.txt", u.history.join("\n"));
+		const u = this.usersMap["76561199442641427"];
+		fs.writeFileSync("../../out-log.txt", u.history.join("\n"));
 	}
 }
 
@@ -455,4 +455,6 @@ async function getInterestingMetrics() {
 
 }
 
-getInterestingMetrics();
+// getInterestingMetrics();
+runComparison();
+// writeHourlyReport();

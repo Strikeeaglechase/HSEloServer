@@ -149,7 +149,7 @@ class EloBackUpdater {
 	protected async loadUsers() {
 		const usersMap: Record<string, User> = {};
 		const users = await this.userDb.collection.find({}).toArray();
-		this.backupUsers(users);
+		// this.backupUsers(users);
 
 		users.forEach(u => {
 			u.elo = BASE_ELO;
@@ -203,9 +203,8 @@ class EloBackUpdater {
 		console.log(`Loaded ${this.events.length} events.`);
 	}
 
-	public async runBackUpdate() {
+	protected async setupBackUpdate() {
 		await this.loadDb();
-		const start = Date.now();
 		this.season = await this.seasons.collection.findOne({ active: true });
 		console.log(`Active season: ${this.season.id} (${this.season.name})`);
 
@@ -213,6 +212,12 @@ class EloBackUpdater {
 		await this.loadKillsAndDeaths();
 		this.calculateEloMultipliers();
 		this.loadEvents();
+	}
+
+	public async runBackUpdate() {
+		const start = Date.now();
+		await this.setupBackUpdate();
+		console.log(`Setup completed, starting main calculation`);
 
 
 		for (let i = 0; i < this.events.length; i++) {
@@ -382,4 +387,4 @@ process.on("message", async (msg) => {
 });
 
 
-export { IPCMessage, EloBackUpdater, EloEvent };
+export { IPCMessage, EloBackUpdater, EloEvent, Action };

@@ -17,7 +17,8 @@ export enum Weapon {
 	HARM,
 	Invalid,
 	AIM9E,
-	CFIT
+	CFIT,
+	Collision
 }
 
 export enum Team {
@@ -94,6 +95,8 @@ export function userToLimitedUser(user: User): LimitedUserData {
 
 
 export function parseAircraftString(aircraft: string): Aircraft {
+	if (!aircraft) return Aircraft.Invalid;
+
 	const [_, name] = aircraft.split("/");
 	switch (name) {
 		case "VTOL4": return Aircraft.AV42c;
@@ -110,9 +113,12 @@ export function parseAircraftString(aircraft: string): Aircraft {
 
 
 export function parseWeaponString(weapon: string): Weapon {
+	if (!weapon) return Weapon.Invalid;
+
 	// Special weapons
 	if (weapon === "GUN") return Weapon.Gun;
 	if (weapon === "CFIT") return Weapon.CFIT;
+	if (weapon === "COLLISION") return Weapon.Collision;
 
 	const [_, __, name] = weapon.split("/");
 	switch (name) {
@@ -131,6 +137,18 @@ export function parseWeaponString(weapon: string): Weapon {
 			return Weapon.Invalid;
 		}
 	}
+}
+
+export function isIRMissile(weapon: Weapon) {
+	return [Weapon.AIM9E, Weapon.AIM9, Weapon.AIM9X, Weapon.AIRST].includes(weapon);
+}
+
+export function isActiveRadarMissile(weapon: Weapon) {
+	return [Weapon.AIM120].includes(weapon);
+}
+
+export function isRadarMissile(weapon: Weapon) {
+	return [Weapon.AIM120, Weapon.AIM7].includes(weapon);
 }
 
 export function parseTeamString(team: string): Team {
@@ -183,7 +201,6 @@ export function isKillOld(kill: any): kill is KillOld {
 }
 
 
-
 export interface UserAircraftInformation {
 	ownerId: string;
 	occupants: string[];
@@ -205,6 +222,10 @@ export interface Kill {
 	serverInfo: CurrentServerInformation;
 
 	weapon: Weapon;
+	weaponUuid: string;
+	previousDamagedByUserId: string;
+	previousDamagedByWeapon: Weapon;
+
 	time: number;
 	id: string;
 	season: number;
@@ -299,4 +320,12 @@ export interface Tracking {
 	time: number;
 	season: number;
 	args: any[];
+}
+
+export interface MissileLaunchParams {
+	uuid: string;
+	type: Weapon;
+	team: Team;
+	launcher: UserAircraftInformation;
+	players: UserAircraftInformation[];
 }

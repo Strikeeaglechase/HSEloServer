@@ -1,50 +1,6 @@
-import { config } from "dotenv";
-import fs from "fs";
-
-import Database from "../db/database.js";
-import { Aircraft, Death, Kill, User, Weapon } from "../structures.js";
-import { EloBackUpdater, EloEvent } from "./eloBackUpdater.js";
-
-config({ path: "../.env" });
-const hourlyReportPath = "../../prodHourlyReport";
-
-class ProdDBBackUpdater extends EloBackUpdater {
-	protected override async loadDb() {
-		this.db = new Database({
-			databaseName: "vtol-server-elo",
-			url: process.env.PROD_DB_URL
-		}, console.log);
-
-		await this.db.init();
-		this.userDb = await this.db.collection("users", false, "id");
-		this.seasons = await this.db.collection("seasons", false, "id");
-	}
-
-	protected async loadFromHourlyReport() {
-		console.log(`Loading from hourly report...`);
-		this.kills = await this.loadFileStreamed<Kill>(`${hourlyReportPath}/kills.json`);
-		this.deaths = await this.loadFileStreamed<Death>(`${hourlyReportPath}/deaths.json`);
-
-		console.log(`Loaded ${this.kills.length} kills and ${this.deaths.length} deaths.`);
-	}
-}
-
-class ComparisonUpdater extends ProdDBBackUpdater {
-	public async runCompare() {
-		// Compare the locally computed elo to the current elo in the database
-		const currentDbUsers = await this.userDb.collection.find({}).toArray();
-		currentDbUsers.forEach((user) => {
-			const localUser = this.usersMap[user.id];
-
-			if (Math.abs(localUser.elo - user.elo) > 10) {
-				console.log(`${user.pilotNames[0]} (${user.id}). ${user.elo} -> ${localUser.elo}`);
-			}
-		});
-
-		const u = this.usersMap["76561199442641427"];
-		fs.writeFileSync("../../out-log.txt", u.history.join("\n"));
-	}
-}
+import { Aircraft, User, Weapon } from "../../structures.js";
+import { EloEvent } from "../eloBackUpdater.js";
+import { ProdDBBackUpdater } from "./eloUtils.js";
 
 interface ExtraUserStats {
 	maxElo: number;
@@ -61,10 +17,17 @@ interface ExtraUserStats {
 const strUser = (u: User) => `${u.pilotNames[0] ?? "Unknown"} (${u.id})`;
 const killPair = (a: string, b: string) => a > b ? `${a}-${b}` : `${b}-${a}`;
 
+
 class InterestingMetricsExtractor extends ProdDBBackUpdater {
 	private extraUserStats: Record<string, ExtraUserStats> = {};
 	private killPairs: Record<string, number> = {};
 	private eloTransfers: Record<string, number> = {};
+
+	// protected async loadDb(): Promise<void> {
+	// 	await super.loadDb();
+
+	// 	this.reportPath
+	// }
 
 	protected override onUserUpdate(user: User, event: EloEvent, eloDelta: number): void {
 		super.onUserUpdate(user, event, eloDelta);
@@ -411,50 +374,10 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 	}
 }
 
-async function writeHourlyReport() {
-	if (!fs.existsSync(hourlyReportPath)) fs.mkdirSync(hourlyReportPath);
-	if (fs.existsSync(`${hourlyReportPath}/kills.json`)) fs.rmSync(`${hourlyReportPath}/kills.json`);
-	if (fs.existsSync(`${hourlyReportPath}/deaths.json`)) fs.rmSync(`${hourlyReportPath}/deaths.json`);
-	console.log(`Writing hourly report to ${hourlyReportPath}`);
-
-	const db = new Database({
-		databaseName: "vtol-server-elo",
-		url: process.env.PROD_DB_URL
-	}, console.log);
-	await db.init();
-	const kills = await db.collection("kills-v2", false, "id");
-	const deaths = await db.collection("deaths-v2", false, "id");
-
-	const killsStream = fs.createWriteStream(`${hourlyReportPath}/kills.json`);
-	const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);
-	const proms = [
-		new Promise(res => killsStream.on("finish", res)),
-		new Promise(res => deathsStream.on("finish", res))
-	];
-
-	kills.collection.find({}).stream().on("data", (kill) => killsStream.write(JSON.stringify(kill) + "\n")).on("end", () => killsStream.end());
-	deaths.collection.find({}).stream().on("data", (death) => deathsStream.write(JSON.stringify(death) + "\n")).on("end", () => deathsStream.end());
-
-	await Promise.all(proms);
-
-	console.log(`Wrote hourly report finished!`);
-}
-
-async function runComparison() {
-	const updater = new ComparisonUpdater();
-	await updater.runBackUpdate();
-	await updater.runCompare();
-}
-
 async function getInterestingMetrics() {
 	const updater = new InterestingMetricsExtractor();
 	await updater.runBackUpdate();
 	updater.getMetrics();
-
-
-
 }
 
-// getInterestingMetrics();
-runComparison();
-// writeHourlyReport();
+getInterestingMetrics();

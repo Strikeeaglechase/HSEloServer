@@ -11,9 +11,9 @@ import { Client } from "./client.js";
 import { hourlyReportPath } from "./elo/eloUpdater.js";
 import { createUserEloGraph } from "./graph/graph.js";
 import {
-	Aircraft, CurrentServerInformation, Death, Kill, logUser, parseAircraftString, parseTeamString,
-	parseTimeOfDayString, parseWeaponString, Spawn, Tracking, UserAircraftInformation,
-	userToLimitedUser, Weapon
+	Aircraft, CurrentServerInformation, Death, Kill, logUser, MissileLaunchParams,
+	parseAircraftString, parseTeamString, parseTimeOfDayString, parseWeaponString, Spawn, Tracking,
+	UserAircraftInformation, userToLimitedUser, Weapon
 } from "./structures.js";
 
 export const ENDPOINT_BASE = "/api/v1/";
@@ -100,10 +100,10 @@ class API {
 	private achievementManager: IAchievementManager;
 	constructor(private app: Application) {
 		this.log = app.log;
-		this.achievementManager = this.app.achievementManager;
 	}
 
-	public async init() {
+	public async init(achievementManager: IAchievementManager) {
+		this.achievementManager = achievementManager;
 		const port = parseInt(process.env.PORT);
 
 		this.server.use(bodyParser.json());
@@ -239,6 +239,7 @@ class API {
 
 		this.log.info(`User ${logUser(user)} logged in`);
 		await this.app.users.collection.updateOne({ id: user.id }, { $push: { loginTimes: Date.now() } });
+		this.achievementManager.onUserLogin(user);
 		// await this.app.users.update(user, user.id);
 		return 200;
 	}
@@ -252,6 +253,7 @@ class API {
 		this.log.info(`User ${logUser(user)} logged out`);
 		user.logoutTimes.push(Date.now());
 		await this.app.users.update(user, user.id);
+		this.achievementManager.onUserLogout(user);
 		return 200;
 	}
 
@@ -259,12 +261,18 @@ class API {
 		victim: APIUserAircraft,
 		killer: APIUserAircraft,
 		weapon: string,
+		weaponUuid: string,
+		previousDamagedByUserId: string,
+		previousDamagedByWeapon: string,
 		serverInfo: APIServerInfo,
 	}) {
 		const kill: Kill = {
 			id: uuidv4(),
 			time: Date.now(),
 			weapon: parseWeaponString(killReq.weapon),
+			weaponUuid: killReq.weaponUuid,
+			previousDamagedByUserId: killReq.previousDamagedByUserId,
+			previousDamagedByWeapon: parseWeaponString(killReq.previousDamagedByWeapon),
 			killer: parseAPIUserAircraft(killReq.killer),
 			victim: parseAPIUserAircraft(killReq.victim),
 			serverInfo: parseAPIServerInfo(killReq.serverInfo),
@@ -284,8 +292,6 @@ class API {
 		};
 		this.app.kills.add(kill);
 		this.app.deaths.add(death);
-		this.achievementManager.onKill(kill);
-		this.achievementManager.onDeath(death);
 
 		const update = await this.app.elo.updateELOForKill(kill);
 		if (!update) {
@@ -298,11 +304,35 @@ class API {
 
 		const { killer, victim, eloSteal } = update;
 
+		this.achievementManager.onKill(kill, eloSteal);
+		this.achievementManager.onDeath(death, eloSteal);
+
 		return {
 			killerElo: killer.elo,
 			victimElo: victim.elo,
 			eloSteal: eloSteal
 		};
+	}
+
+	public async handleMissileLaunchParams(paramReq: {
+		uuid: string;
+		type: string;
+		team: string;
+		launcher: APIUserAircraft;
+		players: APIUserAircraft[];
+	}) {
+		this.log.info(`Got missile launch params for ${paramReq.uuid}`);
+		const mlParams: MissileLaunchParams = {
+			uuid: paramReq.uuid,
+			type: parseWeaponString(paramReq.type),
+			team: parseTeamString(paramReq.team),
+			launcher: parseAPIUserAircraft(paramReq.launcher),
+			players: paramReq.players.map(p => parseAPIUserAircraft(p)),
+		};
+
+		this.app.missileLaunchParams.add(mlParams);
+
+		return 200;
 	}
 
 	public async handleDeath(deathReq: {
@@ -317,11 +347,11 @@ class API {
 			season: this.app.elo.activeSeason.id,
 		};
 
-		this.log.info(`Death: ${death.victim.ownerId} died in ${Weapon[death.victim.type]}`);
+		this.log.info(`Death: ${death.victim.ownerId} died in ${Aircraft[death.victim.type]}`);
 
 		this.app.deaths.add(death);
-		this.app.elo.updateELOForDeath(death);
-		this.achievementManager.onDeath(death);
+		const { eloSteal } = await this.app.elo.updateELOForDeath(death);
+		this.achievementManager.onDeath(death, eloSteal);
 
 		return 200;
 	}

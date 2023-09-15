@@ -109,6 +109,7 @@ class Client {
 			case "tracking": this.exec(this.api.handleTracking(packet.data.trackingType, packet.data.trackingData), packet); break;
 			case "online": this.exec(this.api.updateOnlineUsers(packet.data), packet); break;
 			case "daemon_report": this.api.handleDaemonReport(packet.data); break;
+			case "missile_launch_params": this.exec(this.api.handleMissileLaunchParams(packet.data), packet); break;
 
 			default:
 				this.app.log.warn(`client ${this.id} sent unknown packet type: ${packet.type}`);

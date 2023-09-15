@@ -120,6 +120,11 @@ class ELOUpdater {
 		this.activeSeason = await this.app.getActiveSeason();
 	}
 
+	public getMultiplier(str: KillString) {
+		const metric = this.lastMultipliers.find(m => m.killStr == str);
+		return metric?.multiplier ?? 1;
+	}
+
 	private checkSpawns() {
 		const file = fs.readFileSync(`../log.txt`, "ascii");
 		const lines = file.split("\n");
@@ -238,6 +243,13 @@ class ELOUpdater {
 		victim.history.push(`[${timestamp}] Death from ${killer.pilotNames[0]} with T-55 lost ${eloSteal} elo`);
 	}
 
+	public static updateUserLogForCollision(timestamp: string, killer: User, victim: User) {
+		// We assume the collision kill with be emitted for both users, to only log once check higher userId
+		if (killer.id < victim.id) return;
+		killer.history.push(`[${timestamp}] Collision with ${victim.pilotNames[0]}`);
+		victim.history.push(`[${timestamp}] Collision with ${killer.pilotNames[0]}`);
+	}
+
 	public async updateELOForKill(kill: Kill) {
 		const killer = await this.app.users.get(kill.killer.ownerId);
 		const victim = await this.app.users.get(kill.victim.ownerId);
@@ -250,6 +262,17 @@ class ELOUpdater {
 		if (!victim) {
 			this.log.error(`Victim ${kill.victim.ownerId} not found!`);
 			return;
+		}
+
+		if (kill.weapon == Weapon.Collision) {
+			this.log.info(`User ${killer.pilotNames[0]} collided with ${victim.pilotNames[0]}`);
+			ELOUpdater.updateUserLogForCollision(new Date().toISOString(), killer, victim);
+
+			return {
+				killer: killer,
+				victim: victim,
+				eloSteal: 0,
+			};
 		}
 
 		if (kill.killer.team == kill.victim.team) {
@@ -268,6 +291,7 @@ class ELOUpdater {
 		const killStr = getKillStr(kill);
 		let metric = this.lastMultipliers.find(m => m.killStr == killStr);
 		let info = "";
+
 		if (kill.weapon == Weapon.CFIT) {
 			const { cfitMetric, extraInfo } = ELOUpdater.getCFITMultiplier(kill, this.lastMultipliers);
 			if (cfitMetric == null) {
@@ -280,6 +304,7 @@ class ELOUpdater {
 			info = extraInfo;
 			metric = cfitMetric;
 		}
+
 		const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
 
 		this.log.info(`Killer ${killer.pilotNames[0]} (${killer.elo}) killed victim ${victim.pilotNames[0]} (${victim.elo}) for ${eloSteal.toFixed(1)} ELO`);
@@ -341,6 +366,8 @@ class ELOUpdater {
 		ELOUpdater.updateUserLogForDeath(new Date().toISOString(), victim, eloSteal);
 
 		await this.app.users.update(victim, victim.id);
+
+		return { eloSteal };
 	}
 
 	public static getCFITMultiplier(kill: Kill, multipliers: KillMetric[]): { cfitMetric: KillMetric, extraInfo: string; } {

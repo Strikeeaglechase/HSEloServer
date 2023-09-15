@@ -34,6 +34,7 @@ class Link extends Command {
 		// Link
 		user.discordId = message.author.id;
 		await app.users.update(user, user.id);
+		app.achievementManager.onLinkedAccount(user);
 
 		return framework.success(`You are now linked to ${user.pilotNames[0]} (${user.id})`);
 	}

@@ -10,7 +10,8 @@ import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
 import { EventEmitter } from "./eventEmitter.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
-	Aircraft, AllowedMod, Death, Kill, ScoreboardMessage, Season, Spawn, Tracking, User
+	Aircraft, AllowedMod, Death, Kill, MissileLaunchParams, ScoreboardMessage, Season, Spawn,
+	Tracking, User
 } from "./structures.js";
 
 const SERVER_MAX_PLAYERS = 16;
@@ -25,9 +26,12 @@ function strCmpNoWhitespace(a: string, b: string) {
 
 interface IAchievementManager extends EventEmitter {
 	init(): Promise<void>;
-	onKill(kill: Kill): void;
-	onDeath(death: Death): void;
+	onKill(kill: Kill, deltaElo: number): void;
+	onDeath(death: Death, deltaElo: number): void;
 	onTrackingEvent(tracking: Tracking): void;
+	onUserLogin(user: User): void;
+	onUserLogout(user: User): void;
+	onLinkedAccount(user: User): void;
 }
 
 class DummyAchievementManager extends EventEmitter implements IAchievementManager {
@@ -35,6 +39,9 @@ class DummyAchievementManager extends EventEmitter implements IAchievementManage
 	onKill(kill: Kill) { }
 	onDeath(death: Death) { }
 	onTrackingEvent(tracking: Tracking) { }
+	onUserLogin(user: User) { }
+	onUserLogout(user: User) { }
+	onLinkedAccount(user: User) { }
 }
 
 class Application {
@@ -48,6 +55,7 @@ class Application {
 	public kills: CollectionManager<string, Kill>;
 	public deaths: CollectionManager<string, Death>;
 	public spawns: CollectionManager<string, Spawn>;
+	public missileLaunchParams: CollectionManager<string, MissileLaunchParams>;
 
 	public scoreboardMessages: CollectionManager<string, ScoreboardMessage>;
 	public allowedMods: CollectionManager<string, AllowedMod>;
@@ -94,10 +102,11 @@ class Application {
 		this.spawns = await this.framework.database.collection("spawns-v2", false, "id");
 		this.seasons = await this.framework.database.collection("seasons", false, "id");
 		this.tracking = await this.framework.database.collection("tracking", false, "id");
+		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
 
-		await this.api.init();
-		await this.elo.init();
 		await this.loadAchievementManager();
+		await this.api.init(this.achievementManager);
+		await this.elo.init();
 		await this.updateScoreboards();
 
 		const users = await this.users.get();

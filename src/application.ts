@@ -282,8 +282,6 @@ class Application {
 	}
 
 	private async createOnlineboardMessage() {
-		this.onlineUsers = [{ name: "Test", id: "76561198350924147", team: "Blue" }, { name: "Test2", id: "76561198985917972", team: "Red" }, { name: "Test3", id: "76561198099952573", team: "Blue" }];
-
 		const embed = new Discord.MessageEmbed({ title: "Onlineboard" });
 		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
 		let onlineUsers = await Promise.all(this.onlineUsers.map(async user => this.users.get(user.id)));

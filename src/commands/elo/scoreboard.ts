@@ -21,11 +21,11 @@ class Scoreboard extends Command {
 		if (existing) {
 			const confirm = await framework.utils.reactConfirm(`There is already a scoreboard in this server, do you want to delete it?`, message);
 			if (confirm) {
-				await app.deleteBoard(existing);
+				await app.deleteScoreboard(existing);
 			}
 		}
 
-		const scoreboard = await app.createNewBoard(message);
+		const scoreboard = await app.createScoreboard(message);
 		if (!scoreboard) return framework.error(`An error has occurred while creating the scoreboard`);
 		const msg = await message.channel.send(framework.success(`Scoreboard created!`));
 		await new Promise((resolve) => setTimeout(resolve, 5000));

@@ -41,6 +41,13 @@ export interface ScoreboardMessage {
 	id: string;
 }
 
+export interface OnlineboardMessage {
+	messageId: string;
+	channelId: string;
+	guildId: string;
+	id: string;
+}
+
 export interface User {
 	id: string;
 	pilotNames: string[];

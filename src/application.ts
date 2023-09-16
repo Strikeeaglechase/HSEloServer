@@ -10,7 +10,7 @@ import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
 import { EventEmitter } from "./eventEmitter.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
-	Aircraft, AllowedMod, Death, Kill, MissileLaunchParams, ScoreboardMessage, Season, Spawn,
+	Aircraft, AllowedMod, Death, Kill, MissileLaunchParams, OnlineboardMessage, ScoreboardMessage, Season, Spawn,
 	Tracking, User
 } from "./structures.js";
 
@@ -58,6 +58,7 @@ class Application {
 	public missileLaunchParams: CollectionManager<string, MissileLaunchParams>;
 
 	public scoreboardMessages: CollectionManager<string, ScoreboardMessage>;
+	public onlineboardMessages: CollectionManager<string, OnlineboardMessage>;
 	public allowedMods: CollectionManager<string, AllowedMod>;
 	public seasons: CollectionManager<number, Season>;
 	public tracking: CollectionManager<string, Tracking>;
@@ -93,6 +94,7 @@ class Application {
 	public async init() {
 		this.log.info(`Application has started!`);
 		this.scoreboardMessages = await this.framework.database.collection("scoreboard-messages", false, "id");
+		this.onlineboardMessages = await this.framework.database.collection("onlineboard-messages", false, "id");
 
 		this.users = await this.framework.database.collection("users", false, "id");
 		this.allowedMods = await this.framework.database.collection("allowed-mods", false, "id");
@@ -128,6 +130,7 @@ class Application {
 		const interval = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60;
 		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 30;
 		setInterval(() => this.updateScoreboards(), interval);
+		setInterval(() => this.updateOnlineboards(), interval);
 		if (process.env.IS_DEV != "true") setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
 
 		this.runHourlyTasks(); // Run it once on startup
@@ -278,6 +281,40 @@ class Application {
 		return embed;
 	}
 
+	private async createOnlineboardMessage() {
+		const embed = new Discord.MessageEmbed({ title: "Onlineboard" });
+		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
+		let onlineUsers = await Promise.all(this.onlineUsers.map(async user => this.users.get(user.id)));
+		onlineUsers = onlineUsers.sort((a, b) => b.elo - a.elo);
+
+		let min = onlineUsers.length > 0 ? onlineUsers[0].elo : 0;
+		let max = 0;
+		let avg = 0;
+
+		const table: (string | number)[][] = [["Name", "ELO", "Team"]];
+		onlineUsers.forEach((user, idx) => {
+			const team = this.onlineUsers.find(u => u.id === user.id).team;
+
+			min = Math.min(min, user.elo);
+			max = Math.max(max, user.elo);
+			avg += user.elo;
+
+			table.push([
+				user.pilotNames[0],
+				Math.round(user.elo),
+				team,
+			]);
+		});
+
+		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
+		resultStr += `\`\`\`ansi\n${this.table(table, 16).join("\n")}\n\`\`\`\n`;
+		resultStr += `\`\`\`Min: ${Math.round(min)} | Max: ${Math.round(max)} | Avg: ${Math.round(avg / onlineUsers.length)}\`\`\`\n`;
+
+		embed.setDescription(resultStr);
+		embed.setTimestamp();
+		return embed;
+	}
+
 	public table(data: (string | number)[][], tEntryMaxLen = 16) {
 		const widths = data[0].map((_, i) => Math.max(...data.map(row => String(row[i]).length)));
 		return data.map(row => row.map((val, i) => String(val).padEnd(widths[i]).substring(0, tEntryMaxLen)).join(" "));
@@ -299,6 +336,28 @@ class Application {
 			});
 
 			if (scoreboard.guildId == enableRankDisplayIn) {
+				await this.updateUserRankDisplay();
+			}
+		});
+
+		await Promise.all(proms);
+	}
+
+	private async updateOnlineboards() {
+		const onlineboards = await this.onlineboardMessages.get();
+		const embed = await this.createOnlineboardMessage();
+		const proms = onlineboards.map(async (onlineboard) => {
+			const channel = await this.framework.client.channels.fetch(onlineboard.channelId).catch(() => { }) as unknown as Discord.TextChannel;
+			if (!channel) return;
+			const msg = await channel.messages.fetch(onlineboard.messageId).catch(() => { });
+			if (!msg) return;
+
+			await msg.edit({ embeds: [embed] }).catch((e) => {
+				this.log.warn(`Unable to update scoreboard: ${e}`);
+				console.log(e);
+			});
+
+			if (onlineboard.guildId == enableRankDisplayIn) {
 				await this.updateUserRankDisplay();
 			}
 		});
@@ -363,7 +422,7 @@ class Application {
 		this.elo.runHourlyTasks();
 	}
 
-	public async createNewBoard(message: Discord.Message) {
+	public async createScoreboard(message: Discord.Message) {
 		const emb = new Discord.MessageEmbed({ title: "Scoreboard" });
 		const msg = await message.channel.send({ embeds: [emb] }).catch(() => { });
 		if (!msg) {
@@ -383,7 +442,27 @@ class Application {
 		return scoreboard;
 	}
 
-	public async deleteBoard(scoreboard: ScoreboardMessage) {
+	public async createOnlineboard(message: Discord.Message) {
+		const emb = new Discord.MessageEmbed({ title: "Online" });
+		const msg = await message.channel.send({ embeds: [emb] }).catch(() => { });
+		if (!msg) {
+			this.log.error(`Unable to send message in channel ${message.channel.id}`);
+			return;
+		}
+
+		const onlineboard: OnlineboardMessage = {
+			messageId: msg.id,
+			channelId: msg.channel.id,
+			guildId: msg.guild.id,
+			id: uuidv4()
+		};
+		await this.onlineboardMessages.add(onlineboard);
+
+		this.log.info(`Created new onlineboard ${onlineboard.id} (${onlineboard.messageId}) in channel ${onlineboard.channelId} in guild ${onlineboard.guildId}`);
+		return onlineboard;
+	}
+
+	public async deleteScoreboard(scoreboard: ScoreboardMessage) {
 		const channel = await this.framework.client.channels.fetch(scoreboard.channelId).catch(() => { }) as unknown as Discord.TextChannel;;
 		if (channel) {
 			const msg = await channel.messages.fetch(scoreboard.messageId).catch(() => { });
@@ -398,6 +477,23 @@ class Application {
 
 		this.log.info(`Deleting scoreboard ${scoreboard.id}`);
 		await this.scoreboardMessages.remove(scoreboard.id);
+	}
+
+	public async deleteOnlineboard(onlineboard: OnlineboardMessage) {
+		const channel = await this.framework.client.channels.fetch(onlineboard.channelId).catch(() => { }) as unknown as Discord.TextChannel;;
+		if (channel) {
+			const msg = await channel.messages.fetch(onlineboard.messageId).catch(() => { });
+			if (msg) {
+				await msg.delete().catch(() => { });
+			} else {
+				this.log.warn(`Could not find message ${onlineboard.messageId} in channel ${onlineboard.channelId} for deletion`);
+			}
+		} else {
+			this.log.warn(`Could not find channel ${onlineboard.channelId} for deletion`);
+		}
+
+		this.log.info(`Deleting onlineboard ${onlineboard.id}`);
+		await this.onlineboardMessages.remove(onlineboard.id);
 	}
 }
 

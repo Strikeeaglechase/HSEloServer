@@ -1,0 +1,584 @@
+{
+	"openapi": "3.0.0",
+	"info": {
+		"version": "1.0.0",
+		"title": "HS Elo Api"
+	},
+	"servers": [
+		{
+			"url": "https://hs.vtolvr.live/api/v1/public"
+		}
+	],
+	"paths": {
+		"/users": {
+			"get": {
+				"summary": "List all users",
+				"operationId": "listUsers",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "An array of all users",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/User"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/users/{userId}": {
+			"get": {
+				"summary": "Info for a specific user",
+				"operationId": "showUserById",
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "path",
+						"required": true,
+						"description": "The id of the user to retrieve",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Expected response to a valid request",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/User"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/graph/{userId}": {
+			"get": {
+				"summary": "Graph of elo for a specific user",
+				"operationId": "showGraphById",
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "path",
+						"required": true,
+						"description": "The id of the user to retrieve",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Expected response to a valid request",
+						"content": {
+							"image/png": {
+								"schema": {
+									"type": "string",
+									"format": "binary"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/online": {
+			"get": {
+				"summary": "List all online users",
+				"operationId": "listOnlineUsers",
+				"parameters": [],
+				"responses": {
+					"200": {
+						"description": "An array of all online users",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/OnlineUser"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/log/{userId}": {
+			"get": {
+				"summary": "Log of a specific user",
+				"operationId": "showLogById",
+				"parameters": [
+					{
+						"name": "userId",
+						"in": "path",
+						"required": true,
+						"description": "The id of the user to retrieve",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Expected response to a valid request",
+						"content": {
+							"text/html": {
+								"schema": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/kills": {
+			"get": {
+				"summary": "List all kills matching the query",
+				"operationId": "listKills",
+				"responses": {
+					"200": {
+						"description": "Expected response to a valid request",
+						"content": {
+							"application/x-ndjson": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Kill"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/deaths": {
+			"get": {
+				"summary": "List all deaths matching the query",
+				"operationId": "listDeaths",
+				"responses": {
+					"200": {
+						"description": "Expected response to a valid request",
+						"content": {
+							"application/x-ndjson": {
+								"schema": {
+									"type": "array",
+									"items": {
+										"$ref": "#/components/schemas/Death"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"User": {
+				"required": [
+					"id",
+					"pilotNames",
+					"loginTimes",
+					"logoutTimes",
+					"kills",
+					"deaths",
+					"spawns",
+					"elo",
+					"eloHistory",
+					"rank",
+					"history",
+					"discordId",
+					"isBanned",
+					"teamKills",
+					"ignoreKillsAgainstUsers",
+					"endOfSeasonStats",
+					"eloFreeze"
+				],
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"pilotNames": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"loginTimes": {
+						"type": "array",
+						"items": {
+							"type": "number"
+						}
+					},
+					"logoutTimes": {
+						"type": "array",
+						"items": {
+							"type": "number"
+						}
+					},
+					"kills": {
+						"type": "number"
+					},
+					"deaths": {
+						"type": "number"
+					},
+					"spawns": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "number"
+						}
+					},
+					"elo": {
+						"type": "number"
+					},
+					"eloHistory": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"time": {
+									"type": "number"
+								},
+								"elo": {
+									"type": "number"
+								}
+							}
+						}
+					},
+					"rank": {
+						"type": "number"
+					},
+					"history": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"discordId": {
+						"type": "string"
+					},
+					"isBanned": {
+						"type": "boolean"
+					},
+					"teamKills": {
+						"type": "number"
+					},
+					"ignoreKillsAgainstUsers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"endOfSeasonStats": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"season": {
+									"type": "number"
+								},
+								"rank": {
+									"type": "number"
+								},
+								"elo": {
+									"type": "number"
+								},
+								"teamKills": {
+									"type": "number"
+								},
+								"history": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"eloFreeze": {
+						"type": "boolean"
+					}
+				}
+			},
+			"LimitedUserData": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"pilotNames": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"kills": {
+						"type": "number"
+					},
+					"deaths": {
+						"type": "number"
+					},
+					"elo": {
+						"type": "number"
+					},
+					"rank": {
+						"type": "number"
+					},
+					"discordId": {
+						"type": "string"
+					},
+					"isBanned": {
+						"type": "boolean"
+					},
+					"teamKills": {
+						"type": "number"
+					}
+				}
+			},
+			"OnlineUser": {
+				"type": "object",
+				"required": [
+					"id",
+					"name",
+					"team"
+				],
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"team": {
+						"type": "string"
+					}
+				}
+			},
+			"Kill": {
+				"type": "object",
+				"required": [
+					"killer",
+					"victim",
+					"serverInfo",
+					"weapon",
+					"weaponUuid",
+					"time",
+					"id",
+					"season"
+				],
+				"properties": {
+					"killer": {
+						"$ref": "#/components/schemas/UserAircraftInformation"
+					},
+					"victim": {
+						"$ref": "#/components/schemas/UserAircraftInformation"
+					},
+					"serverInfo": {
+						"$ref": "#/components/schemas/CurrentServerInformation"
+					},
+					"weapon": {
+						"type": "string",
+						"enum": [
+							"Gun",
+							"AIM120",
+							"AIM9",
+							"AIM7",
+							"AIRST",
+							"HARM",
+							"AIM9E",
+							"CFIT",
+							"AIM9X"
+						]
+					},
+					"weaponUuid": {
+						"type": "string"
+					},
+					"previousDamagedByUserId": {
+						"type": "string"
+					},
+					"previousDamagedByWeapon": {
+						"type": "string",
+						"enum": [
+							"Gun",
+							"AIM120",
+							"AIM9",
+							"AIM7",
+							"AIRST",
+							"HARM",
+							"AIM9E",
+							"CFIT",
+							"AIM9X"
+						]
+					},
+					"time": {
+						"type": "number"
+					},
+					"id": {
+						"type": "string"
+					},
+					"season": {
+						"type": "number"
+					}
+				}
+			},
+			"Death": {
+				"type": "object",
+				"required": [
+					"killer",
+					"victim",
+					"serverInfo",
+					"cause",
+					"time",
+					"id",
+					"season"
+				],
+				"properties": {
+					"killer": {
+						"$ref": "#/components/schemas/UserAircraftInformation"
+					},
+					"victim": {
+						"$ref": "#/components/schemas/UserAircraftInformation"
+					},
+					"serverInfo": {
+						"$ref": "#/components/schemas/CurrentServerInformation"
+					},
+					"cause": {
+						"type": "string",
+						"enum": [
+							"Crash",
+							"Eject",
+							"Kill",
+							"Disconnect",
+							"Timeout",
+							"Admin",
+							"Unknown"
+						]
+					},
+					"time": {
+						"type": "number"
+					},
+					"id": {
+						"type": "string"
+					},
+					"season": {
+						"type": "number"
+					}
+				}
+			},
+			"UserAircraftInformation": {
+				"type": "object",
+				"required": [
+					"ownerId",
+					"occupants",
+					"position",
+					"velocity",
+					"team",
+					"type"
+				],
+				"properties": {
+					"ownerId": {
+						"type": "string"
+					},
+					"occupants": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"position": {
+						"type": "object",
+						"required": [
+							"x",
+							"y",
+							"z"
+						],
+						"properties": {
+							"x": {
+								"type": "number"
+							},
+							"y": {
+								"type": "number"
+							},
+							"z": {
+								"type": "number"
+							}
+						}
+					},
+					"velocity": {
+						"type": "object",
+						"required": [
+							"x",
+							"y",
+							"z"
+						],
+						"properties": {
+							"x": {
+								"type": "number"
+							},
+							"y": {
+								"type": "number"
+							},
+							"z": {
+								"type": "number"
+							}
+						}
+					},
+					"team": {
+						"type": "string",
+						"enum": [
+							"Red",
+							"Blue"
+						]
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"AV42c",
+							"FA26b",
+							"F45A",
+							"AH94",
+							"Invalid",
+							"T55"
+						]
+					}
+				}
+			},
+			"CurrentServerInformation": {
+				"type": "object",
+				"required": [
+					"onlineUsers",
+					"timeOfDay",
+					"missionId"
+				],
+				"properties": {
+					"onlineUsers": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"timeOfDay": {
+						"type": "string",
+						"enum": [
+							"Day",
+							"Night"
+						]
+					},
+					"missionId": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	}
+}

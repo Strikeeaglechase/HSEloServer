@@ -48,6 +48,12 @@ export interface OnlineboardMessage {
 	id: string;
 }
 
+export interface OnlineRole {
+	roleId: string;
+	guildId: string;
+	id: string;
+}
+
 export interface User {
 	id: string;
 	pilotNames: string[];

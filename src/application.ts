@@ -10,7 +10,7 @@ import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
 import { EventEmitter } from "./eventEmitter.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
-	Aircraft, AllowedMod, Death, Kill, MissileLaunchParams, OnlineboardMessage, ScoreboardMessage, Season, Spawn,
+	Aircraft, AllowedMod, Death, Kill, MissileLaunchParams, OnlineRole, OnlineboardMessage, ScoreboardMessage, Season, Spawn,
 	Tracking, User
 } from "./structures.js";
 
@@ -59,6 +59,7 @@ class Application {
 
 	public scoreboardMessages: CollectionManager<string, ScoreboardMessage>;
 	public onlineboardMessages: CollectionManager<string, OnlineboardMessage>;
+	public onlineRoles: CollectionManager<String, OnlineRole>;
 	public allowedMods: CollectionManager<string, AllowedMod>;
 	public seasons: CollectionManager<number, Season>;
 	public tracking: CollectionManager<string, Tracking>;
@@ -95,6 +96,8 @@ class Application {
 		this.log.info(`Application has started!`);
 		this.scoreboardMessages = await this.framework.database.collection("scoreboard-messages", false, "id");
 		this.onlineboardMessages = await this.framework.database.collection("onlineboard-messages", false, "id");
+
+		this.onlineRoles = await this.framework.database.collection("online-roles", false, "id");
 
 		this.users = await this.framework.database.collection("users", false, "id");
 		this.allowedMods = await this.framework.database.collection("allowed-mods", false, "id");
@@ -422,6 +425,32 @@ class Application {
 		this.elo.runHourlyTasks();
 	}
 
+	public async updateOnlineRole() {
+		let onlineRoles = await this.onlineRoles.get();
+		let onlineUsers = await Promise.all(this.onlineUsers.map(async user => this.users.get(user.id)).filter(u => u !== undefined));
+		onlineRoles.forEach(async (onlinerole) => {
+			const guild = await this.framework.client.guilds.fetch(onlinerole.guildId).catch(() => { });
+			if (!guild) return;
+
+			const role = await guild.roles.fetch(onlinerole.roleId).catch(() => { });
+			if (!role) return;
+
+			const onlineMembers = (await Promise.all(onlineUsers.filter(u => u.discordId !== undefined)
+				.map(async user => guild.members.fetch(user.discordId).catch(() => { }))))
+				.filter(m => m !== undefined) as undefined as Discord.GuildMember[];
+
+			const toAdd = onlineMembers.filter(m => !role.members.has(m.id));
+			const toRemove = role.members.filter(m => !onlineMembers.some(u => u.id == m.id));
+
+			toAdd.forEach(async (member) => {
+				await member.roles.add(role).catch(() => { });
+			});
+			toRemove.forEach(async (member) => {
+				await member.roles.remove(role).catch(() => { });
+			});
+		});
+	}
+
 	public async createScoreboard(message: Discord.Message) {
 		const emb = new Discord.MessageEmbed({ title: "Scoreboard" });
 		const msg = await message.channel.send({ embeds: [emb] }).catch(() => { });
@@ -462,6 +491,18 @@ class Application {
 		return onlineboard;
 	}
 
+	public async createOnlinerole(role: Discord.Role) {
+		const onlinerole: OnlineRole = {
+			roleId: role.id,
+			guildId: role.guild.id,
+			id: uuidv4()
+		};
+		await this.onlineRoles.add(onlinerole);
+
+		this.log.info(`Created new onlinerole ${onlinerole.id} (${onlinerole.roleId}) in guild ${onlinerole.guildId}`);
+		return onlinerole;
+	}
+
 	public async deleteScoreboard(scoreboard: ScoreboardMessage) {
 		const channel = await this.framework.client.channels.fetch(scoreboard.channelId).catch(() => { }) as unknown as Discord.TextChannel;;
 		if (channel) {
@@ -494,6 +535,11 @@ class Application {
 
 		this.log.info(`Deleting onlineboard ${onlineboard.id}`);
 		await this.onlineboardMessages.remove(onlineboard.id);
+	}
+
+	public async deleteOnlineRole(onlinerole: OnlineRole) {
+		this.log.info(`Deleting onlinerole ${onlinerole.id}`);
+		await this.onlineboardMessages.remove(onlinerole.id);
 	}
 }
 

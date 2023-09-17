@@ -10,8 +10,18 @@ import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
 import { EventEmitter } from "./eventEmitter.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
-	Aircraft, AllowedMod, Death, Kill, MissileLaunchParams, OnlineRole, OnlineboardMessage, ScoreboardMessage, Season, Spawn,
-	Tracking, User
+	Aircraft,
+	AllowedMod,
+	Death,
+	Kill,
+	MissileLaunchParams,
+	OnlineboardMessage,
+	OnlineRole,
+	ScoreboardMessage,
+	Season,
+	Spawn,
+	Tracking,
+	User
 } from "./structures.js";
 
 const SERVER_MAX_PLAYERS = 16;
@@ -35,13 +45,13 @@ interface IAchievementManager extends EventEmitter {
 }
 
 class DummyAchievementManager extends EventEmitter implements IAchievementManager {
-	async init() { }
-	onKill(kill: Kill) { }
-	onDeath(death: Death) { }
-	onTrackingEvent(tracking: Tracking) { }
-	onUserLogin(user: User) { }
-	onUserLogout(user: User) { }
-	onLinkedAccount(user: User) { }
+	async init() {}
+	onKill(kill: Kill) {}
+	onDeath(death: Death) {}
+	onTrackingEvent(tracking: Tracking) {}
+	onUserLogin(user: User) {}
+	onUserLogout(user: User) {}
+	onLinkedAccount(user: User) {}
 }
 
 class Application {
@@ -70,7 +80,7 @@ class Application {
 	public elo: ELOUpdater;
 	public liveryUpdater: LiveryModifierManager;
 
-	public onlineUsers: { name: string, id: string; team: string; }[] = [];
+	public onlineUsers: { name: string; id: string; team: string }[] = [];
 	public lastOnlineUserUpdateAt = 0;
 
 	constructor(public framework: FrameworkClient) {
@@ -115,7 +125,7 @@ class Application {
 		await this.updateScoreboards();
 
 		const users = await this.users.get();
-		users.forEach(async (user) => {
+		users.forEach(async user => {
 			if (!user.spawns) {
 				user.spawns = {
 					[Aircraft.AV42c]: 0,
@@ -153,14 +163,14 @@ class Application {
 	// 		name: name,
 	// 		totalRankedUsers: 0
 	// 	};
-	// 
+	//
 	// 	seasonDb.add(season);
 	// }
 
 	// private async clearAllUserStats() {
 	// 	console.log(`Clearing all user stats...`);
 	// 	const users = await this.elo.prodUsers.get();
-	// 
+	//
 	// 	const proms = users.map(async (user) => {
 	// 		user.kills = 0;
 	// 		user.deaths = 0;
@@ -179,7 +189,7 @@ class Application {
 	// 	});
 	// 	console.log(`Waiting for ${proms.length} promises to resolve...`);
 	// 	await Promise.all(proms);
-	// 
+	//
 	// 	console.log(`Done, reset ${users.length} users!`);
 	// }
 
@@ -256,26 +266,30 @@ class Application {
 			prefixes.push(prefix);
 			suffixes.push(suffix);
 			table.push([
-				(idx + 1),
+				idx + 1,
 				user.pilotNames[0],
 				Math.round(user.elo),
 				user.spawns[Aircraft.FA26b],
 				user.spawns[Aircraft.F45A],
 				user.kills,
 				user.deaths,
-				(user.kills / user.deaths).toFixed(2),
+				(user.kills / user.deaths).toFixed(2)
 			]);
 		});
 		const multiplierTable: (string | number)[][] = [["Mult", "Type", "Count"]];
-		this.elo.lastMultipliers.sort((a, b) => a.multiplier - b.multiplier).forEach((m, idx) => {
-			multiplierTable.push([m.multiplier.toFixed(1) + "x", m.killStr, m.count]);
-		});
+		this.elo.lastMultipliers
+			.sort((a, b) => a.multiplier - b.multiplier)
+			.forEach((m, idx) => {
+				multiplierTable.push([m.multiplier.toFixed(1) + "x", m.killStr, m.count]);
+			});
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
-		resultStr += `\`\`\`ansi\n${this.table(table, 16).map((l, i) => {
-			if (i == 0) return l;
-			return prefixes[i - 1] + l + suffixes[i - 1];
-		}).join("\n")}\n\`\`\`\n`;
+		resultStr += `\`\`\`ansi\n${this.table(table, 16)
+			.map((l, i) => {
+				if (i == 0) return l;
+				return prefixes[i - 1] + l + suffixes[i - 1];
+			})
+			.join("\n")}\n\`\`\`\n`;
 		resultStr += `\`\`\`\n${this.table(multiplierTable, 32).join("\n")}\n\`\`\``;
 
 		// embed.addFields({ name: "Online", value: `${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}`, inline: true });
@@ -302,11 +316,7 @@ class Application {
 			max = Math.max(max, user.elo);
 			avg += user.elo;
 
-			table.push([
-				user.pilotNames[0],
-				Math.round(user.elo),
-				team,
-			]);
+			table.push([user.pilotNames[0], Math.round(user.elo), team]);
 		});
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
@@ -327,13 +337,13 @@ class Application {
 		await this.preformUserRankUpdate();
 		const scoreboards = await this.scoreboardMessages.get();
 		const embed = await this.createScoreboardMessage();
-		const proms = scoreboards.map(async (scoreboard) => {
-			const channel = await this.framework.client.channels.fetch(scoreboard.channelId).catch(() => { }) as unknown as Discord.TextChannel;
+		const proms = scoreboards.map(async scoreboard => {
+			const channel = (await this.framework.client.channels.fetch(scoreboard.channelId).catch(() => {})) as unknown as Discord.TextChannel;
 			if (!channel) return;
-			const msg = await channel.messages.fetch(scoreboard.messageId).catch(() => { });
+			const msg = await channel.messages.fetch(scoreboard.messageId).catch(() => {});
 			if (!msg) return;
 
-			await msg.edit({ embeds: [embed] }).catch((e) => {
+			await msg.edit({ embeds: [embed] }).catch(e => {
 				this.log.warn(`Unable to update scoreboard: ${e}`);
 				console.log(e);
 			});
@@ -349,13 +359,13 @@ class Application {
 	private async updateOnlineboards() {
 		const onlineboards = await this.onlineboardMessages.get();
 		const embed = await this.createOnlineboardMessage();
-		const proms = onlineboards.map(async (onlineboard) => {
-			const channel = await this.framework.client.channels.fetch(onlineboard.channelId).catch(() => { }) as unknown as Discord.TextChannel;
+		const proms = onlineboards.map(async onlineboard => {
+			const channel = (await this.framework.client.channels.fetch(onlineboard.channelId).catch(() => {})) as unknown as Discord.TextChannel;
 			if (!channel) return;
-			const msg = await channel.messages.fetch(onlineboard.messageId).catch(() => { });
+			const msg = await channel.messages.fetch(onlineboard.messageId).catch(() => {});
 			if (!msg) return;
 
-			await msg.edit({ embeds: [embed] }).catch((e) => {
+			await msg.edit({ embeds: [embed] }).catch(e => {
 				this.log.warn(`Unable to update scoreboard: ${e}`);
 				console.log(e);
 			});
@@ -391,12 +401,12 @@ class Application {
 
 	private async updateUserRankDisplay() {
 		const users = await this.users.collection.find({ discordId: { $ne: null } }).toArray();
-		const server = await this.framework.client.guilds.fetch(enableRankDisplayIn).catch(() => { });
+		const server = await this.framework.client.guilds.fetch(enableRankDisplayIn).catch(() => {});
 		if (!server) return this.log.error(`Unable to fetch server ${enableRankDisplayIn}`);
 		const season = await this.getActiveSeason();
 
-		const proms = users.map(async (user) => {
-			const member = await server.members.fetch(user.discordId).catch(() => { });
+		const proms = users.map(async user => {
+			const member = await server.members.fetch(user.discordId).catch(() => {});
 			if (!member) return;
 			const rawRank = this.getUserRank(user, season);
 			let rank = rawRank.toString().padStart(3, "0") + ". ";
@@ -415,7 +425,8 @@ class Application {
 
 			if (member.displayName != nick) {
 				// this.log.info(`Updating ${member.displayName} to ${nick}`);
-				if (process.env.IS_DEV != "true") await member.setNickname(nick).catch((e) => this.log.error(`Unable to set nickname for ${member.displayName}: ${e}`));
+				if (process.env.IS_DEV != "true")
+					await member.setNickname(nick).catch(e => this.log.error(`Unable to set nickname for ${member.displayName}: ${e}`));
 			}
 		});
 		await Promise.all(proms);
@@ -428,32 +439,32 @@ class Application {
 	public async updateOnlineRole() {
 		let onlineRoles = await this.onlineRoles.get();
 		let onlineUsers = await Promise.all(this.onlineUsers.map(async user => this.users.get(user.id)).filter(u => u !== undefined));
-		onlineRoles.forEach(async (onlinerole) => {
-			const guild = await this.framework.client.guilds.fetch(onlinerole.guildId).catch(() => { });
+		onlineRoles.forEach(async onlinerole => {
+			const guild = await this.framework.client.guilds.fetch(onlinerole.guildId).catch(() => {});
 			if (!guild) return;
 
-			const role = await guild.roles.fetch(onlinerole.roleId).catch(() => { });
+			const role = await guild.roles.fetch(onlinerole.roleId).catch(() => {});
 			if (!role) return;
 
-			const onlineMembers = (await Promise.all(onlineUsers.filter(u => u.discordId !== undefined)
-				.map(async user => guild.members.fetch(user.discordId).catch(() => { }))))
-				.filter(m => m !== undefined) as undefined as Discord.GuildMember[];
+			const onlineMembers = (
+				await Promise.all(onlineUsers.filter(u => u.discordId !== undefined).map(async user => guild.members.fetch(user.discordId).catch(() => {})))
+			).filter(m => m !== undefined) as undefined as Discord.GuildMember[];
 
 			const toAdd = onlineMembers.filter(m => !role.members.has(m.id));
 			const toRemove = role.members.filter(m => !onlineMembers.some(u => u.id == m.id));
 
-			toAdd.forEach(async (member) => {
-				await member.roles.add(role).catch(() => { });
+			toAdd.forEach(async member => {
+				await member.roles.add(role).catch(() => {});
 			});
-			toRemove.forEach(async (member) => {
-				await member.roles.remove(role).catch(() => { });
+			toRemove.forEach(async member => {
+				await member.roles.remove(role).catch(() => {});
 			});
 		});
 	}
 
 	public async createScoreboard(message: Discord.Message) {
 		const emb = new Discord.MessageEmbed({ title: "Scoreboard" });
-		const msg = await message.channel.send({ embeds: [emb] }).catch(() => { });
+		const msg = await message.channel.send({ embeds: [emb] }).catch(() => {});
 		if (!msg) {
 			this.log.error(`Unable to send message in channel ${message.channel.id}`);
 			return;
@@ -473,7 +484,7 @@ class Application {
 
 	public async createOnlineboard(message: Discord.Message) {
 		const emb = new Discord.MessageEmbed({ title: "Online" });
-		const msg = await message.channel.send({ embeds: [emb] }).catch(() => { });
+		const msg = await message.channel.send({ embeds: [emb] }).catch(() => {});
 		if (!msg) {
 			this.log.error(`Unable to send message in channel ${message.channel.id}`);
 			return;
@@ -504,11 +515,11 @@ class Application {
 	}
 
 	public async deleteScoreboard(scoreboard: ScoreboardMessage) {
-		const channel = await this.framework.client.channels.fetch(scoreboard.channelId).catch(() => { }) as unknown as Discord.TextChannel;;
+		const channel = (await this.framework.client.channels.fetch(scoreboard.channelId).catch(() => {})) as unknown as Discord.TextChannel;
 		if (channel) {
-			const msg = await channel.messages.fetch(scoreboard.messageId).catch(() => { });
+			const msg = await channel.messages.fetch(scoreboard.messageId).catch(() => {});
 			if (msg) {
-				await msg.delete().catch(() => { });
+				await msg.delete().catch(() => {});
 			} else {
 				this.log.warn(`Could not find message ${scoreboard.messageId} in channel ${scoreboard.channelId} for deletion`);
 			}
@@ -521,11 +532,11 @@ class Application {
 	}
 
 	public async deleteOnlineboard(onlineboard: OnlineboardMessage) {
-		const channel = await this.framework.client.channels.fetch(onlineboard.channelId).catch(() => { }) as unknown as Discord.TextChannel;;
+		const channel = (await this.framework.client.channels.fetch(onlineboard.channelId).catch(() => {})) as unknown as Discord.TextChannel;
 		if (channel) {
-			const msg = await channel.messages.fetch(onlineboard.messageId).catch(() => { });
+			const msg = await channel.messages.fetch(onlineboard.messageId).catch(() => {});
 			if (msg) {
-				await msg.delete().catch(() => { });
+				await msg.delete().catch(() => {});
 			} else {
 				this.log.warn(`Could not find message ${onlineboard.messageId} in channel ${onlineboard.channelId} for deletion`);
 			}

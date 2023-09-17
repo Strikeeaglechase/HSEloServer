@@ -27,7 +27,7 @@ class Client {
 
 		setInterval(() => this.ping(), 1000 * 5);
 
-		socket.on("message", (data) => {
+		socket.on("message", data => {
 			try {
 				const packet = JSON.parse(data.toString()) as Packet;
 				this.onMessage(packet);
@@ -45,8 +45,12 @@ class Client {
 
 	private onMessage<T extends Packet>(message: T) {
 		switch (message.type) {
-			case "pong": this.lastPingReply = Date.now(); break;
-			case "lookup": this.handleLookup(message); break;
+			case "pong":
+				this.lastPingReply = Date.now();
+				break;
+			case "lookup":
+				this.handleLookup(message);
+				break;
 
 			case "authenticate_daemon":
 			case "authenticate": {
@@ -62,7 +66,6 @@ class Client {
 				break;
 			}
 
-
 			default:
 				this.handleAuthenticatedMessage(message);
 				break;
@@ -73,14 +76,37 @@ class Client {
 		const category: string = packet?.data?.category;
 		let id: string = packet?.data?.id;
 		if (!category || !id) return;
-		id = id.split("").filter(c => validLookupChars.includes(c)).join("");
+		id = id
+			.split("")
+			.filter(c => validLookupChars.includes(c))
+			.join("");
 		switch (category) {
-			case "kill": this.app.kills.get(id).then(r => this.replyToLookup(packet, r)); break;
-			case "death": this.app.deaths.get(id).then(r => this.replyToLookup(packet, r)); break;
-			case "user": this.app.users.get(id).then(r => this.replyToLookup(packet, r)); break;
-			case "user_by_name": this.app.users.collection.findOne({ pilotNames: { $regex: id } }).then(r => this.replyToLookup(packet, r)); break;
-			case "kills_by_killer": this.app.kills.collection.find({ "killer.ownerId": id }).limit(2000).toArray().then(r => this.replyToLookup(packet, r)); break;
-			case "kills_by_victim": this.app.kills.collection.find({ "victim.ownerId": id }).limit(2000).toArray().then(r => this.replyToLookup(packet, r)); break;
+			case "kill":
+				this.app.kills.get(id).then(r => this.replyToLookup(packet, r));
+				break;
+			case "death":
+				this.app.deaths.get(id).then(r => this.replyToLookup(packet, r));
+				break;
+			case "user":
+				this.app.users.get(id).then(r => this.replyToLookup(packet, r));
+				break;
+			case "user_by_name":
+				this.app.users.collection.findOne({ pilotNames: { $regex: id } }).then(r => this.replyToLookup(packet, r));
+				break;
+			case "kills_by_killer":
+				this.app.kills.collection
+					.find({ "killer.ownerId": id })
+					.limit(2000)
+					.toArray()
+					.then(r => this.replyToLookup(packet, r));
+				break;
+			case "kills_by_victim":
+				this.app.kills.collection
+					.find({ "victim.ownerId": id })
+					.limit(2000)
+					.toArray()
+					.then(r => this.replyToLookup(packet, r));
+				break;
 		}
 	}
 
@@ -95,21 +121,39 @@ class Client {
 		}
 
 		// Retransmit packet to all clients
-		this.app.api.clients.forEach((client) => {
+		this.app.api.clients.forEach(client => {
 			if (client.id == this.id) return;
 			client.send(packet);
 		});
 
 		switch (packet.type) {
-			case "user_login": this.exec(this.api.handleUserLogin(packet.data.userId, packet.data.pilotName), packet); break;
-			case "user_logout": this.exec(this.api.handleUserLogout(packet.data.userId), packet); break;
-			case "kill": this.exec(this.api.handleKill(packet.data), packet); break;
-			case "death": this.exec(this.api.handleDeath(packet.data), packet); break;
-			case "spawn": this.exec(this.api.handleSpawn(packet.data), packet); break;
-			case "tracking": this.exec(this.api.handleTracking(packet.data.trackingType, packet.data.trackingData), packet); break;
-			case "online": this.exec(this.api.updateOnlineUsers(packet.data), packet); break;
-			case "daemon_report": this.api.handleDaemonReport(packet.data); break;
-			case "missile_launch_params": this.exec(this.api.handleMissileLaunchParams(packet.data), packet); break;
+			case "user_login":
+				this.exec(this.api.handleUserLogin(packet.data.userId, packet.data.pilotName), packet);
+				break;
+			case "user_logout":
+				this.exec(this.api.handleUserLogout(packet.data.userId), packet);
+				break;
+			case "kill":
+				this.exec(this.api.handleKill(packet.data), packet);
+				break;
+			case "death":
+				this.exec(this.api.handleDeath(packet.data), packet);
+				break;
+			case "spawn":
+				this.exec(this.api.handleSpawn(packet.data), packet);
+				break;
+			case "tracking":
+				this.exec(this.api.handleTracking(packet.data.trackingType, packet.data.trackingData), packet);
+				break;
+			case "online":
+				this.exec(this.api.updateOnlineUsers(packet.data), packet);
+				break;
+			case "daemon_report":
+				this.api.handleDaemonReport(packet.data);
+				break;
+			case "missile_launch_params":
+				this.exec(this.api.handleMissileLaunchParams(packet.data), packet);
+				break;
 
 			default:
 				this.app.log.warn(`client ${this.id} sent unknown packet type: ${packet.type}`);

@@ -1,8 +1,8 @@
 import Discord from "discord.js";
+import { Arg } from "strike-discord-framework/dist/argumentParser.js";
 import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
 
 import { Application } from "../../application.js";
-import { Arg } from 'strike-discord-framework/dist/argumentParser.js';
 
 class Onlinerole extends Command {
 	name = "onlinerole";
@@ -10,7 +10,7 @@ class Onlinerole extends Command {
 	allowDm = false;
 	help = {
 		msg: "Set the role to be given to online users, max 1 per server, must be an admin to run this command",
-		usage: "",
+		usage: ""
 	};
 
 	async run({ message, framework, app }: CommandEvent<Application>, @Arg() role: Discord.Role) {
@@ -36,9 +36,9 @@ class Onlinerole extends Command {
 		const onlinerole = await app.createOnlinerole(role);
 		if (!onlinerole) return framework.error(`An error has occurred while creating the onlinerole`);
 		const msg = await message.channel.send(framework.success(`Onlinerole created!`));
-		await new Promise((resolve) => setTimeout(resolve, 5000));
-		await msg.delete().catch(() => { });
-		await message.delete().catch(() => { });
+		await new Promise(resolve => setTimeout(resolve, 5000));
+		await msg.delete().catch(() => {});
+		await message.delete().catch(() => {});
 	}
 }
 

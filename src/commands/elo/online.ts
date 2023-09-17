@@ -8,7 +8,7 @@ class Online extends Command {
 	name = "online";
 	allowDm = false;
 	help = {
-		msg: "Checks online user list",
+		msg: "Checks online user list"
 	};
 
 	@CommandRun
@@ -39,7 +39,6 @@ class Online extends Command {
 			.setDescription(`${timestamp}\n\`\`\`\n${content}\n\`\`\``)
 			.setFooter({ text: `Min: ${minElo} | Max: ${maxElo} | Avg: ${avgElo}` });
 		// .setFooter(`Min: ${minElo} | Max: ${maxElo} | Avg: ${avgElo}`);
-
 
 		return embed;
 	}

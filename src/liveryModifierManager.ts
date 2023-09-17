@@ -31,17 +31,21 @@ class LiveryModifierManager {
 		this.runningTask = task;
 		this.app.log.info(`Processing livery modification for ${task.user.pilotNames[0]} (${task.user.id})...`);
 		await new Promise<void>(res => {
-			const child = fork("./liveryModifier.js", [
-				process.env.STEAM_USER,
-				process.env.STEAM_PASS,
-				task.user.pilotNames[0],
-				task.user.id,
-				task.liveryId,
-				Aircraft[task.aircraft],
-				task.kills.toString()
-			], {
-				stdio: ["pipe", "pipe", "pipe", "ipc"]
-			});
+			const child = fork(
+				"./liveryModifier.js",
+				[
+					process.env.STEAM_USER,
+					process.env.STEAM_PASS,
+					task.user.pilotNames[0],
+					task.user.id,
+					task.liveryId,
+					Aircraft[task.aircraft],
+					task.kills.toString()
+				],
+				{
+					stdio: ["pipe", "pipe", "pipe", "ipc"]
+				}
+			);
 
 			let hasRes = false;
 			child.stdout.on("data", data => {

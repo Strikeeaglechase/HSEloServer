@@ -23,7 +23,7 @@ export const stealPerEloGainedPoints = 1 / 100;
 // For every 100 points apart, take 0.5 points less, assuming the victim has less ELO than the killer
 export const stealPerEloLostPoints = 0.5 / 100;
 // Loose 0% of ELO for a team kill
-export const teamKillPenalty = 0.00;
+export const teamKillPenalty = 0.0;
 // Loose 25 points if you die to a T-55
 export const t55Penalty = 25;
 // Only loose elo from a t55 if above 2500 elo
@@ -59,8 +59,7 @@ function shouldKillBeCounted(kill: Kill, killerUser?: User, victimUser?: User) {
 
 	// If CFIT, check distance
 	if (kill.weapon == Weapon.CFIT) {
-		const dist = Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
-			Math.pow(kill.killer.position.z - kill.victim.position.z, 2);
+		const dist = Math.pow(kill.killer.position.x - kill.victim.position.x, 2) + Math.pow(kill.killer.position.z - kill.victim.position.z, 2);
 
 		if (dist > maxCfitDistSq) return false;
 	}
@@ -78,9 +77,7 @@ function shouldDeathBeCounted(death: Death, kill?: Kill) {
 
 	// If CFIT, check distance
 	if (kill && kill.weapon == Weapon.CFIT) {
-		const dist =
-			Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
-			Math.pow(kill.killer.position.z - kill.victim.position.z, 2);
+		const dist = Math.pow(kill.killer.position.x - kill.victim.position.x, 2) + Math.pow(kill.killer.position.z - kill.victim.position.z, 2);
 
 		if (dist > maxCfitDistSq) return false;
 	}
@@ -164,26 +161,24 @@ class ELOUpdater {
 				this.lastMultipliers = message.mults;
 				this.log.info(`Received ${message.mults.length} multipliers from eloBackUpdater process`);
 			} else if (message.type == "users") {
-
 			}
 		});
 
-		backUpdateProcess.stdout.on("data", (data) => {
+		backUpdateProcess.stdout.on("data", data => {
 			(data.toString() as string)
 				.split("\n")
 				.filter(l => l.length > 0)
 				.forEach(l => this.log.info(`[BackUpdater] ${l}`));
 		});
 
-		backUpdateProcess.stderr.on("data", (data) => {
+		backUpdateProcess.stderr.on("data", data => {
 			(data.toString() as string)
 				.split("\n")
 				.filter(l => l.length > 0)
 				.forEach(l => this.log.error(`[BackUpdater] ${l}`));
 		});
 
-
-		const retCode = await new Promise(res => backUpdateProcess.on("exit", (code) => res(code)));
+		const retCode = await new Promise(res => backUpdateProcess.on("exit", code => res(code)));
 		this.log.info(`eloBackUpdater process finished with code ${retCode} in ${Date.now() - start}ms`);
 	}
 
@@ -211,22 +206,43 @@ class ELOUpdater {
 
 		const killsStream = fs.createWriteStream(`${hourlyReportPath}/kills.json`);
 		const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);
-		const proms = [
-			new Promise(res => killsStream.on("finish", res)),
-			new Promise(res => deathsStream.on("finish", res))
-		];
+		const proms = [new Promise(res => killsStream.on("finish", res)), new Promise(res => deathsStream.on("finish", res))];
 
-		this.app.kills.collection.find({}).stream().on("data", (kill) => killsStream.write(JSON.stringify(kill) + "\n")).on("end", () => killsStream.end());
-		this.app.deaths.collection.find({}).stream().on("data", (death) => deathsStream.write(JSON.stringify(death) + "\n")).on("end", () => deathsStream.end());
+		this.app.kills.collection
+			.find({})
+			.stream()
+			.on("data", kill => killsStream.write(JSON.stringify(kill) + "\n"))
+			.on("end", () => killsStream.end());
+		this.app.deaths.collection
+			.find({})
+			.stream()
+			.on("data", death => deathsStream.write(JSON.stringify(death) + "\n"))
+			.on("end", () => deathsStream.end());
 
 		await Promise.all(proms);
 
 		this.log.info(`Wrote hourly report finished!`);
 	}
 
-	public static updateUserLogForKill(timestamp: string, killer: User, victim: User, metric: KillMetric, eloSteal: number, killStr: string, extraInfo: string = "") {
-		killer.history.push(`[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${killStr} (${metric?.multiplier.toFixed(1)}) ${extraInfo} Elo gained: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)}`);
-		victim.history.push(`[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${killStr} (${metric?.multiplier.toFixed(1)}) ${extraInfo} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)}`);
+	public static updateUserLogForKill(
+		timestamp: string,
+		killer: User,
+		victim: User,
+		metric: KillMetric,
+		eloSteal: number,
+		killStr: string,
+		extraInfo: string = ""
+	) {
+		killer.history.push(
+			`[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${killStr} (${metric?.multiplier.toFixed(
+				1
+			)}) ${extraInfo} Elo gained: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)}`
+		);
+		victim.history.push(
+			`[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${killStr} (${metric?.multiplier.toFixed(
+				1
+			)}) ${extraInfo} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)}`
+		);
 	}
 
 	public static updateUserLogForDeath(timestamp: string, victim: User, eloSteal: number) {
@@ -271,7 +287,7 @@ class ELOUpdater {
 			return {
 				killer: killer,
 				victim: victim,
-				eloSteal: 0,
+				eloSteal: 0
 			};
 		}
 
@@ -282,7 +298,7 @@ class ELOUpdater {
 				killer: killer,
 				victim: killer,
 				eloSteal: loss,
-				eloStealPrec: 0,
+				eloStealPrec: 0
 			};
 		}
 
@@ -370,11 +386,8 @@ class ELOUpdater {
 		return { eloSteal };
 	}
 
-	public static getCFITMultiplier(kill: Kill, multipliers: KillMetric[]): { cfitMetric: KillMetric, extraInfo: string; } {
-		const dist = Math.sqrt(
-			Math.pow(kill.killer.position.x - kill.victim.position.x, 2) +
-			Math.pow(kill.killer.position.z - kill.victim.position.z, 2)
-		);
+	public static getCFITMultiplier(kill: Kill, multipliers: KillMetric[]): { cfitMetric: KillMetric; extraInfo: string } {
+		const dist = Math.sqrt(Math.pow(kill.killer.position.x - kill.victim.position.x, 2) + Math.pow(kill.killer.position.z - kill.victim.position.z, 2));
 		const nm = 1852;
 
 		let weaponEquivalent: Weapon = null;
@@ -394,7 +407,7 @@ class ELOUpdater {
 	public static calculateEloSteal(killerElo: number, victimElo: number, multiplier = 1) {
 		const eloDiff = Math.abs(victimElo - killerElo);
 		const additionalStealConst = killerElo < victimElo ? stealPerEloGainedPoints : -stealPerEloLostPoints;
-		const eloSteal = Math.min(maxEloStealPoints, Math.max((baseEloStealPoints + (eloDiff * additionalStealConst)), minEloStealPoints) * multiplier);
+		const eloSteal = Math.min(maxEloStealPoints, Math.max(baseEloStealPoints + eloDiff * additionalStealConst, minEloStealPoints) * multiplier);
 		return eloSteal;
 	}
 }

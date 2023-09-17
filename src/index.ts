@@ -34,12 +34,11 @@ const frameworkOptions: FrameworkClientOptions = {
 	ownerID: "272143648114606083",
 	dmPrefixOnPing: true,
 	dmErrorSilently: false,
-	permErrorSilently: false,
+	permErrorSilently: false
 };
 
 const frameClient = new FrameworkClient(frameworkOptions);
 const application = new Application(frameClient);
-
 
 async function init() {
 	await frameClient.init(application);
@@ -48,10 +47,10 @@ async function init() {
 	await frameClient.permissions.setPublic("command.misc", true);
 	await frameClient.permissions.setPublic("command.elo", true);
 
-	process.on("unhandledRejection", (error) => {
+	process.on("unhandledRejection", error => {
 		application.log.error(error);
 	});
-	process.on("uncaughtException", (error) => {
+	process.on("uncaughtException", error => {
 		application.log.error(error);
 	});
 }

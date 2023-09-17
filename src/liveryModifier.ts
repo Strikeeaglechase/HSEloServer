@@ -52,10 +52,15 @@ function colors(image: Jimp, index: number) {
 
 async function getFromSteam(id: string) {
 	const command = [
-		"+force_install_dir", basePath,
-		"+login", steamUser, steamPass,
+		"+force_install_dir",
+		basePath,
+		"+login",
+		steamUser,
+		steamPass,
 		// "+workshop_status", VTOL_ID,
-		"+workshop_download_item", VTOL_ID, id,
+		"+workshop_download_item",
+		VTOL_ID,
+		id,
 		"+quit"
 	];
 
@@ -66,7 +71,7 @@ function execSteamCommand(command: string[]) {
 	const baseCmd = process.platform == "win32" ? "steamcmd" : "/usr/games/steamcmd";
 	const steam = spawn(baseCmd, command, { stdio: ["pipe", "pipe", "pipe"] });
 
-	return new Promise<void>((res) => {
+	return new Promise<void>(res => {
 		steam.stderr.on("data", data => {
 			console.error(`SteamCMD ERROR: ${data.toString()}`);
 		});
@@ -95,7 +100,8 @@ async function download(id: string, ignoreCache = false): Promise<Livery> {
 		const files = fs.readdirSync(liveryPath);
 		const file = files.find(f => f.endsWith(".vtlb"));
 		const info = fs.statSync(`${liveryPath}/${file}`);
-		if (Date.now() - info.mtime.getTime() < 1000 * 60 * 5) { // 5 minutes
+		if (Date.now() - info.mtime.getTime() < 1000 * 60 * 5) {
+			// 5 minutes
 			doDownload = false;
 		}
 	}
@@ -104,14 +110,19 @@ async function download(id: string, ignoreCache = false): Promise<Livery> {
 	if (doDownload) await getFromSteam(id);
 	// console.log("Downloaded");
 
-
 	const files = fs.readdirSync(liveryPath);
 	const file = files.find(f => f.endsWith(".vtlb"));
 	const vtlFileContent = fs.readFileSync(`${liveryPath}/${file}`, "binary");
-	const vtlDecoded = vtlFileContent.split("").map(c => decode(c)).join("");
+	const vtlDecoded = vtlFileContent
+		.split("")
+		.map(c => decode(c))
+		.join("");
 
 	const textureContent = fs.readFileSync(`${liveryPath}/texture.pngb`, "binary");
-	const textureDecoded = textureContent.split("").map(c => decode(c)).join("");
+	const textureDecoded = textureContent
+		.split("")
+		.map(c => decode(c))
+		.join("");
 
 	return {
 		id,
@@ -146,7 +157,6 @@ async function parseUvMap(aircraft: string) {
 			}
 		});
 
-
 		image.write(`../uvs/${name}-parsed.png`);
 		console.log(`Wrote ${name}-parsed.png`);
 	});
@@ -162,14 +172,14 @@ interface Color {
 }
 
 const imageWorths = {
-	"base": 1,
-	"star": 10
+	base: 1,
+	star: 10
 };
 
 async function filterAircraftNumber(aircraft: string, width: number, height: number, kills: number, primaryColor: Color, secondaryColor: Color): Promise<Jimp> {
 	console.log(`Creating icon overlay for ${aircraft} (${width}x${height}) with ${kills} kills`);
 	// Load images
-	let images: { image: Jimp, worth: number; numNeeded: number; }[] = [];
+	let images: { image: Jimp; worth: number; numNeeded: number }[] = [];
 	const proms = Object.keys(imageWorths).map(async key => {
 		if (fs.existsSync(`../uvs/${aircraft}-${key}-parsed.png`)) {
 			const image = await Jimp.read(`../uvs/${aircraft}-${key}-parsed.png`);
@@ -218,9 +228,7 @@ async function filterAircraftNumber(aircraft: string, width: number, height: num
 		});
 
 		start = image.numNeeded + 1;
-
 	});
-
 
 	console.log("Finalizing image");
 	const finalImage = new Jimp(images[0].image.bitmap.width, images[0].image.bitmap.height);
@@ -233,14 +241,20 @@ async function filterAircraftNumber(aircraft: string, width: number, height: num
 	return finalImage;
 }
 
-
 async function modify(user: string, userId: string, id: string, aircraft: string, kills: number) {
 	await parseUvMap(aircraft);
 	const livery = await download(id);
 
 	console.log("Got livery");
 	const liveryImage = await Jimp.read(Buffer.from(livery.texture, "binary"));
-	const uvImage = await filterAircraftNumber(aircraft, liveryImage.bitmap.width, liveryImage.bitmap.height, kills, { r: 0, g: 0, b: 0 }, { r: 255, g: 0, b: 0 });
+	const uvImage = await filterAircraftNumber(
+		aircraft,
+		liveryImage.bitmap.width,
+		liveryImage.bitmap.height,
+		kills,
+		{ r: 0, g: 0, b: 0 },
+		{ r: 255, g: 0, b: 0 }
+	);
 	liveryImage.blit(uvImage, 0, 0);
 
 	const resultPath = `${outputPath}/${userId}`;
@@ -248,13 +262,15 @@ async function modify(user: string, userId: string, id: string, aircraft: string
 
 	await liveryImage.writeAsync(`${resultPath}/texture.png`);
 	const fileData = fs.readFileSync(`${resultPath}/texture.png`, "binary");
-	fs.writeFileSync(`${resultPath}/texture.pngb`, fileData.split("").map(c => encode(c)).join(""), "binary");
-	const toCopy = [
-		"WorkshopItemInfo.xml",
-		"image.jpg",
-		"thumb.png",
-		livery.vtlFileName
-	];
+	fs.writeFileSync(
+		`${resultPath}/texture.pngb`,
+		fileData
+			.split("")
+			.map(c => encode(c))
+			.join(""),
+		"binary"
+	);
+	const toCopy = ["WorkshopItemInfo.xml", "image.jpg", "thumb.png", livery.vtlFileName];
 
 	toCopy.forEach(file => {
 		fs.copyFileSync(livery.filePath + "/" + file, `${resultPath}/${file}`);
@@ -285,12 +301,15 @@ async function upload(user: string, userId: string, itemId: string, kills: numbe
 
 	fs.writeFileSync(vdfPath, fileVdf.trim());
 
-
 	const command = [
-		"+force_install_dir", basePath,
-		"+login", steamUser, steamPass,
+		"+force_install_dir",
+		basePath,
+		"+login",
+		steamUser,
+		steamPass,
 		// "+workshop_status", VTOL_ID,
-		"+workshop_build_item", vdfPath,
+		"+workshop_build_item",
+		vdfPath,
 		"+quit"
 	];
 
@@ -302,7 +321,6 @@ async function upload(user: string, userId: string, itemId: string, kills: numbe
 	const id = updatedVdf.match(/"publishedfileid"\s+"(\d+)"/)[1];
 	return id;
 }
-
 
 function parseAircraft(name: string) {
 	switch (name) {
@@ -333,6 +351,5 @@ async function run() {
 	const id = await modify(user, userId, workshopId, parseAircraft(aircraft), parseInt(kills));
 	console.log(`RESULT: ${id}`);
 }
-
 
 run();

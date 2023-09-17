@@ -30,7 +30,7 @@ class CollectionManager<T, IDType extends string = string> {
 		this.archive = this.database.db.collection<T>(this.collectionName + "Archive");
 		if (this.useCache) await this.updateCache();
 	}
-	// WARN: This function returns {idProp: id} (example: {_id: "abc"}) 
+	// WARN: This function returns {idProp: id} (example: {_id: "abc"})
 	// however the return type is very different to work with MongoDB
 	getLookup(id: IDType) {
 		// Using a record here feels a bit weird as its only one prop, but gets the job done
@@ -51,9 +51,9 @@ class CollectionManager<T, IDType extends string = string> {
 	async get(id: IDType): Promise<T>;
 	async get(id?: IDType): Promise<T | T[]> {
 		if (!id) {
-			return await this.collection.find({}).toArray() as T[];
+			return (await this.collection.find({}).toArray()) as T[];
 		}
-		return await this.collection.findOne(this.getLookup(id)) as T;
+		return (await this.collection.findOne(this.getLookup(id))) as T;
 	}
 	// Inserts an item into the collection
 	async add(obj: T) {
@@ -77,6 +77,5 @@ class CollectionManager<T, IDType extends string = string> {
 		return res;
 	}
 }
-
 
 export { CollectionManager, Encoder };

@@ -39,7 +39,6 @@ class AircraftUserUpdater extends ProdDBBackUpdater {
 		await this.setupBackUpdate();
 		console.log(`Setup completed, starting main calculation`);
 
-
 		for (let i = 0; i < this.events.length; i++) {
 			const e = this.events[i];
 
@@ -63,7 +62,6 @@ class AircraftUserUpdater extends ProdDBBackUpdater {
 				victim.elo = Math.max(victim.elo, 1);
 				killer.kills++;
 				victim.deaths++;
-
 			}
 		}
 
@@ -74,7 +72,6 @@ class AircraftUserUpdater extends ProdDBBackUpdater {
 		console.log(JSON.stringify(this.acUsers, null, 2));
 	}
 }
-
 
 async function runAircraftUserUpdater() {
 	const updater = new AircraftUserUpdater();

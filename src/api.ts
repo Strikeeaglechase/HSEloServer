@@ -432,6 +432,7 @@ class API {
 	}[]) {
 		this.app.onlineUsers = users;
 		this.app.lastOnlineUserUpdateAt = Date.now();
+		this.app.updateOnlineRole();
 		return 200;
 	}
 

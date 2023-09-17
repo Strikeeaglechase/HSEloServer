@@ -5,6 +5,7 @@ import path from "path";
 import Logger from "strike-discord-framework/dist/logger.js";
 import { v4 as uuidv4 } from "uuid";
 import WebSocket from "ws";
+import cors from "cors";
 
 import { Application, IAchievementManager } from "./application.js";
 import { Client } from "./client.js";
@@ -118,6 +119,7 @@ class API {
 			}
 			next();
 		});
+		this.server.use(cors());
 
 		this.registerRoute("GET", "users", this.getUserStats, false);
 		this.registerRoute("GET", "users/:id", this.getUser, false);

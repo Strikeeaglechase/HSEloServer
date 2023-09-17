@@ -539,7 +539,7 @@ class Application {
 
 	public async deleteOnlineRole(onlinerole: OnlineRole) {
 		this.log.info(`Deleting onlinerole ${onlinerole.id}`);
-		await this.onlineboardMessages.remove(onlinerole.id);
+		await this.onlineRoles.remove(onlinerole.id);
 	}
 }
 

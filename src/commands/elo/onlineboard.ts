@@ -8,7 +8,7 @@ class Onlineboard extends Command {
 	allowDm = false;
 	help = {
 		msg: "Creates the onlineboard listing, max 1 per server, must be an admin to run this command",
-		usage: "",
+		usage: ""
 	};
 
 	async run({ message, framework, app }: CommandEvent<Application>) {
@@ -28,9 +28,9 @@ class Onlineboard extends Command {
 		const onlineboard = await app.createOnlineboard(message);
 		if (!onlineboard) return framework.error(`An error has occurred while creating the onlineboard`);
 		const msg = await message.channel.send(framework.success(`Onlineboard created!`));
-		await new Promise((resolve) => setTimeout(resolve, 5000));
-		await msg.delete().catch(() => { });
-		await message.delete().catch(() => { });
+		await new Promise(resolve => setTimeout(resolve, 5000));
+		await msg.delete().catch(() => {});
+		await message.delete().catch(() => {});
 	}
 }
 

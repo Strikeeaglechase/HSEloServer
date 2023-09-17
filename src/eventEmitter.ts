@@ -2,7 +2,7 @@ class EventHandler {
 	disableWhenHandler: () => boolean;
 	public shouldExist = true;
 	private context: any;
-	constructor(private handler: Function, private once: boolean) { }
+	constructor(private handler: Function, private once: boolean) {}
 
 	public execute(args: any[]) {
 		if (!this.shouldExist || (this.disableWhenHandler && this.disableWhenHandler())) {
@@ -55,7 +55,7 @@ class EventEmitter<T extends string = string> {
 
 	public emit(event: T, ...args: any[]) {
 		if (this.listeners[event]) {
-			this.listeners[event].forEach((listener) => {
+			this.listeners[event].forEach(listener => {
 				listener.execute(args);
 			});
 

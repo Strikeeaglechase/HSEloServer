@@ -11,7 +11,7 @@ class Link extends Command {
 	allowDm = false;
 	help = {
 		msg: "Links your discord account to your steam",
-		usage: "<steamid>",
+		usage: "<steamid>"
 	};
 
 	@CommandRun

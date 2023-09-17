@@ -8,7 +8,7 @@ class Ban extends Command {
 	name = "ban";
 	allowDm = false;
 	help = {
-		msg: "Bans a user",
+		msg: "Bans a user"
 	};
 
 	@CommandRun

@@ -52,11 +52,15 @@ class Stats extends Command {
 	allowDm = false;
 	help = {
 		msg: "Lists your or anthers stats",
-		usage: "<userid/name> <season #>",
+		usage: "<userid/name> <season #>"
 	};
 
 	@CommandRun
-	async run({ message, framework, app }: CommandEvent<Application>, @Arg({ optional: true }) userLookup: string, @Arg({ optional: true }) seasonResolver: number) {
+	async run(
+		{ message, framework, app }: CommandEvent<Application>,
+		@Arg({ optional: true }) userLookup: string,
+		@Arg({ optional: true }) seasonResolver: number
+	) {
 		let user: User;
 		if (userLookup) {
 			user = await lookupUser(app.users, userLookup);
@@ -75,8 +79,8 @@ class Stats extends Command {
 		}
 
 		const timeOnServer = calculateTimeOnServer(user);
-		let kills = await app.kills.collection.find({ "killer.ownerId": user.id, season: targetSeason.id }).toArray();
-		let deaths = await app.kills.collection.find({ "victim.ownerId": user.id, season: targetSeason.id }).toArray();
+		let kills = await app.kills.collection.find({ "killer.ownerId": user.id, "season": targetSeason.id }).toArray();
+		let deaths = await app.kills.collection.find({ "victim.ownerId": user.id, "season": targetSeason.id }).toArray();
 		kills = kills.filter(k => shouldKillBeCounted(k));
 		deaths = deaths.filter(k => shouldKillBeCounted(k));
 
@@ -97,10 +101,10 @@ class Stats extends Command {
 
 		const usedWeapons: Record<Weapon, number> = {} as Record<Weapon, number>;
 		const diedToWeapons: Record<Weapon, number> = {} as Record<Weapon, number>;
-		kills.forEach((k) => {
+		kills.forEach(k => {
 			usedWeapons[k.weapon] = (usedWeapons[k.weapon] ?? 0) + 1;
 		});
-		deaths.forEach((k) => {
+		deaths.forEach(k => {
 			diedToWeapons[k.weapon] = (diedToWeapons[k.weapon] ?? 0) + 1;
 		});
 
@@ -120,7 +124,11 @@ class Stats extends Command {
 		const embed = new Discord.MessageEmbed();
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
 		embed.addFields([
-			{ name: "Metrics", value: `ELO: ${Math.floor(user.elo)}\nRank: ${rank || "No rank"}\nTop ${(rank / playersWithRank * 100).toFixed(0)}%`, inline: true },
+			{
+				name: "Metrics",
+				value: `ELO: ${Math.floor(user.elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%`,
+				inline: true
+			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
 			// { name: "Online time", value: `${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
 			{ name: "Last Online", value: `<t:${Math.floor(user.loginTimes[user.loginTimes.length - 1] / 1000)}:R>`, inline: true },
@@ -128,7 +136,7 @@ class Stats extends Command {
 			{ name: "Kills against", value: killsAgainst, inline: true },
 			{ name: "Deaths against", value: deathsAgainst, inline: true },
 			{ name: "Weapons", value: weaponKillsStr || "<No Data>", inline: true },
-			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
+			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true }
 			// { name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
 		]);
 		embed.setFooter({ text: `${targetSeason.name} | ID: ${user.id}` });

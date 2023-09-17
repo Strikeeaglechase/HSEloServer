@@ -5,15 +5,22 @@ import { CollectionManager } from "../db/collectionManager.js";
 import Database from "../db/database.js";
 import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
 import {
-	BASE_ELO, ELOUpdater, getKillStr, KillMetric, KillString, maxWeaponMultiplier,
-	shouldDeathBeCounted, shouldKillBeCounted, t55Penalty, teamKillPenalty, userCanRank
+	BASE_ELO,
+	ELOUpdater,
+	getKillStr,
+	KillMetric,
+	KillString,
+	maxWeaponMultiplier,
+	shouldDeathBeCounted,
+	shouldKillBeCounted,
+	t55Penalty,
+	teamKillPenalty,
+	userCanRank
 } from "./eloUpdater.js";
 
 config();
 const userBackupPath = "../users/";
 const userChunkSize = 100; // Send 100 users at a time
-
-
 
 function shouldKillContributeToMultipliers(kill: Kill) {
 	if (kill.weapon == Weapon.CFIT) return false;
@@ -26,10 +33,10 @@ interface UserResult {
 	user: User;
 	log: string;
 }
-type IPCMessage = { users: UserResult[]; type: "users"; } | { type: "mults", mults: KillMetric[]; };
+type IPCMessage = { users: UserResult[]; type: "users" } | { type: "mults"; mults: KillMetric[] };
 
 // type UserLogsObj = Record<string, string>;
-type Action = { action: "Login" | "Logout"; userId: string; };
+type Action = { action: "Login" | "Logout"; userId: string };
 interface EloKillEvent {
 	event: Kill;
 	time: number;
@@ -70,10 +77,13 @@ class EloBackUpdater {
 	protected events: EloEvent[] = [];
 
 	protected async loadDb() {
-		this.db = new Database({
-			databaseName: "vtol-server-elo" + (process.env.IS_DEV == "true" ? "-dev" : ""),
-			url: process.env.DB_URL
-		}, console.log);
+		this.db = new Database(
+			{
+				databaseName: "vtol-server-elo" + (process.env.IS_DEV == "true" ? "-dev" : ""),
+				url: process.env.DB_URL
+			},
+			console.log
+		);
 
 		await this.db.init();
 		this.userDb = await this.db.collection("users", false, "id");
@@ -82,7 +92,7 @@ class EloBackUpdater {
 
 	protected loadFileStreamed<T>(path: string): Promise<T[]> {
 		const readStream = fs.createReadStream(path);
-		return new Promise((res) => {
+		return new Promise(res => {
 			let remaining = "";
 			const result: T[] = [];
 
@@ -131,7 +141,7 @@ class EloBackUpdater {
 
 		const normalizer = 1 / (expectPrec / normalizerMetricPrec);
 		relevantMetrics.forEach(metric => {
-			const multiplier = expectPrec / metric.prec * normalizer;
+			const multiplier = (expectPrec / metric.prec) * normalizer;
 			metric.multiplier = Math.min(multiplier, maxWeaponMultiplier);
 		});
 
@@ -172,7 +182,7 @@ class EloBackUpdater {
 		this.kills = this.kills.filter(kill => kill.season == this.season.id && isKillValid(kill)).sort((a, b) => a.time - b.time);
 		this.deaths = this.deaths.filter(kill => kill.season == this.season.id).sort((a, b) => a.time - b.time);
 
-		this.kills.forEach(kill => this.killsMap[kill.id] = kill);
+		this.kills.forEach(kill => (this.killsMap[kill.id] = kill));
 
 		console.log(`After filtering for season ${this.season.id}, there are ${this.kills.length} kills and ${this.deaths.length} deaths.`);
 	}
@@ -184,15 +194,9 @@ class EloBackUpdater {
 		const seasonStartTime = new Date(this.season.started).getTime();
 		const seasonEndTime = new Date(this.season.ended).getTime();
 		this.users.forEach(user => {
-			const validLoginTimes = user.loginTimes.filter(t =>
-				(seasonStartTime == 0 || t >= seasonStartTime) &&
-				(seasonEndTime == 0 || t <= seasonEndTime)
-			);
+			const validLoginTimes = user.loginTimes.filter(t => (seasonStartTime == 0 || t >= seasonStartTime) && (seasonEndTime == 0 || t <= seasonEndTime));
 
-			const validLogoutTimes = user.logoutTimes.filter(t =>
-				(seasonStartTime == 0 || t >= seasonStartTime) &&
-				(seasonEndTime == 0 || t <= seasonEndTime)
-			);
+			const validLogoutTimes = user.logoutTimes.filter(t => (seasonStartTime == 0 || t >= seasonStartTime) && (seasonEndTime == 0 || t <= seasonEndTime));
 
 			validLoginTimes.forEach(login => this.events.push({ event: { action: "Login", userId: user.id }, time: login, type: "action" }));
 			validLogoutTimes.forEach(logout => this.events.push({ event: { action: "Logout", userId: user.id }, time: logout, type: "action" }));
@@ -219,7 +223,6 @@ class EloBackUpdater {
 		await this.setupBackUpdate();
 		console.log(`Setup completed, starting main calculation`);
 
-
 		for (let i = 0; i < this.events.length; i++) {
 			const e = this.events[i];
 
@@ -239,6 +242,8 @@ class EloBackUpdater {
 					killer.elo -= loss;
 					ELOUpdater.updateUserLogForTK(timestamp, killer, victim, loss);
 					killer.eloHistory.push({ elo: killer.elo, time: e.time });
+					this.onUserUpdate(killer, e, 0);
+					this.onUserUpdate(victim, e, 0);
 					continue;
 				}
 
@@ -287,7 +292,6 @@ class EloBackUpdater {
 				const kill = death.killId ? this.killsMap[death.killId] : null;
 				if (!shouldDeathBeCounted(death, kill)) continue;
 
-
 				const eloSteal = ELOUpdater.calculateEloSteal(BASE_ELO, victim.elo);
 				victim.elo -= eloSteal;
 				victim.elo = Math.max(victim.elo, 1);
@@ -308,7 +312,7 @@ class EloBackUpdater {
 		console.log(`Primary back update calculations done! Took ${Date.now() - start}ms`);
 	}
 
-	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) { }
+	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) {}
 
 	public async storeResults() {
 		console.log(`Beginning store results`);
@@ -316,8 +320,8 @@ class EloBackUpdater {
 		this.seasons.collection.updateOne({ id: this.season.id }, { $set: { totalRankedUsers: rankedUsers.length } });
 		console.log(`Updated total ranked users to ${rankedUsers.length}`);
 
-		rankedUsers.forEach((user, i) => user.rank = i + 1);
-		this.users.filter(u => !userCanRank(u)).forEach(user => user.rank = null); // Un-rank users
+		rankedUsers.forEach((user, i) => (user.rank = i + 1));
+		this.users.filter(u => !userCanRank(u)).forEach(user => (user.rank = null)); // Un-rank users
 		console.log(`Calculated user ranks`);
 
 		const batchSize = 1000;
@@ -372,7 +376,7 @@ class EloBackUpdater {
 	}
 }
 
-process.on("message", async (msg) => {
+process.on("message", async msg => {
 	if (msg != "start") {
 		console.log(`Unknown message: ${msg}`);
 		return;
@@ -385,6 +389,5 @@ process.on("message", async (msg) => {
 	console.log(`Back update process completely done!`);
 	process.exit();
 });
-
 
 export { IPCMessage, EloBackUpdater, EloEvent, Action };

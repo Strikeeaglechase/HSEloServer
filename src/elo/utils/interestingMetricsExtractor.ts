@@ -1,3 +1,5 @@
+import fs from "fs";
+
 import { Aircraft, User, Weapon } from "../../structures.js";
 import { EloEvent } from "../eloBackUpdater.js";
 import { ProdDBBackUpdater } from "./eloUtils.js";
@@ -8,6 +10,7 @@ interface ExtraUserStats {
 	streak: number;
 	streakWith26b: number;
 	totalEloDelta: number;
+	timesGotTKed: number;
 	killsWithWeapon: Record<Weapon, number>;
 	deathsByWeapon: Record<Weapon, number>;
 	killsWithAircraft: Record<Aircraft, number>;
@@ -15,8 +18,7 @@ interface ExtraUserStats {
 }
 
 const strUser = (u: User) => `${u.pilotNames[0] ?? "Unknown"} (${u.id})`;
-const killPair = (a: string, b: string) => a > b ? `${a}-${b}` : `${b}-${a}`;
-
+const killPair = (a: string, b: string) => (a > b ? `${a}-${b}` : `${b}-${a}`);
 
 class InterestingMetricsExtractor extends ProdDBBackUpdater {
 	private extraUserStats: Record<string, ExtraUserStats> = {};
@@ -41,7 +43,6 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 			const kill = event.event;
 			// Did we get a kill?
 			if (kill.killer.ownerId == user.id) {
-
 				if (!extraStats.killsWithWeapon[kill.weapon]) extraStats.killsWithWeapon[kill.weapon] = 0;
 				extraStats.killsWithWeapon[kill.weapon]++;
 				extraStats.streak++;
@@ -69,6 +70,8 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 				extraStats.deathsByWeapon[kill.weapon]++;
 				extraStats.streak = 0;
 				if (kill.victim.type == Aircraft.FA26b) extraStats.streakWith26b = 0;
+
+				if (kill.killer.team == kill.victim.team) extraStats.timesGotTKed++;
 			}
 		}
 	}
@@ -82,10 +85,11 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 				streak: 0,
 				streakWith26b: 0,
 				totalEloDelta: 0,
+				timesGotTKed: 0,
 				killsWithWeapon: {} as Record<Weapon, number>,
 				deathsByWeapon: {} as Record<Weapon, number>,
 
-				killsWithAircraft: {} as Record<Aircraft, number>,
+				killsWithAircraft: {} as Record<Aircraft, number>
 			};
 		}
 
@@ -105,7 +109,11 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		}
 
 		const rUser = this.usersMap[highestUser.id];
-		console.log(`${strUser(rUser)} had the highest elo delta of ${Math.round(highestDelta)}, reaching a peak of ${Math.round(highestUser.maxElo)} and a low of ${Math.round(highestUser.minElo)}`);
+		console.log(
+			`${strUser(rUser)} had the highest elo delta of ${Math.round(highestDelta)}, reaching a peak of ${Math.round(
+				highestUser.maxElo
+			)} and a low of ${Math.round(highestUser.minElo)}`
+		);
 	}
 
 	private findHighestDeltaUserBelow4k() {
@@ -124,7 +132,11 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		}
 
 		const rUser = this.usersMap[highestUser.id];
-		console.log(`${strUser(rUser)} had the highest elo delta of ${Math.round(highestDelta)} (for users below 4k elo), reaching a peak of ${Math.round(highestUser.maxElo)} and a low of ${Math.round(highestUser.minElo)}`);
+		console.log(
+			`${strUser(rUser)} had the highest elo delta of ${Math.round(highestDelta)} (for users below 4k elo), reaching a peak of ${Math.round(
+				highestUser.maxElo
+			)} and a low of ${Math.round(highestUser.minElo)}`
+		);
 	}
 
 	private findHighestFallAtEnd() {
@@ -141,13 +153,17 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		}
 
 		const rUser = this.usersMap[highestUser.id];
-		console.log(`${strUser(rUser)} ended the season the farthest down from where they were. At one point reaching ${Math.round(highestUser.maxElo)} but ending the season at ${Math.round(rUser.elo)}`);
+		console.log(
+			`${strUser(rUser)} ended the season the farthest down from where they were. At one point reaching ${Math.round(
+				highestUser.maxElo
+			)} but ending the season at ${Math.round(rUser.elo)}`
+		);
 	}
 
 	private findHighestKills() {
 		let highestKills = -Infinity;
 		let highestUser: User;
-		this.users.forEach((user) => {
+		this.users.forEach(user => {
 			if (user.kills > highestKills) {
 				highestKills = user.kills;
 				highestUser = user;
@@ -160,7 +176,7 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 	private findHighestDeaths() {
 		let highestDeaths = -Infinity;
 		let highestUser: User;
-		this.users.forEach((user) => {
+		this.users.forEach(user => {
 			if (user.deaths > highestDeaths) {
 				highestDeaths = user.deaths;
 				highestUser = user;
@@ -173,7 +189,7 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 	private findBestKDRWithMoreThan10Kills() {
 		let highestKDR = -Infinity;
 		let highestUser: User;
-		this.users.forEach((user) => {
+		this.users.forEach(user => {
 			if (user.kills < 10) return;
 			const kdr = user.kills / user.deaths;
 			if (kdr > highestKDR) {
@@ -188,18 +204,18 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 	private findMostTKs() {
 		let highestTKs = -Infinity;
 		let highestUser: User;
-		this.users.forEach((user) => {
+		this.users.forEach(user => {
 			if (user.teamKills > highestTKs) {
 				highestTKs = user.teamKills;
 				highestUser = user;
 			}
 		});
 
-		console.log(`${strUser(highestUser)} had the most team kills with ${highestTKs}  ${(highestTKs / highestUser.kills * 100).toFixed(2)}% of their kills`);
+		console.log(`${strUser(highestUser)} had the most team kills with ${highestTKs}  ${((highestTKs / highestUser.kills) * 100).toFixed(2)}% of their kills`);
 	}
 
 	private findMostKillsPerWeaponType() {
-		const highestKillsPerWeaponType: Record<Weapon, { kills: number, user: ExtraUserStats; }> = {} as Record<Weapon, { kills: number, user: ExtraUserStats; }>;
+		const highestKillsPerWeaponType: Record<Weapon, { kills: number; user: ExtraUserStats }> = {} as Record<Weapon, { kills: number; user: ExtraUserStats }>;
 		for (const user of Object.values(this.extraUserStats)) {
 			for (const weapon of Object.keys(user.killsWithWeapon)) {
 				if (!highestKillsPerWeaponType[weapon]) highestKillsPerWeaponType[weapon] = { kills: -Infinity, user: null };
@@ -219,7 +235,7 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 	}
 
 	private findMostDeathsByWeaponType() {
-		const deathsPerWeaponType: Record<Weapon, { deaths: number, user: ExtraUserStats; }> = {} as Record<Weapon, { deaths: number, user: ExtraUserStats; }>;
+		const deathsPerWeaponType: Record<Weapon, { deaths: number; user: ExtraUserStats }> = {} as Record<Weapon, { deaths: number; user: ExtraUserStats }>;
 		for (const user of Object.values(this.extraUserStats)) {
 			for (const weapon of Object.keys(user.deathsByWeapon)) {
 				if (!deathsPerWeaponType[weapon]) deathsPerWeaponType[weapon] = { deaths: -Infinity, user: null };
@@ -272,11 +288,12 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		let highestElo = -Infinity;
 		let highestUser: User;
 
-		this.users.forEach((user) => {
+		this.users.forEach(user => {
 			if (user.elo > highestElo) {
 				const stats = this.getUser(user.id);
 				const ratio = stats.killsWithAircraft[Aircraft.F45A] / ((stats.killsWithAircraft[Aircraft.FA26b] ?? 0) + stats.killsWithAircraft[Aircraft.F45A]);
-				if (ratio > 0.9) {  // 90% of kills with the F45A
+				if (ratio > 0.9) {
+					// 90% of kills with the F45A
 					highestElo = user.elo;
 					highestUser = user;
 				}
@@ -337,6 +354,34 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		console.log(`${strUser(rUser)} had the highest elo delta of ${Math.round(highestDelta)}`);
 	}
 
+	private findMostTKed() {
+		let highestTKs = -Infinity;
+		let highestUser: User;
+
+		let results: { name: string; times: number }[] = [];
+		for (const user of Object.values(this.extraUserStats)) {
+			if (user.timesGotTKed > highestTKs) {
+				highestTKs = user.timesGotTKed;
+				highestUser = this.usersMap[user.id];
+			}
+
+			results.push({
+				name: this.usersMap[user.id].pilotNames[0] ?? "Unknown",
+				times: user.timesGotTKed
+			});
+		}
+
+		let out = "";
+		results
+			.sort((a, b) => b.times - a.times)
+			.forEach((r, i) => {
+				out += `${i + 1}. ${r.name}: ${r.times}\n`;
+			});
+		fs.writeFileSync("../../../out.txt", out);
+
+		console.log(`${strUser(highestUser)} was TKed the most with ${highestTKs} times`);
+	}
+
 	public getMetrics() {
 		console.log(`----- Metrics -----`);
 		this.findHighestDeltaUser();
@@ -354,6 +399,7 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		this.findBiggestRivals();
 		this.findBiggestEloTransfer();
 		this.findHighestEloDelta();
+		this.findMostTKed();
 
 		// const u = this.usersMap["76561198177819141"];
 		// fs.writeFileSync("../../out-log.txt", u.history.join("\n"));

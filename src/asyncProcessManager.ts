@@ -5,7 +5,7 @@ interface Process<T> {
 
 class AsyncProcessManager<TArgs extends any[] = [], TRet = any> {
 	private processes: Map<string, Process<TRet>> = new Map();
-	constructor(private executor: (...args: TArgs) => Promise<TRet>) { }
+	constructor(private executor: (...args: TArgs) => Promise<TRet>) {}
 
 	public execute(key: string, ...args: TArgs): Promise<TRet> {
 		if (this.processes.has(key)) {

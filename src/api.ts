@@ -1,20 +1,32 @@
 import bodyParser from "body-parser";
+import cors from "cors";
 import express from "express";
 import fs from "fs";
 import path from "path";
 import Logger from "strike-discord-framework/dist/logger.js";
 import { v4 as uuidv4 } from "uuid";
 import WebSocket from "ws";
-import cors from "cors";
 
 import { Application, IAchievementManager } from "./application.js";
 import { Client } from "./client.js";
 import { hourlyReportPath } from "./elo/eloUpdater.js";
 import { createUserEloGraph } from "./graph/graph.js";
 import {
-	Aircraft, CurrentServerInformation, Death, Kill, logUser, MissileLaunchParams,
-	parseAircraftString, parseTeamString, parseTimeOfDayString, parseWeaponString, Spawn, Tracking,
-	UserAircraftInformation, userToLimitedUser, Weapon
+	Aircraft,
+	CurrentServerInformation,
+	Death,
+	Kill,
+	logUser,
+	MissileLaunchParams,
+	parseAircraftString,
+	parseTeamString,
+	parseTimeOfDayString,
+	parseWeaponString,
+	Spawn,
+	Tracking,
+	UserAircraftInformation,
+	userToLimitedUser,
+	Weapon
 } from "./structures.js";
 
 export const ENDPOINT_BASE = "/api/v1/";
@@ -45,8 +57,8 @@ function parseQuery(query: any, allowedQueries: string[]) {
 interface APIUserAircraft {
 	ownerId: string;
 	occupants: string[];
-	position: { x: number, y: number, z: number; };
-	velocity: { x: number, y: number, z: number; };
+	position: { x: number; y: number; z: number };
+	velocity: { x: number; y: number; z: number };
 	team: string;
 	type: string;
 }
@@ -70,7 +82,6 @@ interface DaemonReport {
 	lastCommandedServerStart: number;
 	lastServerStop: number;
 }
-
 
 function parseAPIUserAircraft(apiUA: APIUserAircraft): UserAircraftInformation {
 	return {
@@ -135,17 +146,15 @@ class API {
 		this.registerRoute("GET", "bannedraw", this.getBannedUsersRaw, false);
 		this.registerRoute("GET", "bannedUsers", this.getBannedUsers, false);
 
-
 		this.registerRoute("GET", "mods", this.getAllowedMods, true);
 		this.registerRoute("GET", "liveryUpdate", this.handleLiveryUpdate, true);
-
 
 		const httpServer = this.server.listen(port, () => {
 			this.log.info(`ELO API listening on port ${port}`);
 		});
 
 		this.websocketServer = new WebSocket.Server({ server: httpServer });
-		this.websocketServer.on("connection", (ws) => {
+		this.websocketServer.on("connection", ws => {
 			this.clients.push(new Client(this.app, ws));
 		});
 
@@ -228,7 +237,8 @@ class API {
 			this.log.info(`New pilot name for user ${logUser(user)}: ${pilotName}`);
 			// user.pilotNames.unshift(req.body.pilotName);
 			// Preform unshift
-			await this.app.users.collection.updateOne({ id: user.id },
+			await this.app.users.collection.updateOne(
+				{ id: user.id },
 				{
 					$push: {
 						pilotNames: {
@@ -236,7 +246,8 @@ class API {
 							$position: 0
 						}
 					}
-				});
+				}
+			);
 		}
 
 		this.log.info(`User ${logUser(user)} logged in`);
@@ -260,13 +271,13 @@ class API {
 	}
 
 	public async handleKill(killReq: {
-		victim: APIUserAircraft,
-		killer: APIUserAircraft,
-		weapon: string,
-		weaponUuid: string,
-		previousDamagedByUserId: string,
-		previousDamagedByWeapon: string,
-		serverInfo: APIServerInfo,
+		victim: APIUserAircraft;
+		killer: APIUserAircraft;
+		weapon: string;
+		weaponUuid: string;
+		previousDamagedByUserId: string;
+		previousDamagedByWeapon: string;
+		serverInfo: APIServerInfo;
 	}) {
 		const kill: Kill = {
 			id: uuidv4(),
@@ -278,7 +289,7 @@ class API {
 			killer: parseAPIUserAircraft(killReq.killer),
 			victim: parseAPIUserAircraft(killReq.victim),
 			serverInfo: parseAPIServerInfo(killReq.serverInfo),
-			season: this.app.elo.activeSeason.id,
+			season: this.app.elo.activeSeason.id
 		};
 
 		this.log.info(`Kill: ${kill.killer.ownerId} killed ${kill.victim.ownerId} with ${Weapon[kill.weapon]} in ${Aircraft[kill.killer.type]}`);
@@ -290,7 +301,7 @@ class API {
 			time: Date.now(),
 			victim: kill.victim,
 			serverInfo: kill.serverInfo,
-			season: this.app.elo.activeSeason.id,
+			season: this.app.elo.activeSeason.id
 		};
 		this.app.kills.add(kill);
 		this.app.deaths.add(death);
@@ -316,20 +327,14 @@ class API {
 		};
 	}
 
-	public async handleMissileLaunchParams(paramReq: {
-		uuid: string;
-		type: string;
-		team: string;
-		launcher: APIUserAircraft;
-		players: APIUserAircraft[];
-	}) {
+	public async handleMissileLaunchParams(paramReq: { uuid: string; type: string; team: string; launcher: APIUserAircraft; players: APIUserAircraft[] }) {
 		this.log.info(`Got missile launch params for ${paramReq.uuid}`);
 		const mlParams: MissileLaunchParams = {
 			uuid: paramReq.uuid,
 			type: parseWeaponString(paramReq.type),
 			team: parseTeamString(paramReq.team),
 			launcher: parseAPIUserAircraft(paramReq.launcher),
-			players: paramReq.players.map(p => parseAPIUserAircraft(p)),
+			players: paramReq.players.map(p => parseAPIUserAircraft(p))
 		};
 
 		this.app.missileLaunchParams.add(mlParams);
@@ -337,16 +342,13 @@ class API {
 		return 200;
 	}
 
-	public async handleDeath(deathReq: {
-		victim: APIUserAircraft,
-		serverInfo: APIServerInfo,
-	}) {
+	public async handleDeath(deathReq: { victim: APIUserAircraft; serverInfo: APIServerInfo }) {
 		const death: Death = {
 			id: uuidv4(),
 			time: Date.now(),
 			victim: parseAPIUserAircraft(deathReq.victim),
 			serverInfo: parseAPIServerInfo(deathReq.serverInfo),
-			season: this.app.elo.activeSeason.id,
+			season: this.app.elo.activeSeason.id
 		};
 
 		this.log.info(`Death: ${death.victim.ownerId} died in ${Aircraft[death.victim.type]}`);
@@ -358,7 +360,7 @@ class API {
 		return 200;
 	}
 
-	public async handleSpawn(spawnReq: { user: APIUserAircraft, serverInfo: APIServerInfo; }) {
+	public async handleSpawn(spawnReq: { user: APIUserAircraft; serverInfo: APIServerInfo }) {
 		// console.log(req.body);
 		// console.log(typeof req.body);
 		const spawn: Spawn = {
@@ -366,7 +368,7 @@ class API {
 			time: Date.now(),
 			user: parseAPIUserAircraft(spawnReq.user),
 			serverInfo: parseAPIServerInfo(spawnReq.serverInfo),
-			season: this.app.elo.activeSeason.id,
+			season: this.app.elo.activeSeason.id
 		};
 
 		this.log.info(`Spawn: ${spawn.user.ownerId} spawned in ${Aircraft[spawn.user.type]}`);
@@ -374,14 +376,15 @@ class API {
 
 		const user = await this.app.users.get(spawn.user.ownerId);
 		if (!user) return 400;
-		if (!user.spawns) user.spawns = {
-			[Aircraft.AV42c]: 0,
-			[Aircraft.FA26b]: 0,
-			[Aircraft.AH94]: 0,
-			[Aircraft.T55]: 0,
-			[Aircraft.F45A]: 0,
-			[Aircraft.Invalid]: 0,
-		};
+		if (!user.spawns)
+			user.spawns = {
+				[Aircraft.AV42c]: 0,
+				[Aircraft.FA26b]: 0,
+				[Aircraft.AH94]: 0,
+				[Aircraft.T55]: 0,
+				[Aircraft.F45A]: 0,
+				[Aircraft.Invalid]: 0
+			};
 		if (!user.spawns[spawn.user.type]) user.spawns[spawn.user.type] = 0;
 		user.spawns[spawn.user.type]++;
 		await this.app.users.collection.updateOne({ id: user.id }, { $set: { spawns: user.spawns } });
@@ -390,14 +393,14 @@ class API {
 	}
 
 	public async handleTracking(type: string, args: any[]) {
-		this.log.info(`Tracking: ${type} ${args.join(', ')}`);
+		this.log.info(`Tracking: ${type} ${args.join(", ")}`);
 
 		const trackingObject: Tracking = {
 			id: uuidv4(),
 			time: Date.now(),
 			type: type,
 			args: args,
-			season: this.app.elo.activeSeason.id,
+			season: this.app.elo.activeSeason.id
 		};
 		await this.app.tracking.add(trackingObject);
 
@@ -425,13 +428,16 @@ class API {
 		res.send(await this.app.allowedMods.get());
 	}
 
-	public async updateOnlineUsers(users: {
-		name: string;
-		id: string;
-		team: string;
-	}[]) {
+	public async updateOnlineUsers(
+		users: {
+			name: string;
+			id: string;
+			team: string;
+		}[]
+	) {
 		this.app.onlineUsers = users;
 		this.app.lastOnlineUserUpdateAt = Date.now();
+		this.app.updateOnlineRole();
 		return 200;
 	}
 
@@ -482,7 +488,12 @@ class API {
 		res.send(bannedUsers);
 	}
 
-	private registerRoute(verb: "GET" | "POST" | "PUT" | "DELETE", path: string, handler: (req: express.Request, res: express.Response) => unknown, auth: boolean = true) {
+	private registerRoute(
+		verb: "GET" | "POST" | "PUT" | "DELETE",
+		path: string,
+		handler: (req: express.Request, res: express.Response) => unknown,
+		auth: boolean = true
+	) {
 		const fullPath = ENDPOINT_BASE + (auth ? "private/" : "public/") + path;
 		this.server[verb.toLowerCase()](fullPath, handler.bind(this));
 		this.log.info(`Registered route (${verb}) ${fullPath}`);

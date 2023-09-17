@@ -12,10 +12,13 @@ class ProdDBBackUpdater extends EloBackUpdater {
 	protected reportPath: string = hourlyReportPath;
 
 	protected override async loadDb() {
-		this.db = new Database({
-			databaseName: "vtol-server-elo",
-			url: process.env.PROD_DB_URL
-		}, console.log);
+		this.db = new Database(
+			{
+				databaseName: "vtol-server-elo",
+				url: process.env.PROD_DB_URL
+			},
+			console.log
+		);
 
 		await this.db.init();
 		this.userDb = await this.db.collection("users", false, "id");
@@ -35,7 +38,7 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 	public async runCompare() {
 		// Compare the locally computed elo to the current elo in the database
 		const currentDbUsers = await this.userDb.collection.find({}).toArray();
-		currentDbUsers.forEach((user) => {
+		currentDbUsers.forEach(user => {
 			const localUser = this.usersMap[user.id];
 
 			if (Math.abs(localUser.elo - user.elo) > 10) {
@@ -48,32 +51,37 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 	}
 }
 
-
-
-
 async function writeHourlyReport() {
 	if (!fs.existsSync(hourlyReportPath)) fs.mkdirSync(hourlyReportPath);
 	if (fs.existsSync(`${hourlyReportPath}/kills.json`)) fs.rmSync(`${hourlyReportPath}/kills.json`);
 	if (fs.existsSync(`${hourlyReportPath}/deaths.json`)) fs.rmSync(`${hourlyReportPath}/deaths.json`);
 	console.log(`Writing hourly report to ${hourlyReportPath}`);
 
-	const db = new Database({
-		databaseName: "vtol-server-elo",
-		url: process.env.PROD_DB_URL
-	}, console.log);
+	const db = new Database(
+		{
+			databaseName: "vtol-server-elo",
+			url: process.env.PROD_DB_URL
+		},
+		console.log
+	);
 	await db.init();
 	const kills = await db.collection("kills-v2", false, "id");
 	const deaths = await db.collection("deaths-v2", false, "id");
 
 	const killsStream = fs.createWriteStream(`${hourlyReportPath}/kills.json`);
 	const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);
-	const proms = [
-		new Promise(res => killsStream.on("finish", res)),
-		new Promise(res => deathsStream.on("finish", res))
-	];
+	const proms = [new Promise(res => killsStream.on("finish", res)), new Promise(res => deathsStream.on("finish", res))];
 
-	kills.collection.find({}).stream().on("data", (kill) => killsStream.write(JSON.stringify(kill) + "\n")).on("end", () => killsStream.end());
-	deaths.collection.find({}).stream().on("data", (death) => deathsStream.write(JSON.stringify(death) + "\n")).on("end", () => deathsStream.end());
+	kills.collection
+		.find({})
+		.stream()
+		.on("data", kill => killsStream.write(JSON.stringify(kill) + "\n"))
+		.on("end", () => killsStream.end());
+	deaths.collection
+		.find({})
+		.stream()
+		.on("data", death => deathsStream.write(JSON.stringify(death) + "\n"))
+		.on("end", () => deathsStream.end());
 
 	await Promise.all(proms);
 

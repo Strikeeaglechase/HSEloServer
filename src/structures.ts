@@ -48,6 +48,12 @@ export interface OnlineboardMessage {
 	id: string;
 }
 
+export interface OnlineRole {
+	roleId: string;
+	guildId: string;
+	id: string;
+}
+
 export interface User {
 	id: string;
 	pilotNames: string[];
@@ -57,7 +63,7 @@ export interface User {
 	deaths: number;
 	spawns: Record<Aircraft, number>;
 	elo: number;
-	eloHistory: { time: number, elo: number; }[];
+	eloHistory: { time: number; elo: number }[];
 	rank: number;
 	history: string[];
 	discordId: string;
@@ -100,24 +106,27 @@ export function userToLimitedUser(user: User): LimitedUserData {
 	};
 }
 
-
 export function parseAircraftString(aircraft: string): Aircraft {
 	if (!aircraft) return Aircraft.Invalid;
 
 	const [_, name] = aircraft.split("/");
 	switch (name) {
-		case "VTOL4": return Aircraft.AV42c;
-		case "FA-26B": return Aircraft.FA26b;
-		case "SEVTF": return Aircraft.F45A;
-		case "AH-94": return Aircraft.AH94;
-		case "T-55": return Aircraft.T55;
+		case "VTOL4":
+			return Aircraft.AV42c;
+		case "FA-26B":
+			return Aircraft.FA26b;
+		case "SEVTF":
+			return Aircraft.F45A;
+		case "AH-94":
+			return Aircraft.AH94;
+		case "T-55":
+			return Aircraft.T55;
 		default: {
 			console.error(`Unknown aircraft: ${aircraft}`);
 			return Aircraft.Invalid;
 		}
 	}
 }
-
 
 export function parseWeaponString(weapon: string): Weapon {
 	if (!weapon) return Weapon.Invalid;
@@ -129,16 +138,24 @@ export function parseWeaponString(weapon: string): Weapon {
 
 	const [_, __, name] = weapon.split("/");
 	switch (name) {
-		case "GUN": return Weapon.Gun;
+		case "GUN":
+			return Weapon.Gun;
 		case "AIM-120":
-		case "AIM-120D": return Weapon.AIM120;
-		case "AIM-9": return Weapon.AIM9;
-		case "AIM-7": return Weapon.AIM7;
-		case "AIM-9+": return Weapon.AIM9X;
-		case "AIRS-T": return Weapon.AIRST;
+		case "AIM-120D":
+			return Weapon.AIM120;
+		case "AIM-9":
+			return Weapon.AIM9;
+		case "AIM-7":
+			return Weapon.AIM7;
+		case "AIM-9+":
+			return Weapon.AIM9X;
+		case "AIRS-T":
+			return Weapon.AIRST;
 		case "HARM":
-		case "SideARM": return Weapon.HARM;
-		case "AIM-9E": return Weapon.AIM9E;
+		case "SideARM":
+			return Weapon.HARM;
+		case "AIM-9E":
+			return Weapon.AIM9E;
 		default: {
 			console.error(`Unknown weapon: ${weapon}`);
 			return Weapon.Invalid;
@@ -160,8 +177,10 @@ export function isRadarMissile(weapon: Weapon) {
 
 export function parseTeamString(team: string): Team {
 	switch (team) {
-		case "Allied": return Team.Allied;
-		case "Enemy": return Team.Enemy;
+		case "Allied":
+			return Team.Allied;
+		case "Enemy":
+			return Team.Enemy;
 		default: {
 			console.error(`Unknown team: ${team}`);
 			return Team.Invalid;
@@ -171,9 +190,12 @@ export function parseTeamString(team: string): Team {
 
 export function parseTimeOfDayString(time: string): TimeOfDay {
 	switch (time) {
-		case "Morning": return TimeOfDay.Morning;
-		case "Day": return TimeOfDay.Day;
-		case "Night": return TimeOfDay.Night;
+		case "Morning":
+			return TimeOfDay.Morning;
+		case "Day":
+			return TimeOfDay.Day;
+		case "Night":
+			return TimeOfDay.Night;
 		default: {
 			console.error(`Unknown time of day: ${time}`);
 			return TimeOfDay.Invalid;
@@ -192,27 +214,28 @@ export interface KillOld {
 	weapon: Weapon;
 	id: string;
 
-	killerPosition: { x: number, y: number, z: number; };
-	victimPosition: { x: number, y: number, z: number; };
+	killerPosition: { x: number; y: number; z: number };
+	victimPosition: { x: number; y: number; z: number };
 
-	killerVelocity: { x: number, y: number, z: number; };
-	victimVelocity: { x: number, y: number, z: number; };
+	killerVelocity: { x: number; y: number; z: number };
+	victimVelocity: { x: number; y: number; z: number };
 }
 
 export function isKillOld(kill: any): kill is KillOld {
-	return typeof kill.killerId == "string" &&
+	return (
+		typeof kill.killerId == "string" &&
 		typeof kill.victimId == "string" &&
 		typeof kill.killerAircraft == "number" &&
 		typeof kill.victimAircraft == "number" &&
-		typeof kill.weapon == "number";
+		typeof kill.weapon == "number"
+	);
 }
-
 
 export interface UserAircraftInformation {
 	ownerId: string;
 	occupants: string[];
-	position: { x: number, y: number, z: number; };
-	velocity: { x: number, y: number, z: number; };
+	position: { x: number; y: number; z: number };
+	velocity: { x: number; y: number; z: number };
 	team: Team;
 	type: Aircraft;
 }
@@ -244,7 +267,7 @@ const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
 	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.CFIT],
 	[Aircraft.AH94]: [],
 	[Aircraft.Invalid]: [],
-	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
+	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT]
 };
 export function isKillValid(kill: Kill) {
 	if (kill.victim.type == Aircraft.Invalid) return false;
@@ -271,14 +294,12 @@ export interface DeathOld {
 	killId?: string;
 	id: string;
 
-	victimPosition: { x: number, y: number, z: number; };
-	victimVelocity: { x: number, y: number, z: number; };
+	victimPosition: { x: number; y: number; z: number };
+	victimVelocity: { x: number; y: number; z: number };
 }
 
-
 export function isDeath(death: any): death is DeathOld {
-	return typeof death.victimId == "string" &&
-		typeof death.victimAircraft == "number";
+	return typeof death.victimId == "string" && typeof death.victimAircraft == "number";
 }
 
 export interface Spawn {
@@ -298,8 +319,7 @@ export interface SpawnOld {
 }
 
 export function isSpawn(spawn: any): spawn is SpawnOld {
-	return typeof spawn.userId == "string" &&
-		typeof spawn.aircraft == "number";
+	return typeof spawn.userId == "string" && typeof spawn.aircraft == "number";
 }
 
 export function logUser(user: User) {

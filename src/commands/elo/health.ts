@@ -22,7 +22,7 @@ interface HealthPendingResult {
 	result: string | PrefixedResult;
 }
 
-const maybeNever = (t: number, elseMsg: string) => t == 0 ? "Never" : elseMsg;
+const maybeNever = (t: number, elseMsg: string) => (t == 0 ? "Never" : elseMsg);
 const deltaTime = (t: number) => maybeNever(t, `${Math.floor((Date.now() - t) / 1000)} seconds ago`);
 const deltaTimeMinutes = (t: number) => maybeNever(t, `${Math.floor((Date.now() - t) / 1000 / 60)} minutes ago`);
 
@@ -51,29 +51,27 @@ class Health extends Command {
 
 	@CommandRun
 	async run({ message, framework, app }: CommandEvent<Application>) {
-
 		const daemonReportCbs: ((report: DaemonReport) => void)[] = [];
 		const drv = async <T extends keyof DaemonReport>(key: T): Promise<DaemonReport[T]> => {
 			const report = await new Promise<DaemonReport>(res => daemonReportCbs.push(res));
 			return report[key];
 		};
 
-
 		const healthItems: HealthItem[] = [
 			{ name: "Last Online User Update", exec: async () => deltaTime(app.lastOnlineUserUpdateAt) },
 			{ name: "Online Users", exec: async () => app.onlineUsers.length.toString() },
 			{ name: "Connected WS clients", exec: async () => app.api.clients.length.toString() },
-			{ name: "HS -> Elo Connection", exec: async () => app.api.clients.some(u => u.isAuthedHs) ? success("Client found") : error("No client") },
-			{ name: "Daemon -> Elo Connection", exec: async () => app.api.clients.some(u => u.isAuthedDaemon) ? success("Client found") : error("No client") },
-			{ name: "Seen SM Leave", exec: async () => (await drv("seenSmLeaveMessage")) ? error("SM Leave (Steam failure)") : success("No") },
-			{ name: "Lobby creation failed", exec: async () => (await drv("seenLobbyCreationFailedMessage")) ? error("Lobby creation failed") : success("No") },
+			{ name: "HS -> Elo Connection", exec: async () => (app.api.clients.some(u => u.isAuthedHs) ? success("Client found") : error("No client")) },
+			{ name: "Daemon -> Elo Connection", exec: async () => (app.api.clients.some(u => u.isAuthedDaemon) ? success("Client found") : error("No client")) },
+			{ name: "Seen SM Leave", exec: async () => ((await drv("seenSmLeaveMessage")) ? error("SM Leave (Steam failure)") : success("No")) },
+			{ name: "Lobby creation failed", exec: async () => ((await drv("seenLobbyCreationFailedMessage")) ? error("Lobby creation failed") : success("No")) },
 			{ name: "Last high tick rate", exec: async () => deltaTime(await drv("lastHighAverageTick")) },
-			{ name: "Exception", exec: async () => (await drv("exceptionSeen")) ? error("Exception seen") : success("No") },
+			{ name: "Exception", exec: async () => ((await drv("exceptionSeen")) ? error("Exception seen") : success("No")) },
 			{ name: "Last restart", exec: async () => deltaTime(await drv("lastRestart")) },
 			{ name: "Last user join attempt", exec: async () => deltaTime(await drv("lastUserJoinAttempt")) },
 			{ name: "Last user join success", exec: async () => deltaTime(await drv("lastUserJoinSuccess")) },
 			{ name: "Last server start", exec: async () => deltaTimeMinutes(await drv("lastCommandedServerStart")) },
-			{ name: "Last server stop", exec: async () => deltaTimeMinutes(await drv("lastServerStop")) },
+			{ name: "Last server stop", exec: async () => deltaTimeMinutes(await drv("lastServerStop")) }
 		];
 
 		const embed = new Discord.MessageEmbed();
@@ -87,10 +85,10 @@ class Health extends Command {
 			const resultObject: HealthPendingResult = {
 				name: item.name,
 				isFinished: false,
-				result: "Pending...",
+				result: "Pending..."
 			};
 
-			prom.then((result) => {
+			prom.then(result => {
 				resultObject.result = result;
 				resultObject.isFinished = true;
 				updateDesc();
@@ -116,7 +114,7 @@ class Health extends Command {
 				}
 
 				description += `${line}\n`;
-			};
+			}
 
 			description += `\`\`\``;
 			embed.setDescription(description);
@@ -124,8 +122,7 @@ class Health extends Command {
 			msg.edit({ embeds: [embed] });
 		};
 
-
-		app.api.daemonReportCb = (report) => daemonReportCbs.forEach(cb => cb(report));
+		app.api.daemonReportCb = report => daemonReportCbs.forEach(cb => cb(report));
 		app.api.sendDaemonReportRequest();
 	}
 }

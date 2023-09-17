@@ -97,4 +97,4 @@ async function run() {
 	fs.writeFileSync("../../../out-avg.csv", resultAvg);
 }
 
-run();;
+run();

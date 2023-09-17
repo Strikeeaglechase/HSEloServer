@@ -7,9 +7,7 @@ interface DatabaseOptions {
 	databaseName: string;
 	url: string;
 }
-const {
-	MongoClient,
-} = MongoDBPkg;
+const { MongoClient } = MongoDBPkg;
 
 type Logger = (msg: string) => void;
 
@@ -45,7 +43,6 @@ class Database {
 		this.log(`Init finished, ${newCollection.collection.collectionName} and ${newCollection.archive.collectionName} are ready to be used`);
 		return newCollection;
 	}
-
 }
 export default Database;
 export { DatabaseOptions };

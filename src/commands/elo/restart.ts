@@ -25,7 +25,8 @@ class Restart extends Command {
 					app.api.sendRestartRequest();
 					return framework.success("Server is restarting");
 				}
-			});
+			}
+		);
 	}
 }
 

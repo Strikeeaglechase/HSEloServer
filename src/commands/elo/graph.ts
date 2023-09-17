@@ -24,14 +24,13 @@ async function lookupUser(users: CollectionManager<string, User>, query: string)
 	}
 }
 
-
 class Graph extends Command {
 	name = "graph";
 	altNames = [];
 	allowDm = false;
 	help = {
 		msg: "Compares the elo between two users",
-		usage: "<userid/name> <userid/name> {stretch/time}",
+		usage: "<userid/name> <userid/name> {stretch/time}"
 	};
 
 	@CommandRun

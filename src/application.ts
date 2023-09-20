@@ -438,20 +438,22 @@ class Application {
 
 	public async updateOnlineRole() {
 		let onlineRoles = await this.onlineRoles.get();
-		let onlineUsers = await Promise.all(this.onlineUsers.map(async user => this.users.get(user.id)).filter(u => u !== undefined));
-		onlineRoles.forEach(async onlinerole => {
-			const guild = await this.framework.client.guilds.fetch(onlinerole.guildId).catch(() => {});
+		let onlineUsers = await Promise.all(this.onlineUsers.map(async user => this.users.get(user.id)));
+		onlineUsers = onlineUsers.filter(u => u != null && u != undefined && u.discordId != null && u.discordId != undefined);
+
+		onlineRoles.forEach(async onlineRole => {
+			const guild = await this.framework.client.guilds.fetch(onlineRole.guildId).catch(() => {});
 			if (!guild) return;
 
-			const role = await guild.roles.fetch(onlinerole.roleId).catch(() => {});
+			const role = await guild.roles.fetch(onlineRole.roleId).catch(() => {});
 			if (!role) return;
 
-			const onlineMembers = (
-				await Promise.all(onlineUsers.filter(u => u.discordId !== undefined).map(async user => guild.members.fetch(user.discordId).catch(() => {})))
-			).filter(m => m !== undefined) as undefined as Discord.GuildMember[];
+			const onlineGuildMembers = (await Promise.all(onlineUsers.map(async user => guild.members.fetch(user.discordId).catch(() => {})))).filter(
+				u => u != undefined && u instanceof Discord.GuildMember
+			) as unknown as Discord.GuildMember[];
 
-			const toAdd = onlineMembers.filter(m => !role.members.has(m.id));
-			const toRemove = role.members.filter(m => !onlineMembers.some(u => u.id == m.id));
+			const toAdd = onlineGuildMembers.filter(m => !role.members.has(m.id));
+			const toRemove = role.members.filter(m => !onlineGuildMembers.some(u => u.id == m.id));
 
 			toAdd.forEach(async member => {
 				await member.roles.add(role).catch(() => {});

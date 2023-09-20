@@ -21,6 +21,8 @@ class Client {
 	private api: API;
 	private lastPingReply = Date.now();
 
+	private subscribedEvents: string[] = [];
+
 	constructor(private app: Application, private socket: WebSocket) {
 		this.id = uuidv4();
 		this.api = app.api;
@@ -48,8 +50,13 @@ class Client {
 			case "pong":
 				this.lastPingReply = Date.now();
 				break;
+
 			case "lookup":
 				this.handleLookup(message);
+				break;
+
+			case "subscribe":
+				if (Array.isArray(message.data) && message.data.length < 50) this.subscribedEvents = message.data;
 				break;
 
 			case "authenticate_daemon":
@@ -91,7 +98,7 @@ class Client {
 				this.app.users.get(id).then(r => this.replyToLookup(packet, r));
 				break;
 			case "user_by_name":
-				this.app.users.collection.findOne({ pilotNames: { $regex: id } }).then(r => this.replyToLookup(packet, r));
+				this.app.users.collection.findOne({ pilotNames: { $regex: id, $options: "i" } }).then(r => this.replyToLookup(packet, r));
 				break;
 			case "kills_by_killer":
 				this.app.kills.collection
@@ -123,7 +130,7 @@ class Client {
 		// Retransmit packet to all clients
 		this.app.api.clients.forEach(client => {
 			if (client.id == this.id) return;
-			client.send(packet);
+			if (client.subscribedEvents.includes(packet.type)) client.send(packet);
 		});
 
 		switch (packet.type) {

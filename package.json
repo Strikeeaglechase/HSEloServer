@@ -5,7 +5,8 @@
 	"main": "index.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"redoc": "npx redoc-cli bundle ./openapi.json -o docs/index.html"
+		"redoc": "npx redoc-cli bundle ./openapi.json -o docs/index.html",
+		"tsc": "npx tsc --watch"
 	},
 	"keywords": [],
 	"type": "module",
@@ -21,16 +22,18 @@
 		"google-auth-library": "^8.9.0",
 		"google-spreadsheet": "^4.0.3",
 		"jimp": "^0.22.7",
+		"mongodb": "^6.1.0",
 		"sharp": "^0.31.3",
 		"strike-discord-framework": "^1.4.13",
-		"typescript": "^4.8.4",
 		"uuid": "^8.3.2",
 		"vega": "^5.22.1",
 		"ws": "^8.13.0"
 	},
 	"devDependencies": {
 		"@types/cors": "^2.8.14",
+		"@types/mongodb": "^4.0.7",
 		"@types/sharp": "^0.31.0",
-		"@types/uuid": "^8.3.4"
+		"@types/uuid": "^8.3.4",
+		"typescript": "^5.2.2"
 	}
 }

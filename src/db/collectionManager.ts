@@ -1,4 +1,4 @@
-import { Collection, FilterQuery } from "mongodb";
+import { Collection, Filter } from "mongodb";
 
 // This file defines a manager wrapper around mongoDB "Collections", they allow custom ID type/prop names
 import Database from "./database.js";
@@ -36,7 +36,7 @@ class CollectionManager<T, IDType extends string = string> {
 		// Using a record here feels a bit weird as its only one prop, but gets the job done
 		const obj: Record<string, IDType> = {};
 		obj[this.idProp] = id;
-		return obj as FilterQuery<T>;
+		return obj as Filter<T>;
 	}
 	// Fills the cache
 	async updateCache() {

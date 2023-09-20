@@ -13,7 +13,11 @@ class Online extends Command {
 
 	@CommandRun
 	async run({ message, framework, app }: CommandEvent<Application>) {
+		const existing = await app.onlineboardMessages.collection.findOne({ guildId: message.guild.id });
+		if (existing) return message.reply(`Check https://discord.com/channels/${existing.guildId}/${existing.channelId}/${existing.messageId} dummy!`);
+
 		if (app.onlineUsers.length == 0) return framework.error(`No users online!`);
+
 		const onlineUsers = await Promise.all(app.onlineUsers.map(async user => app.users.get(user.id)));
 		const elos: number[] = [];
 

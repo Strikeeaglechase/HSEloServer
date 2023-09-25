@@ -239,7 +239,8 @@ class Application {
 			isBanned: false,
 			teamKills: 0,
 			endOfSeasonStats: [],
-			eloFreeze: false
+			eloFreeze: false,
+			eloGainLossSummary: {}
 		};
 		await this.users.add(user);
 		return user;

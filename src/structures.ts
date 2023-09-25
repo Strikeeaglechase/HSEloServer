@@ -78,6 +78,15 @@ export interface User {
 		history: string;
 	}[];
 	eloFreeze: boolean;
+	eloGainLossSummary: Record<
+		string,
+		{
+			// Elo gained from the other user
+			gain: number;
+			// Elo lost to the other user
+			loss: number;
+		}
+	>;
 }
 
 export interface LimitedUserData {

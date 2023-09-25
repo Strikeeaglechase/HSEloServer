@@ -167,7 +167,7 @@ class EloBackUpdater {
 			u.deaths = 0;
 			u.eloHistory = [];
 			u.history = [];
-
+			u.eloGainLossSummary = {};
 			usersMap[u.id] = u;
 		});
 
@@ -312,7 +312,27 @@ class EloBackUpdater {
 		console.log(`Primary back update calculations done! Took ${Date.now() - start}ms`);
 	}
 
-	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) {}
+	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) {
+		switch (event.type) {
+			case "kill": {
+				const summary = user.eloGainLossSummary[event.event.killer.ownerId] || { gain: 0, loss: 0 };
+				summary.gain += eloDelta;
+				user.eloGainLossSummary[event.event.victim.ownerId] = summary;
+				break;
+			}
+			case "death": {
+				const kill = this.killsMap[event.event.killId];
+				const id = kill ? kill.killer.ownerId : user.id;
+
+				const summary = user.eloGainLossSummary[id] || { gain: 0, loss: 0 };
+				summary.loss -= eloDelta;
+				user.eloGainLossSummary[event.event.killId] = summary;
+				break;
+			}
+			case "action":
+				break;
+		}
+	}
 
 	public async storeResults() {
 		console.log(`Beginning store results`);

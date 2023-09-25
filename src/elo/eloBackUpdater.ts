@@ -253,6 +253,7 @@ class EloBackUpdater {
 					victim.elo -= loss;
 					ELOUpdater.updateUserLogForT55(timestamp, killer, victim, loss);
 					victim.eloHistory.push({ elo: victim.elo, time: e.time });
+					this.onUserUpdate(victim, e, 0);
 					continue;
 				}
 
@@ -312,21 +313,31 @@ class EloBackUpdater {
 		console.log(`Primary back update calculations done! Took ${Date.now() - start}ms`);
 	}
 
+	protected getSummary(forUser: string, againstUser: string) {
+		const user = this.usersMap[forUser];
+		const summary = user.eloGainLossSummary[againstUser] ?? { gain: 0, loss: 0 };
+		user.eloGainLossSummary[againstUser] = summary;
+		return summary;
+	}
+
 	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) {
 		switch (event.type) {
 			case "kill": {
-				const summary = user.eloGainLossSummary[event.event.killer.ownerId] || { gain: 0, loss: 0 };
-				summary.gain += eloDelta;
-				user.eloGainLossSummary[event.event.victim.ownerId] = summary;
+				const kill = event.event as Kill;
+				if (user.id != kill.killer.ownerId) return; // Only run logic once per kill
+
+				const killerSummaryAgainstVictim = this.getSummary(kill.killer.ownerId, kill.victim.ownerId);
+				const victimSummaryAgainstKiller = this.getSummary(kill.victim.ownerId, kill.killer.ownerId);
+
+				killerSummaryAgainstVictim.gain += eloDelta;
+				victimSummaryAgainstKiller.loss += eloDelta;
+
 				break;
 			}
 			case "death": {
-				const kill = this.killsMap[event.event.killId];
-				const id = kill ? kill.killer.ownerId : user.id;
-
-				const summary = user.eloGainLossSummary[id] || { gain: 0, loss: 0 };
-				summary.loss -= eloDelta;
-				user.eloGainLossSummary[event.event.killId] = summary;
+				if (event.event.killId) return; // Death relates to a kill, don't do anything
+				const victimSummaryAgainstVictim = this.getSummary(event.event.victim.ownerId, event.event.victim.ownerId);
+				victimSummaryAgainstVictim.loss += eloDelta;
 				break;
 			}
 			case "action":
@@ -360,7 +371,8 @@ class EloBackUpdater {
 								deaths: user.deaths,
 								eloHistory: user.eloHistory,
 								history: user.history,
-								rank: user.rank
+								rank: user.rank,
+								eloGainLossSummary: user.eloGainLossSummary
 							}
 						}
 					}

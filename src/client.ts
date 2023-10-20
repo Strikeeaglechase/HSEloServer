@@ -50,15 +50,12 @@ class Client {
 			case "pong":
 				this.lastPingReply = Date.now();
 				break;
-
 			case "lookup":
 				this.handleLookup(message);
 				break;
-
 			case "subscribe":
 				if (Array.isArray(message.data) && message.data.length < 50) this.subscribedEvents = message.data;
 				break;
-
 			case "authenticate_daemon":
 			case "authenticate": {
 				const valid = message.data.token == process.env.AUTH_TOKEN;

@@ -9,6 +9,8 @@ import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
 import { createUserEloGraph } from "../../graph/graph.js";
 import { Aircraft, User, Weapon } from "../../structures.js";
 
+const achievementsEnabled = false;
+
 async function lookupUser(users: CollectionManager<string, User>, query: string) {
 	// SteamID
 	const userIdUser = await users.get(query);
@@ -139,6 +141,59 @@ class Stats extends Command {
 			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true }
 			// { name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
 		]);
+
+		let achievementLogText = "";
+		if (achievementsEnabled) {
+			const achievements = user.achievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
+			const dbAchievements = await Promise.all(achievements.map(ach => app.achievementsDb.get(ach.id)));
+			const topAchievements = dbAchievements.sort((a, b) => {
+				if (a.firstAchievedBy == user.id) return -1;
+				const aCount = a.users.length;
+				const bCount = b.users.length;
+				return bCount - aCount;
+			});
+
+			achievementLogText += `\n\n\nAchievement log:\n`;
+			topAchievements.forEach(dbAchievement => {
+				const achievement = achievements.find(a => a.id == dbAchievement.id);
+				const userAchievement = user.achievements.find(a => a.id == dbAchievement.id);
+
+				achievementLogText += `${achievement.name} x${userAchievement.count} \n`;
+				achievementLogText += `${achievement.description} \n`;
+				achievementLogText += `First achieved on ${new Date(userAchievement.firstAchieved).toISOString()}\n\n`;
+			});
+
+			const table: { txt: string; bold: boolean }[][] = [];
+			const topSix = topAchievements.slice(0, 6);
+
+			for (let i = 0; i < topSix.length; i += 2) {
+				const ach = topSix[i];
+				const achievement = achievements.find(a => a.id == ach.id);
+				table.push([{ txt: achievement.name, bold: ach.firstAchieved && ach.firstAchievedBy == user.id }]);
+
+				const ach2 = topSix[i + 1];
+				if (ach2) {
+					const achievement2 = achievements.find(a => a.id == ach2.id);
+					table[table.length - 1].push({ txt: achievement2.name, bold: ach2.firstAchieved && ach2.firstAchievedBy == user.id });
+				}
+			}
+
+			let achievementsStr = "```ansi\n[4;2m[1;2mAchievements[0m[0m\n";
+			const optBold = (entry: { txt: string; bold: boolean }, pad: number) => {
+				if (!entry.bold) return entry.txt.padEnd(pad);
+				return `[2;37m[1;37m${entry.txt.padEnd(pad)}[0m[2;37m[0m`;
+			};
+			const col0Pad = Math.max(...table.map(e => e[0].txt.length)) + 3;
+			table.forEach(row => {
+				achievementsStr += optBold(row[0], col0Pad);
+				if (row[1]) achievementsStr += optBold(row[1], 0);
+				achievementsStr += "\n";
+			});
+
+			if (topAchievements.length > 5) achievementsStr += `... and ${topAchievements.length - 5} more`;
+			achievementsStr += "\n```";
+			embed.setDescription(achievementsStr);
+		}
 		embed.setFooter({ text: `${targetSeason.name} | ID: ${user.id}` });
 
 		// let files: Discord.MessageAttachment[] = [];
@@ -148,7 +203,7 @@ class Stats extends Command {
 			const host = getHost();
 			embed.setImage(`${host}${ENDPOINT_BASE}public/graph/${user.id}/${Math.floor(Math.random() * 1000)}`);
 		}
-		const attachment = new Discord.MessageAttachment(await app.elo.getUserLog(user.id, targetSeason), "history.txt");
+		const attachment = new Discord.MessageAttachment(await app.elo.getUserLog(user.id, targetSeason, achievementLogText), "history.txt");
 		const files = [attachment];
 
 		message.channel.send({ embeds: [embed], files: files });

@@ -99,10 +99,10 @@ class ELOUpdater {
 		this.log = app.log;
 	}
 
-	public async getUserLog(userId: string, season: Season) {
+	public async getUserLog(userId: string, season: Season, extraText: string) {
 		const log = await this.getUserLogText(userId, season);
 		if (!fs.existsSync("../userLogs")) fs.mkdirSync("../userLogs");
-		fs.writeFileSync(`../userLogs/${userId}-S${season.id}.txt`, log);
+		fs.writeFileSync(`../userLogs/${userId}-S${season.id}.txt`, log + extraText);
 		return path.resolve(`../userLogs/${userId}-S${season.id}.txt`);
 	}
 

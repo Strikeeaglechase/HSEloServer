@@ -5,11 +5,13 @@ import { CollectionManager } from "strike-discord-framework/dist/collectionManag
 import Logger from "strike-discord-framework/dist/logger";
 import { v4 as uuidv4 } from "uuid";
 
+import { DummyAchievementManager, IAchievementManager } from "./achievementDeclare.js";
 import { API } from "./api.js";
 import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
-import { EventEmitter } from "./eventEmitter.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import {
+	AchievementDBEntry,
+	AchievementLogChannel,
 	Aircraft,
 	AllowedMod,
 	Death,
@@ -34,26 +36,6 @@ function strCmpNoWhitespace(a: string, b: string) {
 	return a.replace(/\s/g, "") == b.replace(/\s/g, "");
 }
 
-interface IAchievementManager extends EventEmitter {
-	init(): Promise<void>;
-	onKill(kill: Kill, deltaElo: number): void;
-	onDeath(death: Death, deltaElo: number): void;
-	onTrackingEvent(tracking: Tracking): void;
-	onUserLogin(user: User): void;
-	onUserLogout(user: User): void;
-	onLinkedAccount(user: User): void;
-}
-
-class DummyAchievementManager extends EventEmitter implements IAchievementManager {
-	async init() {}
-	onKill(kill: Kill) {}
-	onDeath(death: Death) {}
-	onTrackingEvent(tracking: Tracking) {}
-	onUserLogin(user: User) {}
-	onUserLogout(user: User) {}
-	onLinkedAccount(user: User) {}
-}
-
 class Application {
 	public log: Logger;
 
@@ -69,12 +51,14 @@ class Application {
 
 	public scoreboardMessages: CollectionManager<string, ScoreboardMessage>;
 	public onlineboardMessages: CollectionManager<string, OnlineboardMessage>;
+	public achievementLogChannels: CollectionManager<string, AchievementLogChannel>;
 	public onlineRoles: CollectionManager<String, OnlineRole>;
 	public allowedMods: CollectionManager<string, AllowedMod>;
 	public seasons: CollectionManager<number, Season>;
 	public tracking: CollectionManager<string, Tracking>;
 
 	public achievementManager: IAchievementManager = new DummyAchievementManager();
+	public achievementsDb: CollectionManager<string, AchievementDBEntry>;
 
 	public api: API;
 	public elo: ELOUpdater;
@@ -106,6 +90,7 @@ class Application {
 		this.log.info(`Application has started!`);
 		this.scoreboardMessages = await this.framework.database.collection("scoreboard-messages", false, "id");
 		this.onlineboardMessages = await this.framework.database.collection("onlineboard-messages", false, "id");
+		this.achievementLogChannels = await this.framework.database.collection("achievement-log-channels", false, "channelId");
 
 		this.onlineRoles = await this.framework.database.collection("online-roles", false, "id");
 
@@ -118,6 +103,7 @@ class Application {
 		this.seasons = await this.framework.database.collection("seasons", false, "id");
 		this.tracking = await this.framework.database.collection("tracking", false, "id");
 		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
+		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
 
 		await this.loadAchievementManager();
 		await this.api.init(this.achievementManager);
@@ -220,6 +206,7 @@ class Application {
 			pilotNames: [],
 			loginTimes: [],
 			logoutTimes: [],
+			sessions: [],
 			kills: 0,
 			deaths: 0,
 			rank: null,
@@ -240,7 +227,8 @@ class Application {
 			teamKills: 0,
 			endOfSeasonStats: [],
 			eloFreeze: false,
-			eloGainLossSummary: {}
+			eloGainLossSummary: {},
+			achievements: []
 		};
 		await this.users.add(user);
 		return user;
@@ -505,6 +493,16 @@ class Application {
 		return onlineboard;
 	}
 
+	public async createAchievementLogChannel(channel: Discord.TextChannel) {
+		const entry: AchievementLogChannel = {
+			channelId: channel.id,
+			guildId: channel.guild.id
+		};
+
+		await this.achievementLogChannels.add(entry);
+		this.log.info(`Created new achievement log channel ${entry.channelId} in guild ${entry.guildId}`);
+	}
+
 	public async createOnlinerole(role: Discord.Role) {
 		const onlinerole: OnlineRole = {
 			roleId: role.id,
@@ -549,6 +547,11 @@ class Application {
 
 		this.log.info(`Deleting onlineboard ${onlineboard.id}`);
 		await this.onlineboardMessages.remove(onlineboard.id);
+	}
+
+	public async deleteAchievementLogChannel(achievementLogChannel: AchievementLogChannel) {
+		this.log.info(`Deleting achievement log channel ${achievementLogChannel.channelId}`);
+		await this.achievementLogChannels.remove(achievementLogChannel.channelId);
 	}
 
 	public async deleteOnlineRole(onlinerole: OnlineRole) {

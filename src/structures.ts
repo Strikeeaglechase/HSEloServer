@@ -1,3 +1,5 @@
+import { AchievementId } from "./achievementDeclare.js";
+
 export enum Aircraft {
 	AV42c,
 	FA26b,
@@ -48,6 +50,11 @@ export interface OnlineboardMessage {
 	id: string;
 }
 
+export interface AchievementLogChannel {
+	channelId: string;
+	guildId: string;
+}
+
 export interface OnlineRole {
 	roleId: string;
 	guildId: string;
@@ -59,6 +66,7 @@ export interface User {
 	pilotNames: string[];
 	loginTimes: number[];
 	logoutTimes: number[];
+	sessions: { startTime: number; endTime: number }[];
 	kills: number;
 	deaths: number;
 	spawns: Record<Aircraft, number>;
@@ -87,6 +95,8 @@ export interface User {
 			loss: number;
 		}
 	>;
+	achievements: { id: AchievementId; count: number; firstAchieved: number }[];
+	// achievementCounts: Partial<Record<AchievementId, number>>;
 }
 
 export interface LimitedUserData {
@@ -364,4 +374,13 @@ export interface MissileLaunchParams {
 	team: Team;
 	launcher: UserAircraftInformation;
 	players: UserAircraftInformation[];
+}
+
+export interface AchievementDBEntry {
+	id: AchievementId;
+	users: string[];
+	firstAchieved: number;
+	firstAchievedBy?: string;
+
+	messages: { channelId: string; messageId: string }[];
 }

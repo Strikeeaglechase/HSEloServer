@@ -181,6 +181,16 @@ class API {
 		daemonClient.send({ type: "daemon_restart" });
 	}
 
+	public sendKickUserRequest(userId: string) {
+		const hsClient = this.clients.find(c => c.isAuthedHs);
+		if (!hsClient) {
+			this.log.warn(`Unable to find HS client to send kick request`);
+			return;
+		}
+
+		hsClient.send({ type: "kick_user", data: userId });
+	}
+
 	private updateClients() {
 		this.clients = this.clients.filter(c => c.alive);
 	}
@@ -251,9 +261,8 @@ class API {
 		}
 
 		this.log.info(`User ${logUser(user)} logged in`);
-		await this.app.users.collection.updateOne({ id: user.id }, { $push: { loginTimes: Date.now() } });
+		await this.app.users.collection.updateOne({ id: user.id }, { $pull: { sessions: { startTime: Date.now(), endTime: 0 } } });
 		this.achievementManager.onUserLogin(user);
-		// await this.app.users.update(user, user.id);
 		return 200;
 	}
 
@@ -264,7 +273,8 @@ class API {
 		if (!user) user = await this.app.createNewUser(userId);
 
 		this.log.info(`User ${logUser(user)} logged out`);
-		user.logoutTimes.push(Date.now());
+		const lastSession = user.sessions[user.sessions.length - 1];
+		if (lastSession && lastSession.endTime == 0) lastSession.endTime = Date.now();
 		await this.app.users.update(user, user.id);
 		this.achievementManager.onUserLogout(user);
 		return 200;

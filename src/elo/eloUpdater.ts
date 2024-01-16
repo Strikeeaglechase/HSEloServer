@@ -230,12 +230,12 @@ class ELOUpdater {
 		const proms = [new Promise(res => killsStream.on("finish", res)), new Promise(res => deathsStream.on("finish", res))];
 
 		this.app.kills.collection
-			.find({})
+			.find({ season: activeSeason.id })
 			.stream()
 			.on("data", kill => killsStream.write(JSON.stringify(kill) + "\n"))
 			.on("end", () => killsStream.end());
 		this.app.deaths.collection
-			.find({})
+			.find({ season: activeSeason.id })
 			.stream()
 			.on("data", death => deathsStream.write(JSON.stringify(death) + "\n"))
 			.on("end", () => deathsStream.end());

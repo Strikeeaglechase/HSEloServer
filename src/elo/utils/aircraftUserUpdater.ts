@@ -55,7 +55,8 @@ class AircraftUserUpdater extends ProdDBBackUpdater {
 
 				const killer = this.acUsersMap[kill.killer.type];
 				const victim = this.acUsersMap[kill.victim.type];
-				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, 1);
+				const aircraftOffset = ELOUpdater.getKillAircraftOffset(kill);
+				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, 1);
 
 				killer.elo += eloSteal;
 				victim.elo -= eloSteal;

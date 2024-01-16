@@ -5,7 +5,19 @@ import Logger from "strike-discord-framework/dist/logger.js";
 
 import { Application, KILLS_TO_RANK } from "../application.js";
 import { shouldUserBeBanned } from "../banHandler.js";
-import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
+import {
+	Aircraft,
+	AircraftCategory,
+	aircraftCategoryMap,
+	Death,
+	isKillValid,
+	Kill,
+	Season,
+	User,
+	Weapon,
+	WeaponCategory,
+	weaponCategoryMap
+} from "../structures.js";
 import { IPCMessage } from "./eloBackUpdater.js";
 
 // ELO CONFIG:
@@ -30,6 +42,16 @@ export const t55Penalty = 25;
 export const t55PenaltyThreshold = 2500;
 // Maximum multiplier for an aircraft/weapon combo (limited by maxEloStealPrec)
 export const maxWeaponMultiplier = Infinity;
+// Aircraft specific bonuses/nerfs to correct for balance
+export const aircraftBonusMults: Record<Aircraft, { killMult: number; deathMult: number }> = {
+	[Aircraft.AV42c]: { killMult: 0, deathMult: 0 },
+	[Aircraft.FA26b]: { killMult: 1, deathMult: 1 },
+	[Aircraft.F45A]: { killMult: 1, deathMult: 1 },
+	[Aircraft.AH94]: { killMult: 0, deathMult: 0 },
+	[Aircraft.T55]: { killMult: 1.5, deathMult: 0.9 },
+	[Aircraft.EF24G]: { killMult: 1, deathMult: 0.8 },
+	[Aircraft.Invalid]: { killMult: 0, deathMult: 0 }
+};
 
 const hourlyReportPath = "../hourlyReport/";
 
@@ -43,17 +65,17 @@ interface KillMetric {
 }
 
 function getKillStr(kill: Kill) {
-	return `${Aircraft[kill.killer.type]}->${Weapon[kill.weapon]}->${Aircraft[kill.victim.type]}`;
+	const killerCat = AircraftCategory[aircraftCategoryMap[kill.killer.type]];
+	const victimCat = AircraftCategory[aircraftCategoryMap[kill.victim.type]];
+	const weaponCat = WeaponCategory[weaponCategoryMap[kill.weapon]];
+
+	return `${killerCat}->${weaponCat}->${victimCat}`;
 }
 
 const maxCfitDist = 20 * 1852;
 const maxCfitDistSq = maxCfitDist * maxCfitDist;
 
 function shouldKillBeCounted(kill: Kill, killerUser?: User, victimUser?: User) {
-	// If T-55, ignore
-	// if (kill.killer.type == Aircraft.T55) return false;
-	if (kill.victim.type == Aircraft.T55) return false;
-
 	// If invalid, ignore
 	if (!isKillValid(kill)) return false;
 
@@ -68,10 +90,6 @@ function shouldKillBeCounted(kill: Kill, killerUser?: User, victimUser?: User) {
 }
 
 function shouldDeathBeCounted(death: Death, kill?: Kill) {
-	// If T-55, ignore
-	if (death.victim.type == Aircraft.T55) return false;
-	if (kill && kill.killer.type == Aircraft.T55) return false;
-
 	// If invalid, ignore
 	if (kill && !isKillValid(kill)) return false;
 
@@ -146,6 +164,7 @@ class ELOUpdater {
 	}
 
 	public async runHourlyTasks() {
+		this.log.info(`Running hourly tasks...`);
 		await this.writeHourlyReport();
 
 		const start = Date.now();
@@ -229,17 +248,21 @@ class ELOUpdater {
 		killer: User,
 		victim: User,
 		metric: KillMetric,
+		kill: Kill,
 		eloSteal: number,
-		killStr: string,
+		multStr: string,
 		extraInfo: string = ""
 	) {
+		// const killerAc = Aircraft[kill.killer.type];
+		// const victimAc = Aircraft[kill.victim.type];
+		const wpnStr = `${Aircraft[kill.killer.type]}->${Weapon[kill.weapon]}->${Aircraft[kill.victim.type]}`;
 		killer.history.push(
-			`[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${killStr} (${metric?.multiplier.toFixed(
+			`[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${wpnStr} (${metric?.multiplier.toFixed(
 				1
 			)}) ${extraInfo} Elo gained: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)}`
 		);
 		victim.history.push(
-			`[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${killStr} (${metric?.multiplier.toFixed(
+			`[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${wpnStr} (${metric?.multiplier.toFixed(
 				1
 			)}) ${extraInfo} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)}`
 		);
@@ -321,7 +344,8 @@ class ELOUpdater {
 			metric = cfitMetric;
 		}
 
-		const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
+		const aircraftOffset = ELOUpdater.getKillAircraftOffset(kill);
+		const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1);
 
 		this.log.info(`Killer ${killer.pilotNames[0]} (${killer.elo}) killed victim ${victim.pilotNames[0]} (${victim.elo}) for ${eloSteal.toFixed(1)} ELO`);
 		this.log.info(` -> ${killer.pilotNames[0]} ELO: ${killer.elo} -> ${killer.elo + eloSteal}`);
@@ -333,7 +357,7 @@ class ELOUpdater {
 		killer.elo += eloSteal;
 		victim.elo -= eloSteal;
 		victim.elo = Math.max(victim.elo, 1);
-		ELOUpdater.updateUserLogForKill(new Date().toISOString(), killer, victim, metric, eloSteal, killStr);
+		ELOUpdater.updateUserLogForKill(new Date().toISOString(), killer, victim, metric, kill, eloSteal, killStr);
 
 		killer.kills++;
 		victim.deaths++;
@@ -389,7 +413,6 @@ class ELOUpdater {
 	public static getCFITMultiplier(kill: Kill, multipliers: KillMetric[]): { cfitMetric: KillMetric; extraInfo: string } {
 		const dist = Math.sqrt(Math.pow(kill.killer.position.x - kill.victim.position.x, 2) + Math.pow(kill.killer.position.z - kill.victim.position.z, 2));
 		const nm = 1852;
-
 		let weaponEquivalent: Weapon = null;
 		if (dist / nm < 1) weaponEquivalent = Weapon.Gun;
 		else if (dist / nm < 5) weaponEquivalent = Weapon.AIM9;
@@ -404,10 +427,19 @@ class ELOUpdater {
 		}
 	}
 
-	public static calculateEloSteal(killerElo: number, victimElo: number, multiplier = 1) {
+	public static getKillAircraftOffset(kill: Kill) {
+		const killerMult = aircraftBonusMults[kill.killer.type];
+		const victimMult = aircraftBonusMults[kill.victim.type];
+		return killerMult.killMult * victimMult.deathMult;
+	}
+
+	public static calculateEloSteal(killerElo: number, victimElo: number, aircraftOffset = 1, multiplier = 1) {
 		const eloDiff = Math.abs(victimElo - killerElo);
 		const additionalStealConst = killerElo < victimElo ? stealPerEloGainedPoints : -stealPerEloLostPoints;
-		const eloSteal = Math.min(maxEloStealPoints, Math.max(baseEloStealPoints + eloDiff * additionalStealConst, minEloStealPoints) * multiplier);
+		const eloSteal = Math.min(
+			maxEloStealPoints,
+			Math.max(baseEloStealPoints + eloDiff * additionalStealConst, minEloStealPoints) * multiplier * aircraftOffset
+		);
 		return eloSteal;
 	}
 }

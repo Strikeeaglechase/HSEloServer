@@ -3,6 +3,7 @@ import fs from "fs";
 
 import { CollectionManager } from "../db/collectionManager.js";
 import Database from "../db/database.js";
+import { createUserEloGraph } from "../graph/graph.js";
 import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
 import {
 	BASE_ELO,
@@ -20,12 +21,14 @@ import {
 
 config();
 const userBackupPath = "../users/";
-const userChunkSize = 100; // Send 100 users at a time
+const fullyOffline = false;
+const manualSeasonSelection = 2;
 
 function shouldKillContributeToMultipliers(kill: Kill) {
 	if (kill.weapon == Weapon.CFIT) return false;
-	if (kill.killer.type == Aircraft.T55) return false;
-	if (kill.victim.type == Aircraft.T55) return false;
+	if (kill.weapon == Weapon.Collision) return false;
+	// if (kill.killer.type == Aircraft.T55) return false;
+	// if (kill.victim.type == Aircraft.T55) return false;
 	return shouldKillBeCounted(kill);
 }
 
@@ -77,6 +80,8 @@ class EloBackUpdater {
 	protected events: EloEvent[] = [];
 
 	protected async loadDb() {
+		if (fullyOffline) return;
+
 		this.db = new Database(
 			{
 				databaseName: "vtol-server-elo" + (process.env.IS_DEV == "true" ? "-dev" : ""),
@@ -137,7 +142,7 @@ class EloBackUpdater {
 		const relevantMetrics = killMetrics.sort((a, b) => b.count - a.count);
 
 		const expectPrec = 1 / relevantMetrics.length;
-		const normalizerMetricPrec = relevantMetrics.find(m => m.killStr == "FA26b->AIM120->FA26b")?.prec ?? expectPrec;
+		const normalizerMetricPrec = relevantMetrics.find(m => m.killStr == "FourthGen->HighTechRadar->FourthGen")?.prec ?? expectPrec;
 
 		const normalizer = 1 / (expectPrec / normalizerMetricPrec);
 		relevantMetrics.forEach(metric => {
@@ -158,8 +163,13 @@ class EloBackUpdater {
 
 	protected async loadUsers() {
 		const usersMap: Record<string, User> = {};
-		const users = await this.userDb.collection.find({}).toArray();
-		// this.backupUsers(users);
+		let users: User[] = [];
+
+		if (!fullyOffline) {
+			users = await this.userDb.collection.find({}).toArray();
+		} else {
+			users = await this.loadFileStreamed<User>("../hourlyReport/users.json");
+		}
 
 		users.forEach(u => {
 			u.elo = BASE_ELO;
@@ -207,9 +217,24 @@ class EloBackUpdater {
 		console.log(`Loaded ${this.events.length} events.`);
 	}
 
+	private async getActiveSeason() {
+		if (!fullyOffline) return await this.seasons.collection.findOne({ active: true });
+
+		const manualSeason: Season = {
+			id: manualSeasonSelection,
+			name: "Manual Selection",
+			started: "2020-01-01T00:00:00.000Z",
+			ended: null,
+			active: true,
+			totalRankedUsers: 0
+		};
+
+		return manualSeason;
+	}
+
 	protected async setupBackUpdate() {
 		await this.loadDb();
-		this.season = await this.seasons.collection.findOne({ active: true });
+		this.season = await this.getActiveSeason();
 		console.log(`Active season: ${this.season.id} (${this.season.name})`);
 
 		await this.loadUsers();
@@ -272,7 +297,9 @@ class EloBackUpdater {
 					info = extraInfo;
 					metric = cfitMetric;
 				}
-				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, metric?.multiplier ?? 1);
+
+				const aircraftOffset = ELOUpdater.getKillAircraftOffset(kill);
+				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1);
 
 				killer.elo += eloSteal;
 				victim.elo -= eloSteal;
@@ -280,7 +307,7 @@ class EloBackUpdater {
 				killer.kills++;
 				victim.deaths++;
 
-				ELOUpdater.updateUserLogForKill(timestamp, killer, victim, metric, eloSteal, killStr, info);
+				ELOUpdater.updateUserLogForKill(timestamp, killer, victim, metric, kill, eloSteal, killStr, info);
 				killer.eloHistory.push({ elo: killer.elo, time: e.time });
 				victim.eloHistory.push({ elo: victim.elo, time: e.time });
 				this.onUserUpdate(killer, e, eloSteal);
@@ -406,6 +433,48 @@ class EloBackUpdater {
 		process.send(message);
 		console.log(`Sent`);
 	}
+
+	public async logResults() {
+		const targetPlayerId = "76561198151068299";
+
+		const topPlayers = this.users
+			.sort((a, b) => b.elo - a.elo)
+			.filter(u => userCanRank(u))
+			.slice(0, 20);
+
+		topPlayers.forEach((u, idx) => {
+			console.log(`${idx + 1}. ${u.pilotNames[0]} - ${u.elo.toFixed(0)}`);
+		});
+
+		console.log(`\n\n`);
+		const targetPlayer = this.users.find(u => u.id == targetPlayerId);
+		const targetPlayerIdx = this.users.findIndex(u => u.id == targetPlayerId);
+
+		console.log(`Target player: ${targetPlayerIdx + 1}. ${targetPlayer.pilotNames[0]} - ${targetPlayer.elo.toFixed(0)}`);
+		fs.writeFileSync("../../out-log.txt", targetPlayer.history.join("\n"));
+		const result = await createUserEloGraph(targetPlayer);
+		console.log(` - Graph path: ${result}`);
+
+		console.log(`\n\n`);
+		this.killMultipliers.forEach(m => {
+			console.log(`${m.killStr} - ${m.multiplier.toFixed(1)}x (${m.count})`);
+		});
+	}
+}
+
+async function run() {
+	const updater = new EloBackUpdater();
+	await updater.runBackUpdate();
+	await updater.sendResult();
+	if (!fullyOffline) await updater.storeResults();
+	else await updater.logResults();
+
+	console.log(`Back update process completely done!`);
+	process.exit();
+}
+
+if (fullyOffline) {
+	run();
 }
 
 process.on("message", async msg => {
@@ -414,12 +483,7 @@ process.on("message", async msg => {
 		return;
 	}
 
-	const updater = new EloBackUpdater();
-	await updater.runBackUpdate();
-	await updater.sendResult();
-	await updater.storeResults();
-	console.log(`Back update process completely done!`);
-	process.exit();
+	await run();
 });
 
 export { IPCMessage, EloBackUpdater, EloEvent, Action };

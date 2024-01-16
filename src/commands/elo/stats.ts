@@ -4,12 +4,10 @@ import { CollectionManager } from "strike-discord-framework/dist/collectionManag
 import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
 
 import { ENDPOINT_BASE, getHost } from "../../api.js";
-import { Application } from "../../application.js";
+import { achievementsEnabled, Application } from "../../application.js";
 import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
 import { createUserEloGraph } from "../../graph/graph.js";
 import { Aircraft, User, Weapon } from "../../structures.js";
-
-const achievementsEnabled = false;
 
 async function lookupUser(users: CollectionManager<string, User>, query: string) {
 	// SteamID
@@ -122,6 +120,7 @@ class Stats extends Command {
 		const rawRank = app.getUserRank(user, targetSeason);
 		const rank = rawRank == "N/A" ? 0 : rawRank;
 		const playersWithRank = targetSeason.totalRankedUsers;
+		const mostRecentSession = user.sessions[user.sessions.length - 1];
 
 		const embed = new Discord.MessageEmbed();
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
@@ -133,7 +132,7 @@ class Stats extends Command {
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
 			// { name: "Online time", value: `${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
-			{ name: "Last Online", value: `<t:${Math.floor(user.loginTimes[user.loginTimes.length - 1] / 1000)}:R>`, inline: true },
+			{ name: "Last Online", value: `<t:${Math.floor((mostRecentSession?.startTime ?? 0) / 1000)}:R>`, inline: true },
 			{ name: "Kills with", value: killsWith, inline: true },
 			{ name: "Kills against", value: killsAgainst, inline: true },
 			{ name: "Deaths against", value: deathsAgainst, inline: true },
@@ -144,7 +143,8 @@ class Stats extends Command {
 
 		let achievementLogText = "";
 		if (achievementsEnabled) {
-			const achievements = user.achievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
+			const userAchievements = activeSeason == targetSeason ? user.achievements : user.endOfSeasonStats.find(s => s.season == targetSeason.id).achievements;
+			const achievements = userAchievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
 			const dbAchievements = await Promise.all(achievements.map(ach => app.achievementsDb.get(ach.id)));
 			const topAchievements = dbAchievements.sort((a, b) => {
 				if (a.firstAchievedBy == user.id) return -1;

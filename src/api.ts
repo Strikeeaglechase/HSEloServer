@@ -261,7 +261,7 @@ class API {
 		}
 
 		this.log.info(`User ${logUser(user)} logged in`);
-		await this.app.users.collection.updateOne({ id: user.id }, { $pull: { sessions: { startTime: Date.now(), endTime: 0 } } });
+		await this.app.users.collection.updateOne({ id: user.id }, { $push: { sessions: { startTime: Date.now(), endTime: 0 } } });
 		this.achievementManager.onUserLogin(user);
 		return 200;
 	}
@@ -348,6 +348,7 @@ class API {
 		};
 
 		this.app.missileLaunchParams.add(mlParams);
+		this.achievementManager.onMissileLaunchParams(mlParams);
 
 		return 200;
 	}
@@ -393,7 +394,8 @@ class API {
 				[Aircraft.AH94]: 0,
 				[Aircraft.T55]: 0,
 				[Aircraft.F45A]: 0,
-				[Aircraft.Invalid]: 0
+				[Aircraft.Invalid]: 0,
+				[Aircraft.EF24G]: 0
 			};
 		if (!user.spawns[spawn.user.type]) user.spawns[spawn.user.type] = 0;
 		user.spawns[spawn.user.type]++;

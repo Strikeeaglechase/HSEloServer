@@ -41,7 +41,7 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 		currentDbUsers.forEach(user => {
 			const localUser = this.usersMap[user.id];
 
-			if (Math.abs(localUser.elo - user.elo) > 10) {
+			if (Math.abs(localUser.elo - user.elo) > 25) {
 				console.log(`${user.pilotNames[0]} (${user.id}). ${user.elo} -> ${localUser.elo}`);
 			}
 		});
@@ -51,10 +51,28 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 	}
 }
 
-async function writeHourlyReport() {
+async function createPullStream(db: Database, collectionName: string, fileName: string) {
+	const path = `${hourlyReportPath}/${fileName}.json`;
+	if (fs.existsSync(path)) fs.rmSync(path);
+
+	console.log(`Pulling ${collectionName} to ${path}`);
+
+	const collection = await db.collection(collectionName, false, "id");
+	const writeStream = fs.createWriteStream(path);
+
+	const prom = new Promise(res => writeStream.on("finish", res));
+
+	collection.collection
+		.find({})
+		.stream()
+		.on("data", data => writeStream.write(JSON.stringify(data) + "\n"))
+		.on("end", () => writeStream.end());
+
+	await prom;
+}
+
+async function pullOfflineLoad() {
 	if (!fs.existsSync(hourlyReportPath)) fs.mkdirSync(hourlyReportPath);
-	if (fs.existsSync(`${hourlyReportPath}/kills.json`)) fs.rmSync(`${hourlyReportPath}/kills.json`);
-	if (fs.existsSync(`${hourlyReportPath}/deaths.json`)) fs.rmSync(`${hourlyReportPath}/deaths.json`);
 	console.log(`Writing hourly report to ${hourlyReportPath}`);
 
 	const db = new Database(
@@ -65,24 +83,7 @@ async function writeHourlyReport() {
 		console.log
 	);
 	await db.init();
-	const kills = await db.collection("kills-v2", false, "id");
-	const deaths = await db.collection("deaths-v2", false, "id");
-
-	const killsStream = fs.createWriteStream(`${hourlyReportPath}/kills.json`);
-	const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);
-	const proms = [new Promise(res => killsStream.on("finish", res)), new Promise(res => deathsStream.on("finish", res))];
-
-	kills.collection
-		.find({})
-		.stream()
-		.on("data", kill => killsStream.write(JSON.stringify(kill) + "\n"))
-		.on("end", () => killsStream.end());
-	deaths.collection
-		.find({})
-		.stream()
-		.on("data", death => deathsStream.write(JSON.stringify(death) + "\n"))
-		.on("end", () => deathsStream.end());
-
+	const proms = [createPullStream(db, "kills-v2", "kills"), createPullStream(db, "deaths-v2", "deaths"), createPullStream(db, "users", "users")];
 	await Promise.all(proms);
 
 	console.log(`Wrote hourly report finished!`);
@@ -98,4 +99,4 @@ export { ProdDBBackUpdater };
 
 // getInterestingMetrics();
 // runComparison();
-// writeHourlyReport();
+// pullOfflineLoad();

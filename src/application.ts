@@ -29,7 +29,7 @@ import {
 const SERVER_MAX_PLAYERS = 16;
 const USERS_PER_PAGE = 30;
 const KILLS_TO_RANK = 10;
-
+const achievementsEnabled = true;
 const enableRankDisplayIn = "1015729793733492756"; // Did I just hardcode a server ID? Yes, yes I did.
 
 function strCmpNoWhitespace(a: string, b: string) {
@@ -75,7 +75,7 @@ class Application {
 	}
 
 	private async loadAchievementManager() {
-		if (fs.existsSync("./achievementSystem/achievementManager.js")) {
+		if (fs.existsSync("./achievementSystem/achievementManager.js") && achievementsEnabled) {
 			this.log.info(`Loading achievement manager`);
 			const { AchievementManager } = await import("./achievementSystem/achievementManager.js");
 			this.achievementManager = new AchievementManager(this);
@@ -119,7 +119,8 @@ class Application {
 					[Aircraft.F45A]: 0,
 					[Aircraft.AH94]: 0,
 					[Aircraft.Invalid]: 0,
-					[Aircraft.T55]: 0
+					[Aircraft.T55]: 0,
+					[Aircraft.EF24G]: 0
 				};
 				await this.users.update(user, user.id);
 				this.log.info(`Updated user ${user.id} with new spawns object`);
@@ -134,24 +135,23 @@ class Application {
 
 		this.runHourlyTasks(); // Run it once on startup
 
-		// this.createSeason(2, "Season 2 (T-55)");
+		// this.createSeason(3, "Season 3 (EF-24G)");
 		// this.migrateDb();
 		// this.clearAllUserStats();
 	}
 
-	// private async createSeason(seasonId: number, name: string) {
-	// 	const seasonDb = await this.elo.prodDb.collection("seasons", false, "id");
-	// 	const season: Season = {
-	// 		id: seasonId,
-	// 		started: new Date().toISOString(),
-	// 		ended: null,
-	// 		active: false,
-	// 		name: name,
-	// 		totalRankedUsers: 0
-	// 	};
-	//
-	// 	seasonDb.add(season);
-	// }
+	private async createSeason(seasonId: number, name: string) {
+		const season: Season = {
+			id: seasonId,
+			started: new Date().toISOString(),
+			ended: null,
+			active: false,
+			name: name,
+			totalRankedUsers: 0
+		};
+
+		this.seasons.add(season);
+	}
 
 	// private async clearAllUserStats() {
 	// 	console.log(`Clearing all user stats...`);
@@ -218,7 +218,8 @@ class Application {
 				[Aircraft.F45A]: 0,
 				[Aircraft.AH94]: 0,
 				[Aircraft.Invalid]: 0,
-				[Aircraft.T55]: 0
+				[Aircraft.T55]: 0,
+				[Aircraft.EF24G]: 0
 			},
 			elo: BASE_ELO,
 			eloHistory: [],
@@ -228,7 +229,8 @@ class Application {
 			endOfSeasonStats: [],
 			eloFreeze: false,
 			eloGainLossSummary: {},
-			achievements: []
+			achievements: [],
+			canBeFirstWithAchievement: true
 		};
 		await this.users.add(user);
 		return user;
@@ -560,4 +562,4 @@ class Application {
 	}
 }
 
-export { Application, IAchievementManager, KILLS_TO_RANK };
+export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled };

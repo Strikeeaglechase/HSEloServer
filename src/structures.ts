@@ -6,7 +6,8 @@ export enum Aircraft {
 	F45A,
 	AH94,
 	Invalid,
-	T55
+	T55,
+	EF24G
 }
 
 export enum Weapon {
@@ -20,8 +21,52 @@ export enum Weapon {
 	Invalid,
 	AIM9E,
 	CFIT,
-	Collision
+	Collision,
+	AIM54,
+	MALD
 }
+
+export enum WeaponCategory {
+	Invalid,
+	Gun,
+	LowTechIR,
+	LowTechRadar,
+	HighTechIR,
+	HighTechRadar,
+	HARM
+}
+
+export enum AircraftCategory {
+	Invalid,
+	FourthGen,
+	FifthGen
+}
+
+export const aircraftCategoryMap: Record<Aircraft, AircraftCategory> = {
+	[Aircraft.AV42c]: AircraftCategory.FourthGen,
+	[Aircraft.FA26b]: AircraftCategory.FourthGen,
+	[Aircraft.F45A]: AircraftCategory.FifthGen,
+	[Aircraft.AH94]: AircraftCategory.FourthGen,
+	[Aircraft.Invalid]: AircraftCategory.Invalid,
+	[Aircraft.T55]: AircraftCategory.FourthGen,
+	[Aircraft.EF24G]: AircraftCategory.FifthGen
+};
+
+export const weaponCategoryMap: Record<Weapon, WeaponCategory> = {
+	[Weapon.Gun]: WeaponCategory.Gun,
+	[Weapon.AIM120]: WeaponCategory.HighTechRadar,
+	[Weapon.AIM9]: WeaponCategory.HighTechIR,
+	[Weapon.AIM7]: WeaponCategory.LowTechRadar,
+	[Weapon.AIM9X]: WeaponCategory.HighTechIR,
+	[Weapon.AIRST]: WeaponCategory.HighTechIR,
+	[Weapon.HARM]: WeaponCategory.HARM,
+	[Weapon.Invalid]: WeaponCategory.Invalid,
+	[Weapon.AIM9E]: WeaponCategory.LowTechIR,
+	[Weapon.CFIT]: WeaponCategory.Invalid,
+	[Weapon.Collision]: WeaponCategory.Invalid,
+	[Weapon.AIM54]: WeaponCategory.LowTechRadar,
+	[Weapon.MALD]: WeaponCategory.Invalid
+};
 
 export enum Team {
 	Allied,
@@ -84,6 +129,7 @@ export interface User {
 		elo: number;
 		teamKills: number;
 		history: string;
+		achievements: { id: AchievementId; count: number; firstAchieved: number }[];
 	}[];
 	eloFreeze: boolean;
 	eloGainLossSummary: Record<
@@ -96,7 +142,7 @@ export interface User {
 		}
 	>;
 	achievements: { id: AchievementId; count: number; firstAchieved: number }[];
-	// achievementCounts: Partial<Record<AchievementId, number>>;
+	canBeFirstWithAchievement: boolean;
 }
 
 export interface LimitedUserData {
@@ -140,6 +186,8 @@ export function parseAircraftString(aircraft: string): Aircraft {
 			return Aircraft.AH94;
 		case "T-55":
 			return Aircraft.T55;
+		case "EF-24":
+			return Aircraft.EF24G;
 		default: {
 			console.error(`Unknown aircraft: ${aircraft}`);
 			return Aircraft.Invalid;
@@ -162,6 +210,8 @@ export function parseWeaponString(weapon: string): Weapon {
 		case "AIM-120":
 		case "AIM-120D":
 			return Weapon.AIM120;
+		case "AIM-54":
+			return Weapon.AIM54;
 		case "AIM-9":
 			return Weapon.AIM9;
 		case "AIM-7":
@@ -172,9 +222,14 @@ export function parseWeaponString(weapon: string): Weapon {
 			return Weapon.AIRST;
 		case "HARM":
 		case "SideARM":
+		case "HARM-SD":
 			return Weapon.HARM;
 		case "AIM-9E":
 			return Weapon.AIM9E;
+		case "ADM-160J":
+		case "DDJ-44":
+			return Weapon.MALD;
+
 		default: {
 			console.error(`Unknown weapon: ${weapon}`);
 			return Weapon.Invalid;
@@ -280,14 +335,16 @@ export interface Kill {
 	season: number;
 }
 
-const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
+export const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
 	[Aircraft.AV42c]: [],
 	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
-	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.CFIT],
+	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.HARM, Weapon.CFIT],
 	[Aircraft.AH94]: [],
 	[Aircraft.Invalid]: [],
-	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT]
+	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
+	[Aircraft.EF24G]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.AIRST, Weapon.HARM, Weapon.AIM54, Weapon.AIM7, Weapon.AIM9E, Weapon.CFIT]
 };
+
 export function isKillValid(kill: Kill) {
 	if (kill.victim.type == Aircraft.Invalid) return false;
 	if (kill.killer.type == Aircraft.Invalid) return false;

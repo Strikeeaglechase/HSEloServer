@@ -221,7 +221,9 @@ class ELOUpdater {
 		if (!fs.existsSync(hourlyReportPath)) fs.mkdirSync(hourlyReportPath);
 		if (fs.existsSync(`${hourlyReportPath}/kills.json`)) fs.rmSync(`${hourlyReportPath}/kills.json`);
 		if (fs.existsSync(`${hourlyReportPath}/deaths.json`)) fs.rmSync(`${hourlyReportPath}/deaths.json`);
-		this.log.info(`Writing hourly report to ${hourlyReportPath}`);
+		const activeSeason = await this.app.getActiveSeason();
+		this.log.info(`Writing hourly report to ${hourlyReportPath} for season ${activeSeason.id}`);
+		if (!activeSeason) throw new Error("No active season found!");
 
 		const killsStream = fs.createWriteStream(`${hourlyReportPath}/kills.json`);
 		const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);

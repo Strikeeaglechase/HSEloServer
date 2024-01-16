@@ -137,7 +137,6 @@ class Application {
 
 		// this.createSeason(3, "Season 3 (EF-24G)");
 		// this.migrateDb();
-		// this.clearAllUserStats();
 	}
 
 	private async createSeason(seasonId: number, name: string) {
@@ -153,31 +152,32 @@ class Application {
 		this.seasons.add(season);
 	}
 
-	// private async clearAllUserStats() {
-	// 	console.log(`Clearing all user stats...`);
-	// 	const users = await this.elo.prodUsers.get();
-	//
-	// 	const proms = users.map(async (user) => {
-	// 		user.kills = 0;
-	// 		user.deaths = 0;
-	// 		user.spawns = {
-	// 			[Aircraft.AV42c]: 0,
-	// 			[Aircraft.FA26b]: 0,
-	// 			[Aircraft.F45A]: 0,
-	// 			[Aircraft.AH94]: 0,
-	// 			[Aircraft.Invalid]: 0,
-	// 			[Aircraft.T55]: 0
-	// 		};
-	// 		user.elo = BASE_ELO;
-	// 		user.eloHistory = [];
-	// 		if (!user.isBanned) user.teamKills = 0;
-	// 		await this.elo.prodUsers.update(user, user.id);
-	// 	});
-	// 	console.log(`Waiting for ${proms.length} promises to resolve...`);
-	// 	await Promise.all(proms);
-	//
-	// 	console.log(`Done, reset ${users.length} users!`);
-	// }
+	private async clearAllUserStats() {
+		console.log(`Clearing all user stats...`);
+		const users = await this.users.get();
+
+		const proms = users.map(async user => {
+			user.kills = 0;
+			user.deaths = 0;
+			user.spawns = {
+				[Aircraft.AV42c]: 0,
+				[Aircraft.FA26b]: 0,
+				[Aircraft.F45A]: 0,
+				[Aircraft.AH94]: 0,
+				[Aircraft.Invalid]: 0,
+				[Aircraft.T55]: 0,
+				[Aircraft.EF24G]: 0
+			};
+			user.elo = BASE_ELO;
+			user.eloHistory = [];
+			if (!user.isBanned) user.teamKills = 0;
+			await this.users.update(user, user.id);
+		});
+		console.log(`Waiting for ${proms.length} promises to resolve...`);
+		await Promise.all(proms);
+
+		console.log(`Done, reset ${users.length} users!`);
+	}
 
 	public async getActiveSeason(seasonDb = this.seasons): Promise<Season> {
 		const activeSeason = await seasonDb.collection.findOne({ active: true });

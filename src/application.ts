@@ -111,7 +111,7 @@ class Application {
 		await this.updateScoreboards();
 
 		const users = await this.users.get();
-		users.forEach(async user => {
+		const proms = users.map(async user => {
 			if (!user.spawns) {
 				user.spawns = {
 					[Aircraft.AV42c]: 0,
@@ -126,6 +126,7 @@ class Application {
 				this.log.info(`Updated user ${user.id} with new spawns object`);
 			}
 		});
+		await Promise.all(proms);
 
 		const interval = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60;
 		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 30;
@@ -381,7 +382,8 @@ class Application {
 			const newUserRank = idx + 1;
 			if (user.rank != newUserRank) {
 				user.rank = newUserRank;
-				await this.users.update(user, user.id);
+				// await this.users.update(user, user.id);
+				await this.users.collection.updateOne({ id: user.id }, { $set: { rank: newUserRank } });
 			}
 		});
 

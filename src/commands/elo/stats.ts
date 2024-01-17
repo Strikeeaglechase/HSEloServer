@@ -120,7 +120,8 @@ class Stats extends Command {
 		const rawRank = app.getUserRank(user, targetSeason);
 		const rank = rawRank == "N/A" ? 0 : rawRank;
 		const playersWithRank = targetSeason.totalRankedUsers;
-		const mostRecentSession = user.sessions[user.sessions.length - 1];
+		const mostRecentSession = user.sessions.length > 0 ? user.sessions[user.sessions.length - 1] : null;
+		const lastOnlineTimeStamp = mostRecentSession ? `<t:${Math.floor((mostRecentSession?.startTime ?? 0) / 1000)}:R>` : "Never";
 
 		const embed = new Discord.MessageEmbed();
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
@@ -132,7 +133,7 @@ class Stats extends Command {
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
 			// { name: "Online time", value: `${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
-			{ name: "Last Online", value: `<t:${Math.floor((mostRecentSession?.startTime ?? 0) / 1000)}:R>`, inline: true },
+			{ name: "Last Online", value: lastOnlineTimeStamp, inline: true },
 			{ name: "Kills with", value: killsWith, inline: true },
 			{ name: "Kills against", value: killsAgainst, inline: true },
 			{ name: "Deaths against", value: deathsAgainst, inline: true },

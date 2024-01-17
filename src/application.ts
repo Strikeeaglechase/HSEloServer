@@ -370,8 +370,11 @@ class Application {
 	}
 
 	private async preformUserRankUpdate() {
+		this.log.info(`Updating user ranks`);
 		const users = await this.users.collection.find({ kills: { $gt: KILLS_TO_RANK } }).toArray();
+		this.log.info(`Found ${users.length} users that have the kills to rank`);
 		const usersThatCanRank = users.filter(u => userCanRank(u));
+		this.log.info(`Of those, ${usersThatCanRank.length} can rank`);
 		usersThatCanRank.sort((a, b) => b.elo - a.elo);
 
 		const proms = usersThatCanRank.map(async (user, idx) => {

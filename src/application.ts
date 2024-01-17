@@ -397,10 +397,13 @@ class Application {
 
 	private async updateUserRankDisplay() {
 		const users = await this.users.collection.find({ discordId: { $ne: null } }).toArray();
+		this.log.info(`Updating rank display, found ${users.length} users with discord ids`);
 		const server = await this.framework.client.guilds.fetch(enableRankDisplayIn).catch(() => {});
 		if (!server) return this.log.error(`Unable to fetch server ${enableRankDisplayIn}`);
 		const season = await this.getActiveSeason();
 
+		await server.members.fetch();
+		this.log.info(`Loaded ${server.members.cache.size} members from server ${enableRankDisplayIn}`);
 		const proms = users.map(async user => {
 			const member = await server.members.fetch(user.discordId).catch(() => {});
 			if (!member) return;
@@ -426,6 +429,8 @@ class Application {
 			}
 		});
 		await Promise.all(proms);
+
+		console.log(`Verified user nicknames`);
 	}
 
 	public async runHourlyTasks() {

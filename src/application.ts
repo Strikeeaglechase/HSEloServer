@@ -125,6 +125,11 @@ class Application {
 				await this.users.update(user, user.id);
 				this.log.info(`Updated user ${user.id} with new spawns object`);
 			}
+
+			if (!user.achievements) {
+				await this.users.collection.updateOne({ id: user.id }, { $set: { achievements: [] } });
+				this.log.info(`Updated user ${user.id} with new achievements object`);
+			}
 		});
 		await Promise.all(proms);
 

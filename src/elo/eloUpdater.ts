@@ -64,10 +64,10 @@ interface KillMetric {
 	multiplier: number;
 }
 
-function getKillStr(kill: Kill) {
+function getKillStr(kill: Kill, overrideWeapon?: Weapon): KillString {
 	const killerCat = AircraftCategory[aircraftCategoryMap[kill.killer.type]];
 	const victimCat = AircraftCategory[aircraftCategoryMap[kill.victim.type]];
-	const weaponCat = WeaponCategory[weaponCategoryMap[kill.weapon]];
+	const weaponCat = overrideWeapon ? WeaponCategory[weaponCategoryMap[overrideWeapon]] : WeaponCategory[weaponCategoryMap[kill.weapon]];
 
 	return `${killerCat}->${weaponCat}->${victimCat}`;
 }

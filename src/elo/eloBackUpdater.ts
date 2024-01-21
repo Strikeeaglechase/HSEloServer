@@ -4,7 +4,7 @@ import fs from "fs";
 import { CollectionManager } from "../db/collectionManager.js";
 import Database from "../db/database.js";
 import { createUserEloGraph } from "../graph/graph.js";
-import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
+import { Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
 import {
 	BASE_ELO,
 	ELOUpdater,
@@ -14,7 +14,6 @@ import {
 	maxWeaponMultiplier,
 	shouldDeathBeCounted,
 	shouldKillBeCounted,
-	t55Penalty,
 	teamKillPenalty,
 	userCanRank
 } from "./eloUpdater.js";
@@ -27,8 +26,6 @@ const manualSeasonSelection = 2;
 function shouldKillContributeToMultipliers(kill: Kill) {
 	if (kill.weapon == Weapon.CFIT) return false;
 	if (kill.weapon == Weapon.Collision) return false;
-	// if (kill.killer.type == Aircraft.T55) return false;
-	// if (kill.victim.type == Aircraft.T55) return false;
 	return shouldKillBeCounted(kill);
 }
 
@@ -268,16 +265,6 @@ class EloBackUpdater {
 					ELOUpdater.updateUserLogForTK(timestamp, killer, victim, loss);
 					killer.eloHistory.push({ elo: killer.elo, time: e.time });
 					this.onUserUpdate(killer, e, 0);
-					this.onUserUpdate(victim, e, 0);
-					continue;
-				}
-
-				if (kill.killer.type == Aircraft.T55) {
-					if (victim.elo < t55Penalty) continue;
-					const loss = t55Penalty;
-					victim.elo -= loss;
-					ELOUpdater.updateUserLogForT55(timestamp, killer, victim, loss);
-					victim.eloHistory.push({ elo: victim.elo, time: e.time });
 					this.onUserUpdate(victim, e, 0);
 					continue;
 				}

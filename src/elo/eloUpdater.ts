@@ -36,10 +36,6 @@ export const stealPerEloGainedPoints = 1 / 100;
 export const stealPerEloLostPoints = 0.5 / 100;
 // Loose 0% of ELO for a team kill
 export const teamKillPenalty = 0.0;
-// Loose 25 points if you die to a T-55
-export const t55Penalty = 25;
-// Only loose elo from a t55 if above 2500 elo
-export const t55PenaltyThreshold = 2500;
 // Maximum multiplier for an aircraft/weapon combo (limited by maxEloStealPrec)
 export const maxWeaponMultiplier = Infinity;
 // Aircraft specific bonuses/nerfs to correct for balance

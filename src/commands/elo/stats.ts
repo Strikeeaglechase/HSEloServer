@@ -84,7 +84,7 @@ class Stats extends Command {
 		kills = kills.filter(k => shouldKillBeCounted(k));
 		deaths = deaths.filter(k => shouldKillBeCounted(k));
 
-		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55];
+		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G];
 		let killsWith = ``;
 		let killsAgainst = ``;
 		let deathsAgainst = ``;

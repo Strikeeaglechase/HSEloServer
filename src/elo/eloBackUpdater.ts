@@ -70,6 +70,7 @@ class EloBackUpdater {
 	protected killMultipliers: KillMetric[] = [];
 
 	protected users: User[] = [];
+	private oldUsers: Record<string, User> = {};
 	protected usersMap: Record<string, User> = {};
 
 	protected season: Season;
@@ -163,12 +164,13 @@ class EloBackUpdater {
 		let users: User[] = [];
 
 		if (!fullyOffline) {
-			users = await this.userDb.collection.find({}).toArray();
+			users = await this.userDb.collection.find({ $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] }).toArray();
 		} else {
 			users = await this.loadFileStreamed<User>("../hourlyReport/users.json");
 		}
 
 		users.forEach(u => {
+			this.oldUsers[u.id] = JSON.parse(JSON.stringify(u));
 			u.elo = BASE_ELO;
 			u.kills = 0;
 			u.deaths = 0;
@@ -371,10 +373,13 @@ class EloBackUpdater {
 
 		const batchSize = 1000;
 
-		for (let i = 0; i < this.users.length; i += batchSize) {
-			const chunk = this.users.slice(i, i + batchSize);
-			// const proms = chunk.map(user => this.userDb.update(user, user.id));
-			const updateActions = chunk.map(user => {
+		const updateActions = this.users
+			.map(user => {
+				const oldUser = this.oldUsers[user.id];
+				const didUserChange =
+					Math.round(user.elo) != Math.round(oldUser.elo) || user.rank != oldUser.rank || user.kills != oldUser.kills || user.deaths != oldUser.deaths;
+				if (!didUserChange) return null;
+
 				return {
 					updateOne: {
 						filter: { id: user.id },
@@ -391,10 +396,15 @@ class EloBackUpdater {
 						}
 					}
 				};
-			});
+			})
+			.filter(a => a != null);
+
+		console.log(`About to bulk update ${updateActions.length} users`);
+		for (let i = 0; i < updateActions.length; i += batchSize) {
+			const chunk = updateActions.slice(i, i + batchSize);
 
 			console.log(`Starting bulk update for ${i} - ${i + batchSize}`);
-			await this.userDb.collection.bulkWrite(updateActions, { ordered: false });
+			await this.userDb.collection.bulkWrite(chunk, { ordered: false });
 			console.log(`Finished bulk update for ${i} - ${i + batchSize}`);
 		}
 	}

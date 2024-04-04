@@ -134,6 +134,7 @@ class API {
 
 		this.registerRoute("GET", "users", this.getUserStats, false);
 		this.registerRoute("GET", "users/:id", this.getUser, false);
+		this.registerRoute("GET", "users_did/:id", this.getUserByDiscordId, false);
 		this.registerRoute("GET", "kills", this.getKills, false);
 		this.registerRoute("GET", "deaths", this.getDeaths, false);
 
@@ -148,6 +149,7 @@ class API {
 
 		this.registerRoute("GET", "mods", this.getAllowedMods, true);
 		this.registerRoute("GET", "liveryUpdate", this.handleLiveryUpdate, true);
+		this.registerRoute("POST", "ban", this.handleUserBan, true);
 
 		const httpServer = this.server.listen(port, () => {
 			this.log.info(`ELO API listening on port ${port}`);
@@ -206,6 +208,13 @@ class API {
 			user = await this.app.createNewUser(req.params.id);
 		}
 		if (user.rank == undefined || user.rank == null) user.rank = 0;
+		res.send(user);
+	}
+
+	private async getUserByDiscordId(req: express.Request, res: express.Response) {
+		if (!req.params.id) return res.sendStatus(400);
+		const user = await this.app.users.collection.findOne({ discordId: req.params.id });
+		if (!user) return res.sendStatus(404);
 		res.send(user);
 	}
 
@@ -438,6 +447,17 @@ class API {
 
 	private async getAllowedMods(req: express.Request, res: express.Response) {
 		res.send(await this.app.allowedMods.get());
+	}
+
+	private async handleUserBan(req: express.Request, res: express.Response) {
+		const userId = req.query.userId as string;
+		if (!userId) return res.sendStatus(400);
+
+		let user = await this.app.users.get(userId);
+		if (!user) user = await this.app.createNewUser(userId);
+
+		this.log.info(`Banning user ${logUser(user)} via API`);
+		await this.app.users.collection.updateOne({ id: user.id }, { $set: { isBanned: true } });
 	}
 
 	public async updateOnlineUsers(

@@ -434,8 +434,8 @@ class ELOUpdater {
 	}
 
 	public static calculateEloSteal(killerElo: number, victimElo: number, aircraftOffset = 1, multiplier = 1) {
-		const eloDiff = Math.abs(victimElo - killerElo);
-		const additionalStealConst = killerElo < victimElo ? stealPerEloGainedPoints : -stealPerEloLostPoints;
+		const eloDiff = Math.abs(victimElo - killerElo); // 5000
+		const additionalStealConst = killerElo < victimElo ? stealPerEloGainedPoints : -stealPerEloLostPoints; // -0.005
 		const eloSteal = Math.min(
 			maxEloStealPoints,
 			Math.max(baseEloStealPoints + eloDiff * additionalStealConst, minEloStealPoints) * multiplier * aircraftOffset

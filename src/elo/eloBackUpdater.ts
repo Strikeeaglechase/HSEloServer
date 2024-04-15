@@ -203,12 +203,15 @@ class EloBackUpdater {
 		const seasonStartTime = new Date(this.season.started).getTime();
 		const seasonEndTime = new Date(this.season.ended).getTime();
 		this.users.forEach(user => {
-			const validLoginTimes = user.loginTimes.filter(t => (seasonStartTime == 0 || t >= seasonStartTime) && (seasonEndTime == 0 || t <= seasonEndTime));
+			const validSessions = user.sessions.filter(s => {
+				const validTime = s.startTime || s.endTime;
+				return (seasonStartTime == 0 || validTime >= seasonStartTime) && (seasonEndTime == 0 || validTime <= seasonEndTime);
+			});
 
-			const validLogoutTimes = user.logoutTimes.filter(t => (seasonStartTime == 0 || t >= seasonStartTime) && (seasonEndTime == 0 || t <= seasonEndTime));
-
-			validLoginTimes.forEach(login => this.events.push({ event: { action: "Login", userId: user.id }, time: login, type: "action" }));
-			validLogoutTimes.forEach(logout => this.events.push({ event: { action: "Logout", userId: user.id }, time: logout, type: "action" }));
+			validSessions.forEach(session => {
+				if (session.startTime) this.events.push({ event: { action: "Login", userId: user.id }, time: session.startTime, type: "action" });
+				if (session.endTime) this.events.push({ event: { action: "Logout", userId: user.id }, time: session.endTime, type: "action" });
+			});
 		});
 
 		this.events = this.events.sort((a, b) => a.time - b.time);

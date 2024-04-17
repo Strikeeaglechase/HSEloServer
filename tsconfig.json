@@ -1,6 +1,6 @@
 {
 	"compilerOptions": {
-		"target": "ES6",
+		"target": "ES2022",
 		"moduleResolution": "node",
 		"module": "esnext",
 		"allowSyntheticDefaultImports": true,

@@ -67,6 +67,8 @@ class Application {
 	public onlineUsers: { name: string; id: string; team: string }[] = [];
 	public lastOnlineUserUpdateAt = 0;
 
+	private isUpdatingRanks = false;
+
 	constructor(public framework: FrameworkClient) {
 		this.log = framework.log;
 		this.api = new API(this);
@@ -105,12 +107,18 @@ class Application {
 		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
 		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
 
+		this.log.info(`Loaded all collections`);
 		await this.loadAchievementManager();
+		this.log.info(`Loaded achievement manager`);
 		await this.api.init(this.achievementManager);
+		this.log.info(`Loaded API`);
 		await this.elo.init();
+		this.log.info(`Loaded ELO updater`);
 		await this.updateScoreboards();
+		this.log.info(`Updated scoreboards`);
 
 		const users = await this.users.get();
+		this.log.info(`Fetched ${users.length} users`);
 		const proms = users.map(async user => {
 			if (!user.spawns) {
 				user.spawns = {
@@ -132,11 +140,15 @@ class Application {
 			}
 		});
 		await Promise.all(proms);
+		this.log.info(`Updated all users with new spawns object`);
 
-		const interval = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60;
-		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 30;
-		setInterval(() => this.updateScoreboards(), interval);
-		setInterval(() => this.updateOnlineboards(), interval);
+		const scoreboardUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60; // 10 seconds in dev, 1 minute in prod
+		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 60; // 10 seconds in dev, 1 hour in prod
+		const userRankUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 15; // 10 seconds in dev, 15 minutes in prod
+
+		setInterval(() => this.updateScoreboards(), scoreboardUpdateRate);
+		setInterval(() => this.updateOnlineboards(), scoreboardUpdateRate);
+		setInterval(() => this.preformUserRankUpdate(), userRankUpdateRate);
 		if (process.env.IS_DEV != "true") setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
 
 		this.runHourlyTasks(); // Run it once on startup
@@ -331,7 +343,6 @@ class Application {
 	}
 
 	private async updateScoreboards() {
-		await this.preformUserRankUpdate();
 		const scoreboards = await this.scoreboardMessages.get();
 		const embed = await this.createScoreboardMessage();
 		const proms = scoreboards.map(async scoreboard => {
@@ -345,9 +356,9 @@ class Application {
 				console.log(e);
 			});
 
-			if (scoreboard.guildId == enableRankDisplayIn) {
-				await this.updateUserRankDisplay();
-			}
+			// if (scoreboard.guildId == enableRankDisplayIn) {
+			// 	await this.updateUserRankDisplay();
+			// }
 		});
 
 		await Promise.all(proms);
@@ -389,6 +400,8 @@ class Application {
 		});
 
 		await Promise.all(proms);
+
+		await this.updateUserRankDisplay();
 	}
 
 	public getUserRank(user: User, season: Season): number | "N/A" {
@@ -397,6 +410,12 @@ class Application {
 	}
 
 	private async updateUserRankDisplay() {
+		if (this.isUpdatingRanks) {
+			this.log.error(`UpdateUserRankDisplay called while already updating ranks`);
+			return;
+		}
+		this.isUpdatingRanks = true;
+
 		const users = await this.users.collection.find({ discordId: { $ne: null } }).toArray();
 		this.log.info(`Updating rank display, found ${users.length} users with discord ids`);
 		const server = await this.framework.client.guilds.fetch(enableRankDisplayIn).catch(() => {});
@@ -425,13 +444,15 @@ class Application {
 
 			if (member.displayName != nick) {
 				// this.log.info(`Updating ${member.displayName} to ${nick}`);
-				if (process.env.IS_DEV != "true")
+				if (process.env.IS_DEV != "true" && member.id != "272143648114606083")
 					await member.setNickname(nick).catch(e => this.log.error(`Unable to set nickname for ${member.displayName}: ${e}`));
 			}
 		});
 		await Promise.all(proms);
 
-		console.log(`Verified user nicknames`);
+		this.isUpdatingRanks = false;
+
+		this.log.info(`Verified user nicknames`);
 	}
 
 	public async runHourlyTasks() {

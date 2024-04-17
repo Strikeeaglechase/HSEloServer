@@ -1,5 +1,6 @@
 import Discord from "discord.js";
 import fs from "fs";
+import { memoryUsage } from "node:process";
 import FrameworkClient from "strike-discord-framework";
 import { CollectionManager } from "strike-discord-framework/dist/collectionManager.js";
 import Logger from "strike-discord-framework/dist/logger";
@@ -149,12 +150,22 @@ class Application {
 		setInterval(() => this.updateScoreboards(), scoreboardUpdateRate);
 		setInterval(() => this.updateOnlineboards(), scoreboardUpdateRate);
 		setInterval(() => this.preformUserRankUpdate(), userRankUpdateRate);
+		setInterval(() => this.checkMemoryUsage(), 1000);
 		if (process.env.IS_DEV != "true") setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
 
 		this.runHourlyTasks(); // Run it once on startup
 
 		// this.createSeason(3, "Season 3 (EF-24G)");
 		// this.migrateDb();
+	}
+
+	private checkMemoryUsage() {
+		const memUsage = process.memoryUsage();
+		const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
+		this.log.info(`Memory usage: ${usageGb.toFixed(2)}GB`);
+		if (usageGb > 1) {
+			debugger;
+		}
 	}
 
 	private async createSeason(seasonId: number, name: string) {

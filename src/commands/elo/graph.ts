@@ -8,7 +8,7 @@ import { Application } from "../../application.js";
 import { createCompareGraph } from "../../graph/graph.js";
 import { User } from "../../structures.js";
 
-async function lookupUser(users: CollectionManager<string, User>, query: string) {
+async function lookupUser(users: CollectionManager<User>, query: string) {
 	// SteamID
 	const userIdUser = await users.get(query);
 	if (userIdUser) return userIdUser;

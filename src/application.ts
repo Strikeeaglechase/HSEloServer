@@ -40,26 +40,26 @@ function strCmpNoWhitespace(a: string, b: string) {
 class Application {
 	public log: Logger;
 
-	public users: CollectionManager<string, User>;
+	public users: CollectionManager<User>;
 	// public killsOld: CollectionManager<string, KillOld>;
 	// public deathsOld: CollectionManager<string, DeathOld>;
 	// public spawnsOld: CollectionManager<string, SpawnOld>;
 
-	public kills: CollectionManager<string, Kill>;
-	public deaths: CollectionManager<string, Death>;
-	public spawns: CollectionManager<string, Spawn>;
-	public missileLaunchParams: CollectionManager<string, MissileLaunchParams>;
+	public kills: CollectionManager<Kill>;
+	public deaths: CollectionManager<Death>;
+	public spawns: CollectionManager<Spawn>;
+	public missileLaunchParams: CollectionManager<MissileLaunchParams>;
 
-	public scoreboardMessages: CollectionManager<string, ScoreboardMessage>;
-	public onlineboardMessages: CollectionManager<string, OnlineboardMessage>;
-	public achievementLogChannels: CollectionManager<string, AchievementLogChannel>;
-	public onlineRoles: CollectionManager<String, OnlineRole>;
-	public allowedMods: CollectionManager<string, AllowedMod>;
-	public seasons: CollectionManager<number, Season>;
-	public tracking: CollectionManager<string, Tracking>;
+	public scoreboardMessages: CollectionManager<ScoreboardMessage>;
+	public onlineboardMessages: CollectionManager<OnlineboardMessage>;
+	public achievementLogChannels: CollectionManager<AchievementLogChannel>;
+	public onlineRoles: CollectionManager<OnlineRole>;
+	public allowedMods: CollectionManager<AllowedMod>;
+	public seasons: CollectionManager<Season>;
+	public tracking: CollectionManager<Tracking>;
 
 	public achievementManager: IAchievementManager = new DummyAchievementManager();
-	public achievementsDb: CollectionManager<string, AchievementDBEntry>;
+	public achievementsDb: CollectionManager<AchievementDBEntry>;
 
 	public api: API;
 	public elo: ELOUpdater;
@@ -226,7 +226,7 @@ class Application {
 	}
 
 	public async getSeason(id: number, seasonDb = this.seasons): Promise<Season> {
-		return seasonDb.get(id);
+		return seasonDb.get(id as unknown as string); // TODO: Do not fucking do this
 	}
 
 	public async createNewUser(id: string) {
@@ -266,7 +266,7 @@ class Application {
 	}
 
 	private async createScoreboardMessage() {
-		const embed = new Discord.MessageEmbed({ title: "Scoreboard" });
+		const embed = new Discord.EmbedBuilder({ title: "Scoreboard" });
 		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
 		let filteredUsers = await this.users.collection.find({ rank: { $lte: USERS_PER_PAGE } }).toArray();
 		filteredUsers = filteredUsers.sort((a, b) => b.elo - a.elo);
@@ -319,7 +319,7 @@ class Application {
 	}
 
 	private async createOnlineboardMessage() {
-		const embed = new Discord.MessageEmbed({ title: "Onlineboard" });
+		const embed = new Discord.EmbedBuilder({ title: "Onlineboard" });
 		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
 		let onlineUsers = await Promise.all(this.onlineUsers.map(async user => this.users.get(user.id)));
 		onlineUsers = onlineUsers.sort((a, b) => b.elo - a.elo);
@@ -499,7 +499,7 @@ class Application {
 	}
 
 	public async createScoreboard(message: Discord.Message) {
-		const emb = new Discord.MessageEmbed({ title: "Scoreboard" });
+		const emb = new Discord.EmbedBuilder({ title: "Scoreboard" });
 		const msg = await message.channel.send({ embeds: [emb] }).catch(() => {});
 		if (!msg) {
 			this.log.error(`Unable to send message in channel ${message.channel.id}`);
@@ -519,7 +519,7 @@ class Application {
 	}
 
 	public async createOnlineboard(message: Discord.Message) {
-		const emb = new Discord.MessageEmbed({ title: "Online" });
+		const emb = new Discord.EmbedBuilder({ title: "Online" });
 		const msg = await message.channel.send({ embeds: [emb] }).catch(() => {});
 		if (!msg) {
 			this.log.error(`Unable to send message in channel ${message.channel.id}`);

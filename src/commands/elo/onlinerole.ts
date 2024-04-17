@@ -1,4 +1,4 @@
-import Discord from "discord.js";
+import Discord, { PermissionFlagsBits } from "discord.js";
 import { Arg } from "strike-discord-framework/dist/argumentParser.js";
 import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
 
@@ -14,7 +14,7 @@ class Onlinerole extends Command {
 	};
 
 	async run({ message, framework, app }: CommandEvent<Application>, @Arg() role: Discord.Role) {
-		if (!message.member.permissions.has("ADMINISTRATOR")) {
+		if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
 			return framework.error(`You must be an admin to run this command`);
 		}
 

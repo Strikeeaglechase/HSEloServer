@@ -1,4 +1,4 @@
-import { TextChannel } from "discord.js";
+import { PermissionFlagsBits, TextChannel } from "discord.js";
 import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
 
 import { Application } from "../../application.js";
@@ -12,7 +12,7 @@ class AchieveLog extends Command {
 	};
 
 	async run({ message, framework, app }: CommandEvent<Application>) {
-		if (!message.member.permissions.has("ADMINISTRATOR")) {
+		if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
 			return framework.error(`You must be an admin to run this command`);
 		}
 

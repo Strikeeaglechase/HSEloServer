@@ -38,7 +38,7 @@ class Online extends Command {
 		const content = app.table(table).join("\n");
 		const timestamp = `<t:${Math.round(Date.now() / 1000)}:R>`;
 
-		const embed = new Discord.MessageEmbed()
+		const embed = new Discord.EmbedBuilder()
 			.setTitle("Online Users")
 			.setDescription(`${timestamp}\n\`\`\`\n${content}\n\`\`\``)
 			.setFooter({ text: `Min: ${minElo} | Max: ${maxElo} | Avg: ${avgElo}` });

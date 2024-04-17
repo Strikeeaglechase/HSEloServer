@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import { Intents, IntentsString } from "discord.js";
+import { IntentsBitField, Partials } from "discord.js";
 import { config as dotenvConfig } from "dotenv";
 import FrameworkClient from "strike-discord-framework";
 import { FrameworkClientOptions } from "strike-discord-framework/dist/interfaces";
@@ -9,6 +9,7 @@ import { Application } from "./application.js";
 
 dotenvConfig();
 
+const f = IntentsBitField.Flags;
 const frameworkOptions: FrameworkClientOptions = {
 	commandsPath: `${process.cwd()}/commands/`,
 	databaseOpts: {
@@ -25,8 +26,8 @@ const frameworkOptions: FrameworkClientOptions = {
 		logToFile: true
 	},
 	clientOptions: {
-		intents: Object.keys(Intents.FLAGS) as IntentsString[],
-		partials: ["CHANNEL", "MESSAGE"]
+		intents: f.Guilds | f.GuildMembers | f.GuildModeration | f.MessageContent | f.DirectMessages,
+		partials: [Partials.Channel, Partials.GuildMember]
 	},
 	defaultPrefix: ",",
 	name: "VTOL Server Elo",

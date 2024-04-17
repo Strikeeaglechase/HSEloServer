@@ -1,4 +1,4 @@
-import Discord, { MessageAttachment } from "discord.js";
+import Discord from "discord.js";
 import { Arg, CommandRun } from "strike-discord-framework/dist/argumentParser.js";
 import { CollectionManager } from "strike-discord-framework/dist/collectionManager.js";
 import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
@@ -9,7 +9,7 @@ import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
 import { createUserEloGraph } from "../../graph/graph.js";
 import { Aircraft, User, Weapon } from "../../structures.js";
 
-async function lookupUser(users: CollectionManager<string, User>, query: string) {
+async function lookupUser(users: CollectionManager<User>, query: string) {
 	// SteamID
 	const userIdUser = await users.get(query);
 	if (userIdUser) return userIdUser;
@@ -123,7 +123,7 @@ class Stats extends Command {
 		const mostRecentSession = user.sessions?.length > 0 ? user.sessions[user.sessions.length - 1] : null;
 		const lastOnlineTimeStamp = mostRecentSession ? `<t:${Math.floor((mostRecentSession?.startTime ?? 0) / 1000)}:R>` : "Never";
 
-		const embed = new Discord.MessageEmbed();
+		const embed = new Discord.EmbedBuilder();
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
 		embed.addFields([
 			{
@@ -204,7 +204,7 @@ class Stats extends Command {
 			const host = getHost();
 			embed.setImage(`${host}${ENDPOINT_BASE}public/graph/${user.id}/${Math.floor(Math.random() * 1000)}`);
 		}
-		const attachment = new Discord.MessageAttachment(await app.elo.getUserLog(user.id, targetSeason, achievementLogText), "history.txt");
+		const attachment = new Discord.AttachmentBuilder(await app.elo.getUserLog(user.id, targetSeason, achievementLogText), { name: "history.txt" });
 		const files = [attachment];
 
 		message.channel.send({ embeds: [embed], files: files });

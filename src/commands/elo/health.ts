@@ -74,7 +74,7 @@ class Health extends Command {
 			{ name: "Last server stop", exec: async () => deltaTimeMinutes(await drv("lastServerStop")) }
 		];
 
-		const embed = new Discord.MessageEmbed();
+		const embed = new Discord.EmbedBuilder();
 		embed.setTitle("Health Check");
 		embed.setTimestamp();
 		const msg = await message.channel.send({ embeds: [embed] });

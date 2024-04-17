@@ -203,7 +203,7 @@ class EloBackUpdater {
 		const seasonStartTime = new Date(this.season.started).getTime();
 		const seasonEndTime = new Date(this.season.ended).getTime();
 		this.users.forEach(user => {
-			const validSessions = user.sessions.filter(s => {
+			const validSessions = (user.sessions ?? []).filter(s => {
 				const validTime = s.startTime || s.endTime;
 				return (seasonStartTime == 0 || validTime >= seasonStartTime) && (seasonEndTime == 0 || validTime <= seasonEndTime);
 			});

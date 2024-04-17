@@ -366,10 +366,6 @@ class Application {
 				this.log.warn(`Unable to update scoreboard: ${e}`);
 				console.log(e);
 			});
-
-			if (onlineboard.guildId == enableRankDisplayIn) {
-				await this.updateUserRankDisplay();
-			}
 		});
 
 		await Promise.all(proms);

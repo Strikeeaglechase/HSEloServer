@@ -1,32 +1,32 @@
-import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
+import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
+import { NoArgs } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { Application } from "../../application.js";
+import { interactionConfirm } from "../../iterConfirm.js";
 
 const reqRole = "1149206471146475550";
-class Restart extends Command {
+class Restart extends SlashCommand {
 	name = "restart";
 	allowDM = false;
-	help = {
-		msg: "Restarts the HS server. Will disconnect any current users"
-	};
+	description = "Restarts the HS server. Will disconnect any current users";
 
-	async run({ message, framework, app }: CommandEvent<Application>) {
-		const userHasRole = message.member.roles.cache.has(reqRole);
+	@NoArgs
+	async run({ interaction, framework, app }: SlashCommandEvent<Application>) {
+		const m = await interaction.guild.members.fetch(interaction.user.id);
+		const userHasRole = m && m.roles.cache.has(reqRole);
 
 		if (!userHasRole) {
-			return framework.error("You do not have permission to run this command");
+			interaction.reply(framework.error("You do not have permission to run this command"));
+			return;
 		}
 
-		const confirm = framework.utils.reactConfirm(
+		const confirm = await interactionConfirm(
 			`Are you sure you would like to restart the server? Confirm error state with \`health\` command. This will disconnect any current users`,
-			message,
-			{
-				onConfirm: () => {
-					app.api.sendRestartRequest();
-					return framework.success("Server is restarting");
-				}
-			}
+			interaction
 		);
+		if (!confirm) return;
+		app.api.sendRestartRequest();
+		interaction.editReply(framework.success("Server is restarting"));
 	}
 }
 

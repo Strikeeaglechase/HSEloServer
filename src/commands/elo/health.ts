@@ -1,6 +1,6 @@
 import Discord from "discord.js";
-import { CommandRun } from "strike-discord-framework/dist/argumentParser.js";
-import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
+import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
+import { NoArgs } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { DaemonReport } from "../../api.js";
 import { Application } from "../../application.js";
@@ -42,15 +42,12 @@ Hello world!
 ```
 */
 
-class Health extends Command {
+class Health extends SlashCommand {
 	name = "health";
-	allowDm = false;
-	help = {
-		msg: "Runs various health checks on the server"
-	};
+	description = "Runs various health checks on the server";
 
-	@CommandRun
-	async run({ message, framework, app }: CommandEvent<Application>) {
+	@NoArgs
+	async run({ interaction, framework, app }: SlashCommandEvent<Application>) {
 		const daemonReportCbs: ((report: DaemonReport) => void)[] = [];
 		const drv = async <T extends keyof DaemonReport>(key: T): Promise<DaemonReport[T]> => {
 			const report = await new Promise<DaemonReport>(res => daemonReportCbs.push(res));
@@ -77,7 +74,8 @@ class Health extends Command {
 		const embed = new Discord.EmbedBuilder();
 		embed.setTitle("Health Check");
 		embed.setTimestamp();
-		const msg = await message.channel.send({ embeds: [embed] });
+		// const msg = await message.channel.send({ embeds: [embed] });
+		await interaction.reply({ embeds: [embed] });
 
 		const execProms = healthItems.map((item): HealthPendingResult => {
 			const prom = item.exec();
@@ -119,7 +117,8 @@ class Health extends Command {
 			description += `\`\`\``;
 			embed.setDescription(description);
 
-			msg.edit({ embeds: [embed] });
+			// msg.edit({ embeds: [embed] });
+			interaction.editReply({ embeds: [embed] });
 		};
 
 		app.api.daemonReportCb = report => daemonReportCbs.forEach(cb => cb(report));

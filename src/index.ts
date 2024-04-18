@@ -27,7 +27,7 @@ const frameworkOptions: FrameworkClientOptions = {
 	},
 	clientOptions: {
 		intents: f.Guilds | f.GuildMembers | f.GuildModeration | f.MessageContent | f.DirectMessages,
-		partials: [Partials.Channel, Partials.GuildMember]
+		partials: [Partials.Channel, Partials.GuildMember, Partials.Message]
 	},
 	defaultPrefix: ",",
 	name: "VTOL Server Elo",
@@ -35,7 +35,8 @@ const frameworkOptions: FrameworkClientOptions = {
 	ownerID: "272143648114606083",
 	dmPrefixOnPing: true,
 	dmErrorSilently: false,
-	permErrorSilently: false
+	permErrorSilently: false,
+	slashCommandDevServer: "1015729793733492756"
 };
 
 const frameClient = new FrameworkClient(frameworkOptions);

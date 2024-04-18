@@ -1,18 +1,19 @@
 import Discord from "discord.js";
-import { Arg, CommandRun } from "strike-discord-framework/dist/argumentParser.js";
-import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
+import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
+import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { Application } from "../../application.js";
 
-class Ban extends Command {
+class Ban extends SlashCommand {
 	name = "ban";
-	allowDm = false;
-	help = {
-		msg: "Bans a user"
-	};
+	description = "Bans a user";
 
-	@CommandRun
-	async run({ message, framework, app }: CommandEvent<Application>, @Arg({}) userId: string) {
+	async run({ interaction, framework, app }: SlashCommandEvent<Application>, @SArg({}) userId: string) {
+		if (interaction.user.id != "272143648114606083") {
+			await interaction.reply(framework.error("No"));
+			return;
+		}
+
 		let user = await app.users.get(userId);
 		if (!user) user = await app.createNewUser(userId);
 

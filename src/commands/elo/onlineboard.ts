@@ -1,37 +1,41 @@
 import { PermissionFlagsBits } from "discord.js";
-import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
+import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
+import { NoArgs } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { Application } from "../../application.js";
+import { interactionConfirm, replyOrEdit } from "../../iterConfirm.js";
 
-class Onlineboard extends Command {
+class Onlineboard extends SlashCommand {
 	name = "onlineboard";
-	altNames = ["onlinelist"];
 	allowDm = false;
-	help = {
-		msg: "Creates the onlineboard listing, max 1 per server, must be an admin to run this command",
-		usage: ""
-	};
+	description = "Creates the onlineboard listing, max 1 per server, must be an admin to run this command";
 
-	async run({ message, framework, app }: CommandEvent<Application>) {
-		if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-			return framework.error(`You must be an admin to run this command`);
+	defaultPermission = PermissionFlagsBits.Administrator;
+
+	@NoArgs
+	async run({ interaction, framework, app }: SlashCommandEvent<Application>) {
+		const m = await interaction.guild.members.fetch(interaction.user.id);
+		if (!m || !m.permissions.has(PermissionFlagsBits.Administrator)) {
+			await interaction.reply(framework.error(`You must be an admin to run this command`, true));
+			return;
 		}
 
-		const existing = await app.onlineboardMessages.collection.findOne({ guildId: message.guild.id });
+		const existing = await app.onlineboardMessages.collection.findOne({ guildId: interaction.guild.id });
 
 		if (existing) {
-			const confirm = await framework.utils.reactConfirm(`There is already a onlineboard in this server, do you want to delete it?`, message);
+			// const confirm = await framework.utils.reactConfirm(`There is already a onlineboard in this server, do you want to delete it?`, message);
+			const confirm = await interactionConfirm(`There is already a onlineboard in this server, do you want to delete it?`, interaction, true);
 			if (confirm) {
 				await app.deleteOnlineboard(existing);
 			}
 		}
 
-		const onlineboard = await app.createOnlineboard(message);
-		if (!onlineboard) return framework.error(`An error has occurred while creating the onlineboard`);
-		const msg = await message.channel.send(framework.success(`Onlineboard created!`));
-		await new Promise(resolve => setTimeout(resolve, 5000));
-		await msg.delete().catch(() => {});
-		await message.delete().catch(() => {});
+		const onlineboard = await app.createOnlineboard(interaction);
+		if (!onlineboard) {
+			replyOrEdit(interaction, framework.error(`An error has occurred while creating the onlineboard`, true));
+			return;
+		}
+		await replyOrEdit(interaction, framework.success(`Onlineboard created!`, true));
 	}
 }
 

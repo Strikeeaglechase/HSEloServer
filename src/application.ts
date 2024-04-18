@@ -69,6 +69,7 @@ class Application {
 	public lastOnlineUserUpdateAt = 0;
 
 	private isUpdatingRanks = false;
+	private lastHighMemoryReset = 0;
 
 	constructor(public framework: FrameworkClient) {
 		this.log = framework.log;
@@ -168,6 +169,10 @@ class Application {
 		const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
 		this.log.info(`Memory usage: ${usageGb.toFixed(2)}GB`);
 		if (usageGb > 0.5) {
+			const timeFromLastReset = Date.now() - this.lastHighMemoryReset;
+			// One minute
+			if (timeFromLastReset < 1000 * 60) return;
+			this.lastHighMemoryReset = Date.now();
 			this.log.info(`Force closing database connection due to high memory usage`);
 			this.framework.database.client.close(true);
 			await this.framework.database.init();
@@ -506,11 +511,11 @@ class Application {
 		});
 	}
 
-	public async createScoreboard(message: Discord.Message) {
+	public async createScoreboard(interaction: Discord.CommandInteraction) {
 		const emb = new Discord.EmbedBuilder({ title: "Scoreboard" });
-		const msg = await message.channel.send({ embeds: [emb] }).catch(() => {});
+		const msg = await interaction.channel.send({ embeds: [emb] }).catch(() => {});
 		if (!msg) {
-			this.log.error(`Unable to send message in channel ${message.channel.id}`);
+			this.log.error(`Unable to send message in channel ${interaction.channel.id}`);
 			return;
 		}
 
@@ -526,11 +531,11 @@ class Application {
 		return scoreboard;
 	}
 
-	public async createOnlineboard(message: Discord.Message) {
+	public async createOnlineboard(interaction: Discord.CommandInteraction) {
 		const emb = new Discord.EmbedBuilder({ title: "Online" });
-		const msg = await message.channel.send({ embeds: [emb] }).catch(() => {});
+		const msg = await interaction.channel.send({ embeds: [emb] }).catch(() => {});
 		if (!msg) {
-			this.log.error(`Unable to send message in channel ${message.channel.id}`);
+			this.log.error(`Unable to send message in channel ${interaction.channel.id}`);
 			return;
 		}
 

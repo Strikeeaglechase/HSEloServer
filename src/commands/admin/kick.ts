@@ -1,18 +1,19 @@
 import Discord from "discord.js";
-import { Arg, CommandRun } from "strike-discord-framework/dist/argumentParser.js";
-import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
+import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
+import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { Application } from "../../application.js";
 
-class Kick extends Command {
+class Kick extends SlashCommand {
 	name = "kick";
-	allowDm = true;
-	help = {
-		msg: "Kicks a user thats currently on the server"
-	};
+	description = "Kicks a user thats currently on the server";
 
-	@CommandRun
-	async run({ message, framework, app }: CommandEvent<Application>, @Arg({}) userId: string) {
+	async run({ interaction, framework, app }: SlashCommandEvent<Application>, @SArg() userId: string) {
+		if (interaction.user.id != "272143648114606083") {
+			await interaction.reply(framework.error("No"));
+			return;
+		}
+
 		app.api.sendKickUserRequest(userId);
 
 		return framework.success(`Sent kick request for user ${userId}`);

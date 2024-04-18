@@ -1,7 +1,7 @@
 import Discord from "discord.js";
-import { Arg, CommandRun } from "strike-discord-framework/dist/argumentParser.js";
 import { CollectionManager } from "strike-discord-framework/dist/collectionManager.js";
-import { Command, CommandEvent } from "strike-discord-framework/dist/command.js";
+import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
+import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { ENDPOINT_BASE, getHost } from "../../api.js";
 import { achievementsEnabled, Application } from "../../application.js";
@@ -50,36 +50,39 @@ function calculateTimeOnServer(user: User) {
 	return timeOnServer;
 }
 
-class Stats extends Command {
+class Stats extends SlashCommand {
 	name = "stats";
-	altNames = ["stat"];
-	allowDm = false;
-	help = {
-		msg: "Lists your or anthers stats",
-		usage: "<userid/name> <season #>"
-	};
+	description = "Gets the stats for yourself or another user";
 
-	@CommandRun
 	async run(
-		{ message, framework, app }: CommandEvent<Application>,
-		@Arg({ optional: true }) userLookup: string,
-		@Arg({ optional: true }) seasonResolver: number
+		{ interaction, framework, app }: SlashCommandEvent<Application>,
+		@SArg({ required: false }) userName: string,
+		@SArg({ required: false }) season: number
 	) {
 		let user: User;
-		if (userLookup) {
-			user = await lookupUser(app.users, userLookup);
-			if (!user) return framework.error(`Could not find a user with that id/name`);
+		if (userName) {
+			user = await lookupUser(app.users, userName);
+			if (!user) {
+				await interaction.reply(framework.error(`Could not find a user with that id/name`));
+				return;
+			}
 		} else {
-			const linkedUser = await app.users.collection.findOne({ discordId: message.author.id });
-			if (!linkedUser) return framework.error(`You must be linked to a steam account to use this command without an argument. \`,link <steamid>\``);
+			const linkedUser = await app.users.collection.findOne({ discordId: interaction.user.id });
+			if (!linkedUser) {
+				interaction.reply(framework.error(`You must be linked to a steam account to use this command without an argument. \`/link <steamid>\``));
+				return;
+			}
 			user = linkedUser;
 		}
 
 		const activeSeason = await app.getActiveSeason();
 		let targetSeason = activeSeason;
-		if (seasonResolver) {
-			targetSeason = await app.getSeason(seasonResolver);
-			if (!targetSeason) return framework.error(`Could not find that season`);
+		if (season) {
+			targetSeason = await app.getSeason(season);
+			if (!targetSeason) {
+				interaction.reply(framework.error(`Could not find that season`));
+				return;
+			}
 		}
 
 		const timeOnServer = calculateTimeOnServer(user);
@@ -211,7 +214,7 @@ class Stats extends Command {
 		const attachment = new Discord.AttachmentBuilder(await app.elo.getUserLog(user.id, targetSeason, achievementLogText), { name: "history.txt" });
 		const files = [attachment];
 
-		message.channel.send({ embeds: [embed], files: files });
+		interaction.reply({ embeds: [embed], files });
 	}
 }
 

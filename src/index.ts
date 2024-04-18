@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import { IntentsBitField, Partials } from "discord.js";
+import { Client, IntentsBitField, Partials } from "discord.js";
 import { config as dotenvConfig } from "dotenv";
 import FrameworkClient from "strike-discord-framework";
 import { FrameworkClientOptions } from "strike-discord-framework/dist/interfaces";
@@ -56,4 +56,22 @@ async function init() {
 		application.log.error(error);
 	});
 }
-init();
+
+async function deleteSlashCommands() {
+	const client = new Client({ intents: IntentsBitField.Flags.GuildIntegrations });
+	client.login(process.env.TOKEN);
+	client.on("ready", async () => {
+		const devGuild = await client.guilds.fetch("1015729793733492756");
+		await devGuild.commands.set([]).then(() => {
+			process.exit();
+		});
+	});
+}
+
+const deregisterCommands = false;
+
+if (deregisterCommands) {
+	deleteSlashCommands();
+} else {
+	init();
+}

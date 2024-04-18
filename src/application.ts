@@ -91,22 +91,7 @@ class Application {
 
 	public async init() {
 		this.log.info(`Application has started!`);
-		this.scoreboardMessages = await this.framework.database.collection("scoreboard-messages", false, "id");
-		this.onlineboardMessages = await this.framework.database.collection("onlineboard-messages", false, "id");
-		this.achievementLogChannels = await this.framework.database.collection("achievement-log-channels", false, "channelId");
-
-		this.onlineRoles = await this.framework.database.collection("online-roles", false, "id");
-
-		this.users = await this.framework.database.collection("users", false, "id");
-		this.allowedMods = await this.framework.database.collection("allowed-mods", false, "id");
-
-		this.kills = await this.framework.database.collection("kills-v2", false, "id");
-		this.deaths = await this.framework.database.collection("deaths-v2", false, "id");
-		this.spawns = await this.framework.database.collection("spawns-v2", false, "id");
-		this.seasons = await this.framework.database.collection("seasons", false, "id");
-		this.tracking = await this.framework.database.collection("tracking", false, "id");
-		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
-		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
+		await this.setupDbCollections();
 
 		this.log.info(`Loaded all collections`);
 		await this.loadAchievementManager();
@@ -159,12 +144,35 @@ class Application {
 		// this.migrateDb();
 	}
 
+	private async setupDbCollections() {
+		this.scoreboardMessages = await this.framework.database.collection("scoreboard-messages", false, "id");
+		this.onlineboardMessages = await this.framework.database.collection("onlineboard-messages", false, "id");
+		this.achievementLogChannels = await this.framework.database.collection("achievement-log-channels", false, "channelId");
+
+		this.onlineRoles = await this.framework.database.collection("online-roles", false, "id");
+
+		this.users = await this.framework.database.collection("users", false, "id");
+		this.allowedMods = await this.framework.database.collection("allowed-mods", false, "id");
+
+		this.kills = await this.framework.database.collection("kills-v2", false, "id");
+		this.deaths = await this.framework.database.collection("deaths-v2", false, "id");
+		this.spawns = await this.framework.database.collection("spawns-v2", false, "id");
+		this.seasons = await this.framework.database.collection("seasons", false, "id");
+		this.tracking = await this.framework.database.collection("tracking", false, "id");
+		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
+		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
+	}
+
 	private async checkMemoryUsage() {
 		const memUsage = process.memoryUsage();
 		const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
 		this.log.info(`Memory usage: ${usageGb.toFixed(2)}GB`);
-		if (usageGb > 1) {
-			debugger;
+		if (usageGb > 0.5) {
+			this.log.info(`Force closing database connection due to high memory usage`);
+			this.framework.database.client.close(true);
+			await this.framework.database.init();
+			await this.setupDbCollections();
+			// debugger;
 		}
 	}
 

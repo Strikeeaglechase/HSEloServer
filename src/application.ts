@@ -159,7 +159,7 @@ class Application {
 		// this.migrateDb();
 	}
 
-	private checkMemoryUsage() {
+	private async checkMemoryUsage() {
 		const memUsage = process.memoryUsage();
 		const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
 		this.log.info(`Memory usage: ${usageGb.toFixed(2)}GB`);

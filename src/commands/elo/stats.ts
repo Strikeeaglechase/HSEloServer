@@ -18,8 +18,12 @@ async function lookupUser(users: CollectionManager<User>, query: string) {
 	const discordIdUser = await users.collection.findOne({ discordId: query });
 	if (discordIdUser) return discordIdUser;
 
+	console.log(`Doing regex query for ${query}`);
 	// PilotName
-	const pilotNameUser = await users.collection.find({ pilotNames: { $regex: new RegExp(query, "i") } }).toArray();
+	const pilotNameUser = await users.collection
+		.find({ pilotNames: { $regex: new RegExp(query, "i") } })
+		.limit(100)
+		.toArray();
 	if (pilotNameUser.length > 0) {
 		return pilotNameUser.sort((a, b) => b.elo - a.elo)[0];
 	}

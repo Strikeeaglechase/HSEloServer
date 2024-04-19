@@ -59,17 +59,18 @@ class Stats extends SlashCommand {
 		@SArg({ required: false }) userName: string,
 		@SArg({ required: false }) season: number
 	) {
+		await interaction.deferReply();
 		let user: User;
 		if (userName) {
 			user = await lookupUser(app.users, userName);
 			if (!user) {
-				await interaction.reply(framework.error(`Could not find a user with that id/name`));
+				await interaction.editReply(framework.error(`Could not find a user with that id/name`));
 				return;
 			}
 		} else {
 			const linkedUser = await app.users.collection.findOne({ discordId: interaction.user.id });
 			if (!linkedUser) {
-				interaction.reply(framework.error(`You must be linked to a steam account to use this command without an argument. \`/link <steamid>\``));
+				interaction.editReply(framework.error(`You must be linked to a steam account to use this command without an argument. \`/link <steamid>\``));
 				return;
 			}
 			user = linkedUser;
@@ -80,7 +81,7 @@ class Stats extends SlashCommand {
 		if (season) {
 			targetSeason = await app.getSeason(season);
 			if (!targetSeason) {
-				interaction.reply(framework.error(`Could not find that season`));
+				interaction.editReply(framework.error(`Could not find that season`));
 				return;
 			}
 		}
@@ -214,7 +215,7 @@ class Stats extends SlashCommand {
 		const attachment = new Discord.AttachmentBuilder(await app.elo.getUserLog(user.id, targetSeason, achievementLogText), { name: "history.txt" });
 		const files = [attachment];
 
-		interaction.reply({ embeds: [embed], files });
+		interaction.editReply({ embeds: [embed], files });
 	}
 }
 

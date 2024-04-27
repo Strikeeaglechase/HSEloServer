@@ -68,7 +68,7 @@ class Application {
 	public onlineUsers: { name: string; id: string; team: string }[] = [];
 	public lastOnlineUserUpdateAt = 0;
 
-	private isUpdatingRanks = false;
+	private updatingRanksAt = 0;
 	private lastHighMemoryReset = 0;
 
 	constructor(public framework: FrameworkClient) {
@@ -272,7 +272,8 @@ class Application {
 			eloFreeze: false,
 			eloGainLossSummary: {},
 			achievements: [],
-			canBeFirstWithAchievement: true
+			canBeFirstWithAchievement: true,
+			voiceMuted: false
 		};
 		await this.users.add(user);
 		return user;
@@ -434,11 +435,13 @@ class Application {
 	}
 
 	private async updateUserRankDisplay() {
-		if (this.isUpdatingRanks) {
-			this.log.error(`UpdateUserRankDisplay called while already updating ranks`);
+		const deltaFromLast = Date.now() - this.updatingRanksAt;
+		if (deltaFromLast < 1000 * 60 * 5) {
+			// 5 minutes
+			this.log.error(`UpdateUserRankDisplay called with short delta: ${deltaFromLast}ms`);
 			return;
 		}
-		this.isUpdatingRanks = true;
+		this.updatingRanksAt = Date.now();
 
 		const users = await this.users.collection.find({ discordId: { $ne: null } }).toArray();
 		this.log.info(`Updating rank display, found ${users.length} users with discord ids`);
@@ -473,8 +476,6 @@ class Application {
 			}
 		});
 		await Promise.all(proms);
-
-		this.isUpdatingRanks = false;
 
 		this.log.info(`Verified user nicknames`);
 	}

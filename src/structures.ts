@@ -143,6 +143,7 @@ export interface User {
 	>;
 	achievements: { id: AchievementId; count: number; firstAchieved: number }[];
 	canBeFirstWithAchievement: boolean;
+	voiceMuted: boolean;
 }
 
 export interface LimitedUserData {

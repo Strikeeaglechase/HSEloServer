@@ -123,7 +123,7 @@ class ELOUpdater {
 	public async getUserLogText(userId: string, season: Season) {
 		const user = await this.app.users.get(userId);
 		if (!user) return "No data (user not found)";
-		if (season.active) return user.history.join("\n") ?? "No data";
+		if (season.active) return user.history.reverse().join("\n") ?? "No data";
 		return user.endOfSeasonStats.find(s => s.season == season.id)?.history ?? "No data (user joined after season end)";
 	}
 

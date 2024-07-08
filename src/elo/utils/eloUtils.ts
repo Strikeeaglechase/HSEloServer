@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import fs from "fs";
+import path from "path";
 
 import Database from "../../db/database.js";
 import { Death, Kill } from "../../structures.js";
@@ -37,12 +38,17 @@ class ProdDBBackUpdater extends EloBackUpdater {
 class ComparisonUpdater extends ProdDBBackUpdater {
 	public async runCompare() {
 		// Compare the locally computed elo to the current elo in the database
-		const currentDbUsers = await this.userDb.collection.find({}).toArray();
+		const currentDbUsers = await this.userDb.collection.find({ $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] }).toArray();
+		console.log(`Loaded ${currentDbUsers.length} users from the database.`);
 		currentDbUsers.forEach(user => {
 			const localUser = this.usersMap[user.id];
+			if (!localUser) {
+				console.log(`User ${user.pilotNames[0]} (${user.id}) not found in local data.`);
+				return;
+			}
 
 			if (Math.abs(localUser.elo - user.elo) > 25) {
-				console.log(`${user.pilotNames[0]} (${user.id}). ${user.elo} -> ${localUser.elo}`);
+				console.log(`${user.pilotNames[0]} (${user.id}). ${user.elo.toFixed(0)} -> ${localUser.elo.toFixed(0)}`);
 			}
 		});
 
@@ -51,19 +57,19 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 	}
 }
 
-async function createPullStream(db: Database, collectionName: string, fileName: string) {
-	const path = `${hourlyReportPath}/${fileName}.json`;
-	if (fs.existsSync(path)) fs.rmSync(path);
+async function createPullStream(db: Database, collectionName: string, fileName: string, filter: any) {
+	const resultPath = `${hourlyReportPath}/${fileName}.json`;
+	if (fs.existsSync(resultPath)) fs.rmSync(resultPath);
 
-	console.log(`Pulling ${collectionName} to ${path}`);
+	console.log(`Pulling ${collectionName} to ${path.resolve(resultPath)}`);
 
 	const collection = await db.collection(collectionName, false, "id");
-	const writeStream = fs.createWriteStream(path);
+	const writeStream = fs.createWriteStream(resultPath);
 
 	const prom = new Promise(res => writeStream.on("finish", res));
 
 	collection.collection
-		.find({})
+		.find(filter)
 		.stream()
 		.on("data", data => writeStream.write(JSON.stringify(data) + "\n"))
 		.on("end", () => writeStream.end());
@@ -83,7 +89,11 @@ async function pullOfflineLoad() {
 		console.log
 	);
 	await db.init();
-	const proms = [createPullStream(db, "kills-v2", "kills"), createPullStream(db, "deaths-v2", "deaths"), createPullStream(db, "users", "users")];
+	const proms = [
+		createPullStream(db, "kills-v2", "kills", { season: 3 }),
+		createPullStream(db, "deaths-v2", "deaths", { season: 3 }),
+		createPullStream(db, "users", "users", {})
+	];
 	await Promise.all(proms);
 
 	console.log(`Wrote hourly report finished!`);
@@ -98,5 +108,5 @@ async function runComparison() {
 export { ProdDBBackUpdater };
 
 // getInterestingMetrics();
-// runComparison();
+runComparison();
 // pullOfflineLoad();

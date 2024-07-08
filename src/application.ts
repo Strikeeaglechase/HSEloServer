@@ -493,22 +493,56 @@ class Application {
 			const guild = await this.framework.client.guilds.fetch(onlineRole.guildId).catch(() => {});
 			if (!guild) return;
 
-			const role = await guild.roles.fetch(onlineRole.roleId).catch(() => {});
-			if (!role) return;
+			const guildOnlineRole = await guild.roles.fetch(onlineRole.roleId).catch(() => {});
+			if (!guildOnlineRole) return;
 
 			const onlineGuildMembers = (await Promise.all(onlineUsers.map(async user => guild.members.fetch(user.discordId).catch(() => {})))).filter(
 				u => u != undefined && u instanceof Discord.GuildMember
 			) as unknown as Discord.GuildMember[];
 
-			const toAdd = onlineGuildMembers.filter(m => !role.members.has(m.id));
-			const toRemove = role.members.filter(m => !onlineGuildMembers.some(u => u.id == m.id));
+			const toAddOnlineRole = onlineGuildMembers.filter(m => !guildOnlineRole.members.has(m.id));
+			const toRemoveOnlineRole = guildOnlineRole.members.filter(m => !onlineGuildMembers.some(u => u.id == m.id));
+			toAddOnlineRole.forEach(async member => await member.roles.add(guildOnlineRole).catch(() => {}));
+			toRemoveOnlineRole.forEach(async member => await member.roles.remove(guildOnlineRole).catch(() => {}));
 
-			toAdd.forEach(async member => {
-				await member.roles.add(role).catch(() => {});
-			});
-			toRemove.forEach(async member => {
-				await member.roles.remove(role).catch(() => {});
-			});
+			if (onlineRole.teamAId && onlineRole.teamBId) {
+				const guildTeamARole = await guild.roles.fetch(onlineRole.teamAId).catch(() => {});
+				const guildTeamBRole = await guild.roles.fetch(onlineRole.teamBId).catch(() => {});
+				if (!guildTeamARole || !guildTeamBRole) return;
+
+				const toRemoveTeamAMembers = guildTeamARole.members.filter(m => {
+					const user = onlineUsers.find(u => u.discordId == m.id);
+					if (!user) return true;
+					const team = this.onlineUsers.find(u => u.id == user.id)?.team;
+					return team != "Allied";
+				});
+
+				const toRemoveTeamBMembers = guildTeamBRole.members.filter(m => {
+					const user = onlineUsers.find(u => u.discordId == m.id);
+					if (!user) return true;
+					const team = this.onlineUsers.find(u => u.id == user.id)?.team;
+					return team != "Enemy";
+				});
+
+				const toAddTeamAMembers = onlineGuildMembers.filter(m => {
+					const user = onlineUsers.find(u => u.discordId == m.id);
+					if (!user) return false;
+					const team = this.onlineUsers.find(u => u.id == user.id)?.team;
+					return team == "Allied";
+				});
+
+				const toAddTeamBMembers = onlineGuildMembers.filter(m => {
+					const user = onlineUsers.find(u => u.discordId == m.id);
+					if (!user) return false;
+					const team = this.onlineUsers.find(u => u.id == user.id)?.team;
+					return team == "Enemy";
+				});
+
+				toAddTeamAMembers.forEach(async member => await member.roles.add(guildTeamARole).catch(() => {}));
+				toAddTeamBMembers.forEach(async member => await member.roles.add(guildTeamBRole).catch(() => {}));
+				toRemoveTeamAMembers.forEach(async member => await member.roles.remove(guildTeamARole).catch(() => {}));
+				toRemoveTeamBMembers.forEach(async member => await member.roles.remove(guildTeamBRole).catch(() => {}));
+			}
 		});
 	}
 
@@ -566,6 +600,8 @@ class Application {
 		const onlinerole: OnlineRole = {
 			roleId: role.id,
 			guildId: role.guild.id,
+			teamAId: "",
+			teamBId: "",
 			id: uuidv4()
 		};
 		await this.onlineRoles.add(onlinerole);

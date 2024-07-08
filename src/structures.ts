@@ -102,6 +102,8 @@ export interface AchievementLogChannel {
 
 export interface OnlineRole {
 	roleId: string;
+	teamAId: string;
+	teamBId: string;
 	guildId: string;
 	id: string;
 }
@@ -350,8 +352,32 @@ export function isKillValid(kill: Kill) {
 	if (kill.victim.type == Aircraft.Invalid) return false;
 	if (kill.killer.type == Aircraft.Invalid) return false;
 	if (kill.weapon == Weapon.Invalid) return false;
+	if (kill.victim.ownerId != kill.victim.occupants[0] && kill.weapon == Weapon.CFIT && kill.victim.type != Aircraft.T55) return false;
+	if (kill.killer.ownerId != kill.killer.occupants[0] && kill.weapon == Weapon.CFIT && kill.killer.type != Aircraft.T55) return false;
+
 	const loadout = aircraftLoadoutMap[kill.killer.type];
 	return loadout.includes(kill.weapon);
+
+	// Check for EWO effected by CFIT bug
+	// if (kill.victim.ownerId != kill.victim.occupants[0] && kill.weapon == Weapon.CFIT && kill.victim.type != Aircraft.T55) {
+	// 	const idx = kill.victim.occupants.indexOf(kill.victim.ownerId);
+	// 	console.log(
+	// 		`Non-first seat victim: ${Aircraft[kill.victim.type]} ${kill.victim.ownerId} != ${kill.victim.occupants[0]} (real idx: ${idx}) with ${
+	// 			Weapon[kill.weapon]
+	// 		}`
+	// 	);
+	// 	return false;
+	// }
+
+	// if (kill.killer.ownerId != kill.killer.occupants[0] && kill.weapon == Weapon.CFIT && kill.killer.type != Aircraft.T55) {
+	// 	const idx = kill.killer.occupants.indexOf(kill.killer.ownerId);
+	// 	console.log(
+	// 		`Non-first seat killer: ${Aircraft[kill.killer.type]} ${kill.killer.ownerId} != ${kill.killer.occupants[0]} (real idx: ${idx}) with ${
+	// 			Weapon[kill.weapon]
+	// 		}`
+	// 	);
+	// 	return false;
+	// }
 }
 
 export interface Death {

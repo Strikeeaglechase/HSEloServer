@@ -139,6 +139,7 @@ class API {
 		this.registerRoute("GET", "deaths", this.getDeaths, false);
 
 		this.registerRoute("GET", "online", this.getOnlineUsers, false);
+		this.registerRoute("GET", "onlinefull", this.getOnlineUsersFullStats, false);
 		this.registerRoute("GET", "graph/:id", this.getUserGraph, false);
 		this.registerRoute("GET", "graph/:id/:refreshId", this.getUserGraph, false);
 		this.registerRoute("GET", "log/:id", this.getUserLog, false);
@@ -481,6 +482,12 @@ class API {
 
 	private async getOnlineUsers(req: express.Request, res: express.Response) {
 		res.send(this.app.onlineUsers);
+	}
+
+	private async getOnlineUsersFullStats(req: express.Request, res: express.Response) {
+		const query = { id: { $in: this.app.onlineUsers.map(u => u.id) } };
+		const users = await this.app.users.collection.find(query).toArray();
+		res.send(users);
 	}
 
 	private async getBannedUsersRaw(req: express.Request, res: express.Response) {

@@ -205,7 +205,8 @@ export function parseWeaponString(weapon: string): Weapon {
 
 	// Special weapons
 	if (weapon === "GUN") return Weapon.Gun;
-	if (weapon === "CFIT" || weapon === "DCCFIT") return Weapon.CFIT;
+	if (weapon === "CFIT") return Weapon.CFIT;
+	if (weapon === "DCCFIT") return Weapon.DCCFIT;
 	if (weapon === "COLLISION") return Weapon.Collision;
 
 	const [_, __, name] = weapon.split("/");

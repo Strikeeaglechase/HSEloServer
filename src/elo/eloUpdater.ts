@@ -76,7 +76,7 @@ function shouldKillBeCounted(kill: Kill, killerUser?: User, victimUser?: User) {
 	if (!isKillValid(kill)) return false;
 
 	// If CFIT, check distance
-	if (kill.weapon == Weapon.CFIT) {
+	if (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT) {
 		const dist = Math.pow(kill.killer.position.x - kill.victim.position.x, 2) + Math.pow(kill.killer.position.z - kill.victim.position.z, 2);
 
 		if (dist > maxCfitDistSq) return false;
@@ -90,7 +90,7 @@ function shouldDeathBeCounted(death: Death, kill?: Kill) {
 	if (kill && !isKillValid(kill)) return false;
 
 	// If CFIT, check distance
-	if (kill && kill.weapon == Weapon.CFIT) {
+	if (kill && (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT)) {
 		const dist = Math.pow(kill.killer.position.x - kill.victim.position.x, 2) + Math.pow(kill.killer.position.z - kill.victim.position.z, 2);
 
 		if (dist > maxCfitDistSq) return false;
@@ -329,7 +329,7 @@ class ELOUpdater {
 		let metric = this.lastMultipliers.find(m => m.killStr == killStr);
 		let info = "";
 
-		if (kill.weapon == Weapon.CFIT) {
+		if (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT) {
 			const { cfitMetric, extraInfo } = ELOUpdater.getCFITMultiplier(kill, this.lastMultipliers);
 			if (cfitMetric == null) {
 				this.log.info(`Victim ${victim.pilotNames[0]} was too far away from ${killer.pilotNames[0]}, so CFIT being dropped`);

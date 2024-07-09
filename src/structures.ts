@@ -23,7 +23,8 @@ export enum Weapon {
 	CFIT,
 	Collision,
 	AIM54,
-	MALD
+	MALD,
+	DCCFIT
 }
 
 export enum WeaponCategory {
@@ -63,6 +64,7 @@ export const weaponCategoryMap: Record<Weapon, WeaponCategory> = {
 	[Weapon.Invalid]: WeaponCategory.Invalid,
 	[Weapon.AIM9E]: WeaponCategory.LowTechIR,
 	[Weapon.CFIT]: WeaponCategory.Invalid,
+	[Weapon.DCCFIT]: WeaponCategory.Invalid,
 	[Weapon.Collision]: WeaponCategory.Invalid,
 	[Weapon.AIM54]: WeaponCategory.LowTechRadar,
 	[Weapon.MALD]: WeaponCategory.Invalid
@@ -203,7 +205,7 @@ export function parseWeaponString(weapon: string): Weapon {
 
 	// Special weapons
 	if (weapon === "GUN") return Weapon.Gun;
-	if (weapon === "CFIT") return Weapon.CFIT;
+	if (weapon === "CFIT" || weapon === "DCCFIT") return Weapon.CFIT;
 	if (weapon === "COLLISION") return Weapon.Collision;
 
 	const [_, __, name] = weapon.split("/");
@@ -340,12 +342,12 @@ export interface Kill {
 
 export const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
 	[Aircraft.AV42c]: [],
-	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
-	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.HARM, Weapon.CFIT],
+	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT, Weapon.DCCFIT],
+	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.HARM, Weapon.CFIT, Weapon.DCCFIT],
 	[Aircraft.AH94]: [],
 	[Aircraft.Invalid]: [],
-	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
-	[Aircraft.EF24G]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.AIRST, Weapon.HARM, Weapon.AIM54, Weapon.AIM7, Weapon.AIM9E, Weapon.CFIT]
+	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT, Weapon.DCCFIT],
+	[Aircraft.EF24G]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.AIRST, Weapon.HARM, Weapon.AIM54, Weapon.AIM7, Weapon.AIM9E, Weapon.CFIT, Weapon.DCCFIT]
 };
 
 export function isKillValid(kill: Kill) {

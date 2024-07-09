@@ -24,7 +24,7 @@ const fullyOffline = false;
 const manualSeasonSelection = 2;
 
 function shouldKillContributeToMultipliers(kill: Kill) {
-	if (kill.weapon == Weapon.CFIT) return false;
+	if (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT) return false;
 	if (kill.weapon == Weapon.Collision) return false;
 	return shouldKillBeCounted(kill);
 }
@@ -278,7 +278,7 @@ class EloBackUpdater {
 
 				let metric = this.killMultipliers.find(m => m.killStr == killStr);
 				let info = "";
-				if (kill.weapon == Weapon.CFIT) {
+				if (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT) {
 					const { cfitMetric, extraInfo } = ELOUpdater.getCFITMultiplier(kill, this.killMultipliers);
 					if (cfitMetric == null) {
 						// this.log.info(`Target was too far away, so CFIT being dropped`);

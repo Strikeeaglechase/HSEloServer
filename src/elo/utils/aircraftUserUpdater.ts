@@ -47,7 +47,7 @@ class AircraftUserUpdater extends ProdDBBackUpdater {
 				const kill = e.event as Kill;
 
 				if (kill.killer.type == Aircraft.Invalid || kill.victim.type == Aircraft.Invalid) continue;
-				if (kill.weapon == Weapon.CFIT) continue;
+				if (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT) continue;
 				if (kill.killer.type == kill.victim.type) {
 					this.acUsersMap[kill.killer.type].selfKills++;
 					continue;

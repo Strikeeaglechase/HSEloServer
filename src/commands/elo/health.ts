@@ -59,16 +59,16 @@ class Health extends SlashCommand {
 			{ name: "Online Users", exec: async () => app.onlineUsers.length.toString() },
 			{ name: "Connected WS clients", exec: async () => app.api.clients.length.toString() },
 			{ name: "HS -> Elo Connection", exec: async () => (app.api.clients.some(u => u.isAuthedHs) ? success("Client found") : error("No client")) },
-			{ name: "Daemon -> Elo Connection", exec: async () => (app.api.clients.some(u => u.isAuthedDaemon) ? success("Client found") : error("No client")) },
-			{ name: "Seen SM Leave", exec: async () => ((await drv("seenSmLeaveMessage")) ? error("SM Leave (Steam failure)") : success("No")) },
-			{ name: "Lobby creation failed", exec: async () => ((await drv("seenLobbyCreationFailedMessage")) ? error("Lobby creation failed") : success("No")) },
-			{ name: "Last high tick rate", exec: async () => deltaTime(await drv("lastHighAverageTick")) },
-			{ name: "Exception", exec: async () => ((await drv("exceptionSeen")) ? error("Exception seen") : success("No")) },
-			{ name: "Last restart", exec: async () => deltaTime(await drv("lastRestart")) },
-			{ name: "Last user join attempt", exec: async () => deltaTime(await drv("lastUserJoinAttempt")) },
-			{ name: "Last user join success", exec: async () => deltaTime(await drv("lastUserJoinSuccess")) },
-			{ name: "Last server start", exec: async () => deltaTimeMinutes(await drv("lastCommandedServerStart")) },
-			{ name: "Last server stop", exec: async () => deltaTimeMinutes(await drv("lastServerStop")) }
+			// { name: "Daemon -> Elo Connection", exec: async () => (app.api.clients.some(u => u.isAuthedDaemon) ? success("Client found") : error("No client")) },
+			// { name: "Seen SM Leave", exec: async () => ((await drv("seenSmLeaveMessage")) ? error("SM Leave (Steam failure)") : success("No")) },
+			// { name: "Lobby creation failed", exec: async () => ((await drv("seenLobbyCreationFailedMessage")) ? error("Lobby creation failed") : success("No")) },
+			// { name: "Last high tick rate", exec: async () => deltaTime(await drv("lastHighAverageTick")) },
+			// { name: "Exception", exec: async () => ((await drv("exceptionSeen")) ? error("Exception seen") : success("No")) },
+			// { name: "Last restart", exec: async () => deltaTime(await drv("lastRestart")) },
+			// { name: "Last user join attempt", exec: async () => deltaTime(await drv("lastUserJoinAttempt")) },
+			// { name: "Last user join success", exec: async () => deltaTime(await drv("lastUserJoinSuccess")) },
+			// { name: "Last server start", exec: async () => deltaTimeMinutes(await drv("lastCommandedServerStart")) },
+			// { name: "Last server stop", exec: async () => deltaTimeMinutes(await drv("lastServerStop")) }
 		];
 
 		const embed = new Discord.EmbedBuilder();

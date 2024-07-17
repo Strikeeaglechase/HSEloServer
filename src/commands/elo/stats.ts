@@ -11,12 +11,22 @@ import { Aircraft, User, Weapon } from "../../structures.js";
 
 async function lookupUser(users: CollectionManager<User>, query: string) {
 	// SteamID
-	const userIdUser = await users.get(query);
-	if (userIdUser) return userIdUser;
+	if (query.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gmi)) {
+		const userIdUser = await users.get(query.replace(/(https):\/\/steamcommunity\.com\/profiles\/|(http):\/\/steamcommunity\.com\/profiles\//gmi, ''));
+		if (userIdUser) return userIdUser;
+	} else if (query.match(/[0-9]+/gmi)) {
+		const userIdUser = await users.get(query);
+		if (userIdUser) return userIdUser;
+	}
 
 	// DiscordID
-	const discordIdUser = await users.collection.findOne({ discordId: query });
-	if (discordIdUser) return discordIdUser;
+	if (query.match(/<@[0-9]+>/gmi)) {
+		const discordIdUser = await users.collection.findOne({ discordId: query.replace(/<@|>/gmi, '') });
+		if (discordIdUser) return discordIdUser;
+	} else if (query.match(/[0-9]+/gmi)) {
+		const discordIdUser = await users.collection.findOne({ discordId: query });
+		if (discordIdUser) return discordIdUser;
+	}
 
 	console.log(`Doing regex query for ${query}`);
 	// PilotName

@@ -11,11 +11,15 @@ class Link extends SlashCommand {
 	description = "Links your discord account to your steam";
 
 	async run({ interaction, framework, app }: SlashCommandEvent<Application>, @SArg() steamId: string) {
+		let id = steamId;
+
 		// Check steamid is numeric
-		const isNumeric = steamId.split("").every(c => nums.includes(c));
-		if (!isNumeric) {
-			interaction.reply(framework.error(`Please provide your steamID64 (https://steamid.io/lookup/${steamId})`));
+		const isNumeric = id.split("").every(c => nums.includes(c));
+		if (!isNumeric || !id.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gmi)) {
+			interaction.reply(framework.error(`Please provide your steamID64 (https://steamid.io/lookup/${id})`));
 			return;
+		} else if (id.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gmi)) {
+			id = id.replace(/(https):\/\/steamcommunity\.com\/profiles\/|(http):\/\/steamcommunity\.com\/profiles\//gmi, '')
 		}
 
 		// Check existing
@@ -27,7 +31,7 @@ class Link extends SlashCommand {
 		}
 
 		// Check steamid exists
-		const user = await app.users.get(steamId);
+		const user = await app.users.get(id);
 		if (!user) {
 			replyOrEdit(interaction, framework.error(`That steamID does not exist (connect to the server at least once)`));
 			return;

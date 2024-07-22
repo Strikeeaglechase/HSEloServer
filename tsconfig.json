@@ -8,6 +8,7 @@
 		"baseUrl": "./src",
 		"lib": [
 			"ES2019",
+			"ESNext",
 			"DOM"
 		],
 		"experimentalDecorators": true,

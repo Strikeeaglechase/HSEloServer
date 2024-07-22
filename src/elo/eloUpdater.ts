@@ -418,9 +418,10 @@ class ELOUpdater {
 		else if (dist / nm < 20) weaponEquivalent = Weapon.AIM120;
 
 		if (weaponEquivalent != null) {
-			const ac = AircraftCategory[AircraftCategory.FourthGen];
+			const killerAc = AircraftCategory[aircraftCategoryMap[kill.killer.type]];
+			const victimAc = AircraftCategory[aircraftCategoryMap[kill.victim.type]];
 			const weapon = WeaponCategory[weaponCategoryMap[weaponEquivalent]];
-			const metric = multipliers.find(km => km.killStr == `${ac}->${weapon}->${ac}`);
+			const metric = multipliers.find(km => km.killStr == `${killerAc}->${weapon}->${victimAc}`);
 			return { cfitMetric: metric, extraInfo: "Distance: " + (dist / nm).toFixed(1) + "nm" };
 		} else {
 			return { cfitMetric: null, extraInfo: null };

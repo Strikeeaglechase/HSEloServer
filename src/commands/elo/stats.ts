@@ -131,12 +131,15 @@ class Stats extends SlashCommand {
 		const mostRecentSession = user.sessions?.length > 0 ? user.sessions[user.sessions.length - 1] : null;
 		const lastOnlineTimeStamp = mostRecentSession ? `<t:${Math.floor((mostRecentSession?.startTime ?? 0) / 1000)}:R>` : "Never";
 
+		let maxElo = 0;
+		user.eloHistory.forEach(h => (maxElo = Math.max(maxElo, h.elo)));
+
 		const embed = new Discord.EmbedBuilder();
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
 		embed.addFields([
 			{
 				name: "Metrics",
-				value: `ELO: ${Math.floor(user.elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%`,
+				value: `ELO: ${Math.floor(user.elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`,
 				inline: true
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },

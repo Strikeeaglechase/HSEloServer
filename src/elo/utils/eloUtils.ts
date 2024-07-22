@@ -39,8 +39,13 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 	public async runCompare() {
 		// Compare the locally computed elo to the current elo in the database
 		const currentDbUsers = await this.userDb.collection.find({ $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] }).toArray();
+		currentDbUsers.sort((a, b) => b.elo - a.elo);
 		console.log(`Loaded ${currentDbUsers.length} users from the database.`);
 		const results: { user: User; oldElo: number; newElo: number }[] = [];
+
+		let biggestGain: { user: User; gain: number } = { user: null, gain: 0 };
+		let biggestLoss: { user: User; loss: number } = { user: null, loss: 0 };
+
 		currentDbUsers.forEach(user => {
 			const localUser = this.usersMap[user.id];
 			if (!localUser) {
@@ -52,15 +57,32 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 				console.log(`${user.pilotNames[0]} (${user.id}). ${user.elo.toFixed(0)} -> ${localUser.elo.toFixed(0)}`);
 			}
 
+			const eloDelta = localUser.elo - user.elo;
+			if (eloDelta > biggestGain.gain) {
+				biggestGain = { user: user, gain: eloDelta };
+			} else if (eloDelta < biggestLoss.loss) {
+				biggestLoss = { user: user, loss: eloDelta };
+			}
+
 			results.push({ user: user, oldElo: user.elo, newElo: localUser.elo });
 		});
 
 		results.sort((a, b) => b.newElo - a.newElo);
 		for (let i = 0; i < 30; i++) {
-			console.log(`${i + 1}) ${results[i].user.pilotNames[0]} (${results[i].user.id}). ${results[i].oldElo.toFixed(0)} -> ${results[i].newElo.toFixed(0)}`);
+			const orgRank = currentDbUsers.findIndex(u => u.id === results[i].user.id);
+			const oldElo = results[i].oldElo.toFixed(0);
+			const newElo = results[i].newElo.toFixed(0);
+			console.log(`${orgRank + 1} -> ${i + 1}) ${results[i].user.pilotNames[0]} (${results[i].user.id}). ${oldElo} -> ${newElo}`);
 		}
 
-		const u = this.usersMap["76561199442641427"];
+		console.log(
+			`Biggest gain: ${biggestGain.user.pilotNames[0]} (${biggestGain.user.id}). ${biggestGain.user.elo.toFixed(0)} +${biggestGain.gain.toFixed(0)}`
+		);
+		console.log(
+			`Biggest loss: ${biggestLoss.user.pilotNames[0]} (${biggestLoss.user.id}). ${biggestLoss.user.elo.toFixed(0)} ${biggestLoss.loss.toFixed(0)}`
+		);
+
+		const u = this.usersMap["76561198977269076"];
 		fs.writeFileSync("../../out-log.txt", u.history.join("\n"));
 	}
 }

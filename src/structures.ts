@@ -343,12 +343,12 @@ export interface Kill {
 
 export const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
 	[Aircraft.AV42c]: [],
-	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT, Weapon.DCCFIT],
-	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.HARM, Weapon.CFIT, Weapon.DCCFIT],
+	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
+	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.HARM, Weapon.CFIT],
 	[Aircraft.AH94]: [],
 	[Aircraft.Invalid]: [],
-	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT, Weapon.DCCFIT],
-	[Aircraft.EF24G]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.AIRST, Weapon.HARM, Weapon.AIM54, Weapon.AIM7, Weapon.AIM9E, Weapon.CFIT, Weapon.DCCFIT]
+	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
+	[Aircraft.EF24G]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.AIRST, Weapon.HARM, Weapon.AIM54, Weapon.AIM7, Weapon.AIM9E, Weapon.CFIT]
 };
 
 export function isKillValid(kill: Kill) {

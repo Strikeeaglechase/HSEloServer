@@ -22,6 +22,7 @@ config();
 const userBackupPath = "../users/";
 const fullyOffline = false;
 const manualSeasonSelection = 2;
+const preFilterForInvalidKills = false;
 
 function shouldKillContributeToMultipliers(kill: Kill) {
 	if (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT) return false;
@@ -188,7 +189,7 @@ class EloBackUpdater {
 
 	protected async loadKillsAndDeaths() {
 		await this.loadFromHourlyReport();
-		this.kills = this.kills.filter(kill => kill.season == this.season.id && isKillValid(kill)).sort((a, b) => a.time - b.time);
+		this.kills = this.kills.filter(kill => kill.season == this.season.id && (isKillValid(kill) || !preFilterForInvalidKills)).sort((a, b) => a.time - b.time);
 		this.deaths = this.deaths.filter(kill => kill.season == this.season.id).sort((a, b) => a.time - b.time);
 
 		this.kills.forEach(kill => (this.killsMap[kill.id] = kill));
@@ -261,6 +262,7 @@ class EloBackUpdater {
 				const killStr = getKillStr(kill);
 
 				if (!killer || !victim || !shouldKillBeCounted(kill, killer, victim)) {
+					this.onInvalidKill(kill, killer, victim);
 					continue;
 				}
 
@@ -338,6 +340,8 @@ class EloBackUpdater {
 		user.eloGainLossSummary[againstUser] = summary;
 		return summary;
 	}
+
+	protected onInvalidKill(kill: Kill, killer: User, victim: User) {}
 
 	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) {
 		switch (event.type) {

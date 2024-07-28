@@ -135,7 +135,7 @@ async function runComparison() {
 	await updater.runCompare();
 }
 
-export { ProdDBBackUpdater };
+export { ProdDBBackUpdater, createPullStream };
 
 // getInterestingMetrics();
 // runComparison();

@@ -1,6 +1,6 @@
 import fs from "fs";
 
-import { Aircraft, User, Weapon } from "../../structures.js";
+import { Aircraft, Kill, User, Weapon } from "../../structures.js";
 import { EloEvent } from "../eloBackUpdater.js";
 import { ProdDBBackUpdater } from "./eloUtils.js";
 
@@ -9,6 +9,12 @@ interface ExtraUserStats {
 	minElo: number;
 	streak: number;
 	streakWith26b: number;
+	longestStreak: number;
+	longestStreakWith26b: number;
+	killsWithoutTkStreak: number;
+	longestKillsWithoutTkStreak: number;
+	enemyCollisions: number;
+	friendlyCollisions: number;
 	totalEloDelta: number;
 	timesGotTKed: number;
 	killsWithWeapon: Record<Weapon, number>;
@@ -46,7 +52,16 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 				if (!extraStats.killsWithWeapon[kill.weapon]) extraStats.killsWithWeapon[kill.weapon] = 0;
 				extraStats.killsWithWeapon[kill.weapon]++;
 				extraStats.streak++;
-				if (kill.killer.type == Aircraft.FA26b) extraStats.streakWith26b++;
+				if (extraStats.streak > extraStats.longestStreak) extraStats.longestStreak = extraStats.streak;
+				if (kill.killer.type == Aircraft.FA26b) {
+					extraStats.streakWith26b++;
+					if (extraStats.streakWith26b > extraStats.longestStreakWith26b) extraStats.longestStreakWith26b = extraStats.streakWith26b;
+				}
+
+				extraStats.killsWithoutTkStreak++;
+				if (kill.killer.team == kill.victim.team) extraStats.killsWithoutTkStreak = 0;
+				if (extraStats.killsWithoutTkStreak > extraStats.longestKillsWithoutTkStreak)
+					extraStats.longestKillsWithoutTkStreak = extraStats.killsWithoutTkStreak;
 
 				if (!extraStats.killsWithAircraft[kill.killer.type]) extraStats.killsWithAircraft[kill.killer.type] = 0;
 				extraStats.killsWithAircraft[kill.killer.type]++;
@@ -76,6 +91,20 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		}
 	}
 
+	protected override onInvalidKill(kill: Kill, killer: User, victim: User): void {
+		super.onInvalidKill(kill, killer, victim);
+
+		if (kill.weapon == Weapon.Collision && killer && victim && kill.killer.team != kill.victim.team) {
+			this.getUser(killer.id).enemyCollisions++;
+			this.getUser(victim.id).enemyCollisions++;
+		}
+
+		if (kill.weapon == Weapon.Collision && killer && victim && kill.killer.team == kill.victim.team) {
+			this.getUser(killer.id).friendlyCollisions++;
+			this.getUser(victim.id).friendlyCollisions++;
+		}
+	}
+
 	private getUser(id: string) {
 		if (!this.extraUserStats[id]) {
 			this.extraUserStats[id] = {
@@ -83,9 +112,15 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 				minElo: Infinity,
 				id: id,
 				streak: 0,
+				longestStreak: 0,
 				streakWith26b: 0,
+				longestStreakWith26b: 0,
 				totalEloDelta: 0,
 				timesGotTKed: 0,
+				killsWithoutTkStreak: 0,
+				longestKillsWithoutTkStreak: 0,
+				enemyCollisions: 0,
+				friendlyCollisions: 0,
 				killsWithWeapon: {} as Record<Weapon, number>,
 				deathsByWeapon: {} as Record<Weapon, number>,
 
@@ -259,8 +294,8 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		let longestUser: ExtraUserStats;
 
 		for (const user of Object.values(this.extraUserStats)) {
-			if (user.streak > longestStreak) {
-				longestStreak = user.streak;
+			if (user.longestStreak > longestStreak) {
+				longestStreak = user.longestStreak;
 				longestUser = user;
 			}
 		}
@@ -274,8 +309,8 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		let longestUser: ExtraUserStats;
 
 		for (const user of Object.values(this.extraUserStats)) {
-			if (user.streakWith26b > longestStreak) {
-				longestStreak = user.streakWith26b;
+			if (user.longestStreakWith26b > longestStreak) {
+				longestStreak = user.longestStreakWith26b;
 				longestUser = user;
 			}
 		}
@@ -382,6 +417,71 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		console.log(`${strUser(highestUser)} was TKed the most with ${highestTKs} times`);
 	}
 
+	private findMostAchievements() {
+		let highestAchievements = -Infinity;
+		let highestUser: User;
+
+		let highestFirstFoundAchievements = -Infinity;
+		let highestFirstFoundUser: User;
+
+		this.users.forEach(user => {
+			const uniqueAchievements = new Set(user.achievements.map(a => a.id));
+			if (uniqueAchievements.size > highestAchievements) {
+				highestAchievements = user.achievements.length;
+				highestUser = user;
+			}
+
+			// const firstFound = user.achievements.filter(a => a.firstAchieved);
+			// if (firstFound.length > highestFirstFoundAchievements) {
+			// 	highestFirstFoundAchievements = firstFound.length;
+			// 	highestFirstFoundUser = user;
+			// }
+		});
+
+		console.log(`${strUser(highestUser)} had the most achievements with ${highestAchievements}`);
+		// console.log(`${strUser(highestFirstFoundUser)} had the most first found achievements with ${highestFirstFoundAchievements}`);
+	}
+
+	private findLongestNoTKStreak() {
+		let longestStreak = -Infinity;
+		let longestUser: User;
+
+		this.users.forEach(user => {
+			const stats = this.getUser(user.id);
+			if (stats.killsWithoutTkStreak > longestStreak) {
+				longestStreak = stats.killsWithoutTkStreak;
+				longestUser = user;
+			}
+		});
+
+		console.log(`${strUser(longestUser)} had the longest streak without a teamkill with ${longestStreak} kills`);
+	}
+
+	private findMostCollisions() {
+		let mostEnemyCollisions = -Infinity;
+		let mostEnemyColUser: User;
+
+		let mostFriendlyCollisions = -Infinity;
+		let mostFriendlyColUser: User;
+
+		this.users.forEach(user => {
+			if (user.id == "76561198008478379") return;
+			const stats = this.getUser(user.id);
+			if (stats.enemyCollisions > mostEnemyCollisions) {
+				mostEnemyCollisions = stats.enemyCollisions;
+				mostEnemyColUser = user;
+			}
+
+			if (stats.friendlyCollisions > mostFriendlyCollisions) {
+				mostFriendlyCollisions = stats.friendlyCollisions;
+				mostFriendlyColUser = user;
+			}
+		});
+
+		console.log(`${strUser(mostEnemyColUser)} had the most collisions with enemies: ${mostEnemyCollisions}`);
+		console.log(`${strUser(mostFriendlyColUser)} had the most collisions with friendlies: ${mostFriendlyCollisions}`);
+	}
+
 	public getMetrics() {
 		console.log(`----- Metrics -----`);
 		this.findHighestDeltaUser();
@@ -391,7 +491,7 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		this.findHighestDeaths();
 		this.findBestKDRWithMoreThan10Kills();
 		this.findMostTKs();
-		// this.findMostKillsPerWeaponType();
+		this.findMostKillsPerWeaponType();
 		// this.findMostDeathsByWeaponType();
 		this.findLongestStreak();
 		this.findLongestStreakWith26b();
@@ -400,6 +500,9 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		this.findBiggestEloTransfer();
 		this.findHighestEloDelta();
 		this.findMostTKed();
+		this.findMostAchievements();
+		this.findLongestNoTKStreak();
+		this.findMostCollisions();
 
 		// const u = this.usersMap["76561198177819141"];
 		// fs.writeFileSync("../../out-log.txt", u.history.join("\n"));

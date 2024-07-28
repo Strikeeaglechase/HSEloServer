@@ -2,7 +2,7 @@ import { User } from "../../structures.js";
 import { EloEvent } from "../eloBackUpdater.js";
 import { ProdDBBackUpdater } from "./eloUtils.js";
 
-const targetUserId = "76561198807560381";
+const targetUserId = "76561198200904090";
 class EloRangeDistributionUpdater extends ProdDBBackUpdater {
 	private rangeBuckets: Record<number, { gain: number; loss: number; kills: number; deaths: number }> = {};
 
@@ -33,7 +33,7 @@ class EloRangeDistributionUpdater extends ProdDBBackUpdater {
 	public log() {
 		const buckets = Object.entries(this.rangeBuckets).map(([bucket, elo]) => ({ bucket: parseInt(bucket), elo }));
 		buckets.sort((a, b) => a.bucket - b.bucket);
-		buckets.forEach(b => console.log(`${b.bucket}, ${b.elo.gain}, ${b.elo.loss}, ${b.elo.kills}, ${b.elo.deaths}`));
+		buckets.forEach(b => console.log(`${b.bucket}, ${b.elo.gain}, ${b.elo.loss}`));
 	}
 }
 

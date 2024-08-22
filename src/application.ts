@@ -255,7 +255,7 @@ class Application {
 	private async createScoreboardMessage() {
 		const embed = new Discord.EmbedBuilder({ title: "Scoreboard" });
 		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
-		let filteredUsers = await this.users.collection.find({ rank: { $lte: USERS_PER_PAGE } }).toArray();
+		let filteredUsers = await this.users.collection.find({ rank: { $lte: USERS_PER_PAGE, $gt: 0 } }).toArray();
 		filteredUsers = filteredUsers.sort((a, b) => b.elo - a.elo);
 		// ```ansi;
 		// Offline player

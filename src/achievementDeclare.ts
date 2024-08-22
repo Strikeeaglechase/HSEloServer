@@ -1,5 +1,5 @@
 import { EventEmitter } from "./eventEmitter.js";
-import { Death, Kill, MissileLaunchParams, Tracking, User } from "./structures.js";
+import { Death, Kill, MissileLaunchParams, Spawn, Tracking, User } from "./structures.js";
 
 type AchievementId = string;
 
@@ -19,6 +19,7 @@ interface IAchievementManager extends EventEmitter {
 	onUserLogout(user: User): void;
 	onLinkedAccount(user: User): void;
 	onMissileLaunchParams(params: MissileLaunchParams): void;
+	onUserSpawn(spawn: Spawn): void;
 }
 
 class DummyAchievementManager extends EventEmitter implements IAchievementManager {
@@ -33,6 +34,7 @@ class DummyAchievementManager extends EventEmitter implements IAchievementManage
 	onUserLogout(user: User) {}
 	onLinkedAccount(user: User) {}
 	onMissileLaunchParams(params: MissileLaunchParams) {}
+	onUserSpawn(spawn: Spawn) {}
 }
 
 export { IAchievement, IAchievementManager, DummyAchievementManager, AchievementId };

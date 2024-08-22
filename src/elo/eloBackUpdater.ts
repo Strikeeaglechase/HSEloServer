@@ -71,14 +71,14 @@ class EloBackUpdater {
 	protected killMultipliers: KillMetric[] = [];
 
 	protected users: User[] = [];
-	private oldUsers: Record<string, User> = {};
+	protected oldUsers: Record<string, User> = {};
 	protected usersMap: Record<string, User> = {};
 
 	protected season: Season;
 
 	protected events: EloEvent[] = [];
 
-	protected async loadDb() {
+	public async loadDb() {
 		if (fullyOffline) return;
 
 		this.db = new Database(
@@ -177,7 +177,6 @@ class EloBackUpdater {
 			u.deaths = 0;
 			u.eloHistory = [];
 			u.history = [];
-			u.eloGainLossSummary = {};
 			usersMap[u.id] = u;
 		});
 
@@ -220,7 +219,7 @@ class EloBackUpdater {
 		console.log(`Loaded ${this.events.length} events.`);
 	}
 
-	private async getActiveSeason() {
+	protected async getActiveSeason() {
 		if (!fullyOffline) return await this.seasons.collection.findOne({ active: true });
 
 		const manualSeason: Season = {
@@ -229,7 +228,10 @@ class EloBackUpdater {
 			started: "2020-01-01T00:00:00.000Z",
 			ended: null,
 			active: true,
-			totalRankedUsers: 0
+			totalRankedUsers: 0,
+			endStats: {
+				achievementHistory: []
+			}
 		};
 
 		return manualSeason;
@@ -293,7 +295,7 @@ class EloBackUpdater {
 				}
 
 				const aircraftOffset = ELOUpdater.getKillAircraftOffset(kill);
-				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1);
+				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1, this.season.id);
 
 				killer.elo += eloSteal;
 				victim.elo -= eloSteal;
@@ -314,7 +316,7 @@ class EloBackUpdater {
 				const kill = death.killId ? this.killsMap[death.killId] : null;
 				if (!shouldDeathBeCounted(death, kill)) continue;
 
-				const eloSteal = ELOUpdater.calculateEloSteal(BASE_ELO, victim.elo);
+				const eloSteal = ELOUpdater.calculateEloSteal(BASE_ELO, victim.elo, 1, 1, this.season.id);
 				victim.elo -= eloSteal;
 				victim.elo = Math.max(victim.elo, 1);
 				victim.deaths++;
@@ -334,38 +336,35 @@ class EloBackUpdater {
 		console.log(`Primary back update calculations done! Took ${Date.now() - start}ms`);
 	}
 
-	protected getSummary(forUser: string, againstUser: string) {
-		const user = this.usersMap[forUser];
-		const summary = user.eloGainLossSummary[againstUser] ?? { gain: 0, loss: 0 };
-		user.eloGainLossSummary[againstUser] = summary;
-		return summary;
-	}
+	// protected getSummary(forUser: string, againstUser: string) {
+	// 	const user = this.usersMap[forUser];
+	// 	const summary = user.eloGainLossSummary[againstUser] ?? { gain: 0, loss: 0 };
+	// 	user.eloGainLossSummary[againstUser] = summary;
+	// 	return summary;
+	// }
 
 	protected onInvalidKill(kill: Kill, killer: User, victim: User) {}
 
 	protected onUserUpdate(user: User, event: EloEvent, eloDelta: number) {
-		switch (event.type) {
-			case "kill": {
-				const kill = event.event as Kill;
-				if (user.id != kill.killer.ownerId) return; // Only run logic once per kill
-
-				const killerSummaryAgainstVictim = this.getSummary(kill.killer.ownerId, kill.victim.ownerId);
-				const victimSummaryAgainstKiller = this.getSummary(kill.victim.ownerId, kill.killer.ownerId);
-
-				killerSummaryAgainstVictim.gain += eloDelta;
-				victimSummaryAgainstKiller.loss += eloDelta;
-
-				break;
-			}
-			case "death": {
-				if (event.event.killId) return; // Death relates to a kill, don't do anything
-				const victimSummaryAgainstVictim = this.getSummary(event.event.victim.ownerId, event.event.victim.ownerId);
-				victimSummaryAgainstVictim.loss += eloDelta;
-				break;
-			}
-			case "action":
-				break;
-		}
+		// switch (event.type) {
+		// 	case "kill": {
+		// 		const kill = event.event as Kill;
+		// 		if (user.id != kill.killer.ownerId) return; // Only run logic once per kill
+		// 		const killerSummaryAgainstVictim = this.getSummary(kill.killer.ownerId, kill.victim.ownerId);
+		// 		const victimSummaryAgainstKiller = this.getSummary(kill.victim.ownerId, kill.killer.ownerId);
+		// 		killerSummaryAgainstVictim.gain += eloDelta;
+		// 		victimSummaryAgainstKiller.loss += eloDelta;
+		// 		break;
+		// 	}
+		// 	case "death": {
+		// 		if (event.event.killId) return; // Death relates to a kill, don't do anything
+		// 		const victimSummaryAgainstVictim = this.getSummary(event.event.victim.ownerId, event.event.victim.ownerId);
+		// 		victimSummaryAgainstVictim.loss += eloDelta;
+		// 		break;
+		// 	}
+		// 	case "action":
+		// 		break;
+		// }
 	}
 
 	public async storeResults() {
@@ -397,8 +396,8 @@ class EloBackUpdater {
 								deaths: user.deaths,
 								eloHistory: user.eloHistory,
 								history: user.history,
-								rank: user.rank,
-								eloGainLossSummary: user.eloGainLossSummary
+								rank: user.rank
+								// eloGainLossSummary: user.eloGainLossSummary
 							}
 						}
 					}

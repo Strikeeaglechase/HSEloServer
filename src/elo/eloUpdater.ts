@@ -27,7 +27,7 @@ const BASE_ELO = 2000;
 // Normal kill takes 10 points
 export const baseEloStealPoints = 10;
 // Always take at least 0.1 points
-export const minEloStealPoints = 0.1;
+export const minEloStealPoints = 1;
 // Take at most 150 points
 export const maxEloStealPoints = 150;
 // For every 100 points apart, take 1 point more, assuming the victim has more ELO than the killer
@@ -38,6 +38,11 @@ export const stealPerEloLostPoints = 0.5 / 100;
 export const teamKillPenalty = 0.0;
 // Maximum multiplier for an aircraft/weapon combo (limited by maxEloStealPrec)
 export const maxWeaponMultiplier = Infinity;
+// Controls how curved the graph is, leads to the other variables no longer perfectly linearly mapping to their name
+export const eloStealCurve = 0.69;
+// Scales the graph to correct for the curve
+export const eloStealScale = eloStealCurve * 10;
+
 // Aircraft specific bonuses/nerfs to correct for balance
 export const aircraftBonusMults: Record<Aircraft, { killMult: number; deathMult: number }> = {
 	[Aircraft.AV42c]: { killMult: 0, deathMult: 0 },
@@ -45,7 +50,7 @@ export const aircraftBonusMults: Record<Aircraft, { killMult: number; deathMult:
 	[Aircraft.F45A]: { killMult: 1, deathMult: 1 },
 	[Aircraft.AH94]: { killMult: 0, deathMult: 0 },
 	[Aircraft.T55]: { killMult: 1.5, deathMult: 0.9 },
-	[Aircraft.EF24G]: { killMult: 1, deathMult: 0.8 },
+	[Aircraft.EF24G]: { killMult: 1, deathMult: 0.9 },
 	[Aircraft.Invalid]: { killMult: 0, deathMult: 0 }
 };
 
@@ -124,7 +129,10 @@ class ELOUpdater {
 		const user = await this.app.users.get(userId);
 		if (!user) return "No data (user not found)";
 		if (season.active) return user.history.reverse().join("\n") ?? "No data";
-		return user.endOfSeasonStats.find(s => s.season == season.id)?.history ?? "No data (user joined after season end)";
+
+		const endOfSeasonStats = await this.app.endOfSeasonStats.collection.findOne({ userId: user.id, season: season.id });
+		if (!endOfSeasonStats) return "No data (user joined after season end)";
+		return endOfSeasonStats.history;
 	}
 
 	public async init() {
@@ -343,7 +351,7 @@ class ELOUpdater {
 		}
 
 		const aircraftOffset = ELOUpdater.getKillAircraftOffset(kill);
-		const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1);
+		const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1, this.activeSeason.id);
 
 		this.log.info(`Killer ${killer.pilotNames[0]} (${killer.elo}) killed victim ${victim.pilotNames[0]} (${victim.elo}) for ${eloSteal.toFixed(1)} ELO`);
 		this.log.info(` -> ${killer.pilotNames[0]} ELO: ${killer.elo} -> ${killer.elo + eloSteal}`);
@@ -393,7 +401,7 @@ class ELOUpdater {
 			return;
 		}
 
-		const eloSteal = ELOUpdater.calculateEloSteal(BASE_ELO, victim.elo);
+		const eloSteal = ELOUpdater.calculateEloSteal(BASE_ELO, victim.elo, 1, 1, this.activeSeason.id);
 		this.log.info(`User ${victim.pilotNames[0]} died and lost ${eloSteal.toFixed(1)} ELO`);
 		this.log.info(` -> ${victim.pilotNames[0]} ELO: ${victim.elo} -> ${victim.elo - eloSteal}`);
 
@@ -434,12 +442,35 @@ class ELOUpdater {
 		return killerMult.killMult * victimMult.deathMult;
 	}
 
-	public static calculateEloSteal(killerElo: number, victimElo: number, aircraftOffset = 1, multiplier = 1) {
+	private static seasonOneOrTwoEloSteal(killerElo: number, victimElo: number, multiplier: number) {
+		const eloDiff = Math.abs(victimElo - killerElo); // 5000
+		const additionalStealConst = killerElo < victimElo ? 1 / 100 : -(0.5 / 100); // -0.005
+		const eloSteal = Math.min(150, Math.max(10 + eloDiff * additionalStealConst, 0.1) * multiplier);
+		return eloSteal;
+	}
+
+	private static seasonThreeEloSteal(killerElo: number, victimElo: number, aircraftOffset: number, multiplier: number) {
+		const eloDiff = Math.abs(victimElo - killerElo); // 5000
+		const additionalStealConst = killerElo < victimElo ? 1 / 100 : -(0.5 / 100); // -0.005
+		const eloSteal = Math.min(150, Math.max(10 + eloDiff * additionalStealConst, 0.1) * multiplier * aircraftOffset);
+		return eloSteal;
+	}
+
+	public static calculateEloSteal(killerElo: number, victimElo: number, aircraftOffset = 1, multiplier = 1, season = -1) {
+		if (season == 1 || season == 2) return ELOUpdater.seasonOneOrTwoEloSteal(killerElo, victimElo, multiplier);
+		if (season == 3) return ELOUpdater.seasonThreeEloSteal(killerElo, victimElo, aircraftOffset, multiplier);
+
 		const eloDiff = Math.abs(victimElo - killerElo); // 5000
 		const additionalStealConst = killerElo < victimElo ? stealPerEloGainedPoints : -stealPerEloLostPoints; // -0.005
+		// Old, linear
+		// const eloSteal = Math.min(
+		// 	maxEloStealPoints,
+		// 	Math.max(baseEloStealPoints + eloDiff * additionalStealConst, minEloStealPoints) * multiplier * aircraftOffset
+		// );
+		// New, non-linear
 		const eloSteal = Math.min(
 			maxEloStealPoints,
-			Math.max(baseEloStealPoints + eloDiff * additionalStealConst, minEloStealPoints) * multiplier * aircraftOffset
+			Math.max(baseEloStealPoints + Math.pow(eloDiff, eloStealCurve) * eloStealScale * additionalStealConst, minEloStealPoints) * multiplier * aircraftOffset
 		);
 		return eloSteal;
 	}

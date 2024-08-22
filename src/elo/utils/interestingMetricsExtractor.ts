@@ -225,7 +225,7 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		let highestKDR = -Infinity;
 		let highestUser: User;
 		this.users.forEach(user => {
-			if (user.kills < 10) return;
+			if (user.kills < 20) return;
 			const kdr = user.kills / user.deaths;
 			if (kdr > highestKDR) {
 				highestKDR = kdr;
@@ -482,6 +482,22 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		console.log(`${strUser(mostFriendlyColUser)} had the most collisions with friendlies: ${mostFriendlyCollisions}`);
 	}
 
+	private findMostFooledUser() {
+		let mostFooled = -Infinity;
+		let mostFooledUser: User;
+
+		this.users.forEach(user => {
+			const fooled = user.achievements.filter(a => a.id == "fooled").length;
+			if (fooled > 0) console.log(`${strUser(user)} was fooled ${fooled} times`);
+			if (fooled > mostFooled) {
+				mostFooled = fooled;
+				mostFooledUser = user;
+			}
+		});
+
+		console.log(`${strUser(mostFooledUser)} was fooled the most with ${mostFooled} times`);
+	}
+
 	public getMetrics() {
 		console.log(`----- Metrics -----`);
 		this.findHighestDeltaUser();
@@ -503,6 +519,7 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		this.findMostAchievements();
 		this.findLongestNoTKStreak();
 		this.findMostCollisions();
+		this.findMostFooledUser();
 
 		// const u = this.usersMap["76561198177819141"];
 		// fs.writeFileSync("../../out-log.txt", u.history.join("\n"));

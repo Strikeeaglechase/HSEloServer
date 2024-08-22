@@ -125,7 +125,8 @@ class Stats extends SlashCommand {
 			.map(entry => entry[1] + " " + Weapon[entry[0]])
 			.join("\n");
 
-		const rawRank = app.getUserRank(user, targetSeason);
+		const endOfSeasonStats = targetSeason.active ? null : await app.endOfSeasonStats.collection.findOne({ season: targetSeason.id, user: user.id });
+		const rawRank = app.getUserRank(user, targetSeason, endOfSeasonStats);
 		const rank = rawRank == "N/A" ? 0 : rawRank;
 		const playersWithRank = targetSeason.totalRankedUsers;
 		const mostRecentSession = user.sessions?.length > 0 ? user.sessions[user.sessions.length - 1] : null;
@@ -155,7 +156,7 @@ class Stats extends SlashCommand {
 
 		let achievementLogText = "";
 		if (achievementsEnabled) {
-			const userAchievements = activeSeason == targetSeason ? user.achievements : user.endOfSeasonStats.find(s => s.season == targetSeason.id).achievements;
+			const userAchievements = activeSeason == targetSeason ? user.achievements : endOfSeasonStats.achievements ?? [];
 			const achievements = userAchievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
 			const dbAchievements = await Promise.all(achievements.map(ach => app.achievementsDb.get(ach.id)));
 			const topAchievements = dbAchievements.sort((a, b) => {

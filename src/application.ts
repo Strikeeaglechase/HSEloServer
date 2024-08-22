@@ -10,12 +10,14 @@ import { DummyAchievementManager, IAchievementManager } from "./achievementDecla
 import { API } from "./api.js";
 import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
+import { getRandomEnv, RandomEnv } from "./serverEnvProfile.js";
 import {
 	AchievementDBEntry,
 	AchievementLogChannel,
 	Aircraft,
 	AllowedMod,
 	Death,
+	EndOfSeasonStats,
 	Kill,
 	MissileLaunchParams,
 	OnlineboardMessage,
@@ -57,6 +59,7 @@ class Application {
 	public allowedMods: CollectionManager<AllowedMod>;
 	public seasons: CollectionManager<Season>;
 	public tracking: CollectionManager<Tracking>;
+	public endOfSeasonStats: CollectionManager<EndOfSeasonStats>;
 
 	public achievementManager: IAchievementManager = new DummyAchievementManager();
 	public achievementsDb: CollectionManager<AchievementDBEntry>;
@@ -66,6 +69,7 @@ class Application {
 	public liveryUpdater: LiveryModifierManager;
 
 	public onlineUsers: { name: string; id: string; team: string }[] = [];
+	public currentServerEnv: RandomEnv;
 	public lastOnlineUserUpdateAt = 0;
 
 	private updatingRanksAt = 0;
@@ -91,6 +95,7 @@ class Application {
 	}
 
 	public async init() {
+		this.currentServerEnv = getRandomEnv();
 		this.log.info(`Application has started!`);
 		await this.setupDbCollections();
 
@@ -125,6 +130,10 @@ class Application {
 				await this.users.collection.updateOne({ id: user.id }, { $set: { achievements: [] } });
 				this.log.info(`Updated user ${user.id} with new achievements object`);
 			}
+
+			if ("eloGainLossSummary" in user) {
+				await this.users.collection.updateOne({ id: user.id }, { $unset: { eloGainLossSummary: "" } });
+			}
 		});
 		await Promise.all(proms);
 		this.log.info(`Updated all users with new spawns object`);
@@ -136,12 +145,14 @@ class Application {
 		setInterval(() => this.updateScoreboards(), scoreboardUpdateRate);
 		setInterval(() => this.updateOnlineboards(), scoreboardUpdateRate);
 		setInterval(() => this.preformUserRankUpdate(), userRankUpdateRate);
-		setInterval(() => this.checkMemoryUsage(), 1000);
-		if (process.env.IS_DEV != "true") setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
+		if (process.env.IS_DEV != "true") {
+			setInterval(() => this.checkMemoryUsage(), 1000);
+			setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
+		}
 
 		this.runHourlyTasks(); // Run it once on startup
 
-		// this.createSeason(3, "Season 3 (EF-24G)");
+		// this.createSeason(4, "Season 4 (Weather)");
 		// this.migrateDb();
 	}
 
@@ -160,6 +171,7 @@ class Application {
 		this.spawns = await this.framework.database.collection("spawns-v2", false, "id");
 		this.seasons = await this.framework.database.collection("seasons", false, "id");
 		this.tracking = await this.framework.database.collection("tracking", false, "id");
+		this.endOfSeasonStats = await this.framework.database.collection("end-of-season-stats", false, "id");
 		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
 		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
 	}
@@ -181,46 +193,6 @@ class Application {
 		}
 	}
 
-	private async createSeason(seasonId: number, name: string) {
-		const season: Season = {
-			id: seasonId,
-			started: new Date().toISOString(),
-			ended: null,
-			active: false,
-			name: name,
-			totalRankedUsers: 0
-		};
-
-		this.seasons.add(season);
-	}
-
-	private async clearAllUserStats() {
-		console.log(`Clearing all user stats...`);
-		const users = await this.users.get();
-
-		const proms = users.map(async user => {
-			user.kills = 0;
-			user.deaths = 0;
-			user.spawns = {
-				[Aircraft.AV42c]: 0,
-				[Aircraft.FA26b]: 0,
-				[Aircraft.F45A]: 0,
-				[Aircraft.AH94]: 0,
-				[Aircraft.Invalid]: 0,
-				[Aircraft.T55]: 0,
-				[Aircraft.EF24G]: 0
-			};
-			user.elo = BASE_ELO;
-			user.eloHistory = [];
-			if (!user.isBanned) user.teamKills = 0;
-			await this.users.update(user, user.id);
-		});
-		console.log(`Waiting for ${proms.length} promises to resolve...`);
-		await Promise.all(proms);
-
-		console.log(`Done, reset ${users.length} users!`);
-	}
-
 	public async getActiveSeason(seasonDb = this.seasons): Promise<Season> {
 		const activeSeason = await seasonDb.collection.findOne({ active: true });
 		if (!activeSeason) {
@@ -231,7 +203,10 @@ class Application {
 				ended: null,
 				active: false,
 				name: "Invalid Season",
-				totalRankedUsers: 0
+				totalRankedUsers: 0,
+				endStats: {
+					achievementHistory: []
+				}
 			};
 		}
 
@@ -268,9 +243,7 @@ class Application {
 			discordId: null,
 			isBanned: false,
 			teamKills: 0,
-			endOfSeasonStats: [],
 			eloFreeze: false,
-			eloGainLossSummary: {},
 			achievements: [],
 			canBeFirstWithAchievement: true,
 			voiceMuted: false
@@ -429,8 +402,8 @@ class Application {
 		await this.updateUserRankDisplay();
 	}
 
-	public getUserRank(user: User, season: Season): number | "N/A" {
-		if (!season.active) return user.endOfSeasonStats.find(s => s.season == season.id)?.rank ?? "N/A";
+	public getUserRank(user: User, season: Season, endOfSeasonStats: EndOfSeasonStats): number | "N/A" {
+		if (!season.active) return endOfSeasonStats?.rank ?? "N/A";
 		return user.rank ?? "N/A";
 	}
 
@@ -454,7 +427,7 @@ class Application {
 		const proms = users.map(async user => {
 			const member = await server.members.fetch(user.discordId).catch(() => {});
 			if (!member) return;
-			const rawRank = this.getUserRank(user, season);
+			const rawRank = this.getUserRank(user, season, null);
 			let rank = rawRank.toString().padStart(3, "0") + ". ";
 			if (rawRank == "N/A") rank = "";
 			else if (rawRank > 999) rank = "";

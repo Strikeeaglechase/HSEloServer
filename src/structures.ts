@@ -127,27 +127,21 @@ export interface User {
 	isBanned: boolean;
 	teamKills: number;
 	ignoreKillsAgainstUsers: string[];
-	endOfSeasonStats: {
-		season: number;
-		rank: number;
-		elo: number;
-		teamKills: number;
-		history: string;
-		achievements: { id: AchievementId; count: number; firstAchieved: number }[];
-	}[];
 	eloFreeze: boolean;
-	eloGainLossSummary: Record<
-		string,
-		{
-			// Elo gained from the other user
-			gain: number;
-			// Elo lost to the other user
-			loss: number;
-		}
-	>;
 	achievements: { id: AchievementId; count: number; firstAchieved: number }[];
 	canBeFirstWithAchievement: boolean;
 	voiceMuted: boolean;
+}
+
+export interface EndOfSeasonStats {
+	id: string;
+	userId: string;
+	season: number;
+	rank: number;
+	elo: number;
+	teamKills: number;
+	history: string;
+	achievements: { id: AchievementId; count: number; firstAchieved: number }[];
 }
 
 export interface LimitedUserData {
@@ -445,6 +439,10 @@ export interface Season {
 	ended: string;
 	active: boolean;
 	totalRankedUsers: number;
+
+	endStats: {
+		achievementHistory: AchievementDBEntry[];
+	};
 }
 
 export interface Tracking {

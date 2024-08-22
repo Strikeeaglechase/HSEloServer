@@ -11,6 +11,7 @@ import { Application, IAchievementManager } from "./application.js";
 import { Client } from "./client.js";
 import { hourlyReportPath } from "./elo/eloUpdater.js";
 import { createUserEloGraph } from "./graph/graph.js";
+import { getRandomEnv } from "./serverEnvProfile.js";
 import {
 	Aircraft,
 	CurrentServerInformation,
@@ -147,10 +148,12 @@ class API {
 		this.registerRoute("GET", "blocklist", this.getBlockList, false);
 		this.registerRoute("GET", "bannedraw", this.getBannedUsersRaw, false);
 		this.registerRoute("GET", "bannedUsers", this.getBannedUsers, false);
+		this.registerRoute("GET", "serverenv", this.getEnv, false);
 
 		this.registerRoute("GET", "mods", this.getAllowedMods, true);
 		this.registerRoute("GET", "liveryUpdate", this.handleLiveryUpdate, true);
 		this.registerRoute("POST", "ban", this.handleUserBan, true);
+		this.registerRoute("GET", "randomenv", this.getRandomEnv, true);
 
 		const httpServer = this.server.listen(port, () => {
 			this.log.info(`ELO API listening on port ${port}`);
@@ -411,6 +414,8 @@ class API {
 		user.spawns[spawn.user.type]++;
 		await this.app.users.collection.updateOne({ id: user.id }, { $set: { spawns: user.spawns } });
 
+		this.achievementManager.onUserSpawn(spawn);
+
 		return 200;
 	}
 
@@ -525,6 +530,16 @@ class API {
 	private async getBannedUsers(req: express.Request, res: express.Response) {
 		const bannedUsers = await this.app.users.collection.find({ isBanned: true }).toArray();
 		res.send(bannedUsers);
+	}
+
+	private async getRandomEnv(req: express.Request, res: express.Response) {
+		this.app.currentServerEnv = getRandomEnv();
+		this.handleTracking("server_env", [JSON.stringify(this.app.currentServerEnv)]);
+		res.send(this.app.currentServerEnv);
+	}
+
+	private async getEnv(req: express.Request, res: express.Response) {
+		res.send(this.app.currentServerEnv);
 	}
 
 	private registerRoute(

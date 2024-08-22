@@ -9,7 +9,7 @@
 		"lib": [
 			"ES2019",
 			"ESNext",
-			"DOM"
+			"DOM",
 		],
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,

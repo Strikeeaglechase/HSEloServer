@@ -12,7 +12,7 @@ const hourlyReportPath = "../../../prodHourlyReport";
 class ProdDBBackUpdater extends EloBackUpdater {
 	protected reportPath: string = hourlyReportPath;
 
-	protected override async loadDb() {
+	public override async loadDb() {
 		this.db = new Database(
 			{
 				databaseName: "vtol-server-elo",
@@ -107,7 +107,7 @@ async function createPullStream(db: Database, collectionName: string, fileName: 
 	await prom;
 }
 
-async function pullOfflineLoad() {
+async function pullOfflineLoad(filter: any) {
 	if (!fs.existsSync(hourlyReportPath)) fs.mkdirSync(hourlyReportPath);
 	console.log(`Writing hourly report to ${hourlyReportPath}`);
 
@@ -120,8 +120,8 @@ async function pullOfflineLoad() {
 	);
 	await db.init();
 	const proms = [
-		createPullStream(db, "kills-v2", "kills", { season: 3 }),
-		createPullStream(db, "deaths-v2", "deaths", { season: 3 }),
+		createPullStream(db, "kills-v2", "kills", filter),
+		createPullStream(db, "deaths-v2", "deaths", filter),
 		createPullStream(db, "users", "users", {})
 	];
 	await Promise.all(proms);
@@ -139,4 +139,4 @@ export { ProdDBBackUpdater, createPullStream };
 
 // getInterestingMetrics();
 // runComparison();
-// pullOfflineLoad();
+// pullOfflineLoad({}); //{ season: 3 }

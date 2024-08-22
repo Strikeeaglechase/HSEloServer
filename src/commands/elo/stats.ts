@@ -128,6 +128,7 @@ class Stats extends SlashCommand {
 		const endOfSeasonStats = targetSeason.active ? null : await app.endOfSeasonStats.collection.findOne({ season: targetSeason.id, userId: user.id });
 		const rawRank = app.getUserRank(user, targetSeason, endOfSeasonStats);
 		const rank = rawRank == "N/A" ? 0 : rawRank;
+		const elo = targetSeason.active ? user.elo : endOfSeasonStats?.elo ?? 0;
 		const playersWithRank = targetSeason.totalRankedUsers;
 		const mostRecentSession = user.sessions?.length > 0 ? user.sessions[user.sessions.length - 1] : null;
 		const lastOnlineTimeStamp = mostRecentSession ? `<t:${Math.floor((mostRecentSession?.startTime ?? 0) / 1000)}:R>` : "Never";
@@ -140,7 +141,7 @@ class Stats extends SlashCommand {
 		embed.addFields([
 			{
 				name: "Metrics",
-				value: `ELO: ${Math.floor(user.elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`,
+				value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`,
 				inline: true
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },

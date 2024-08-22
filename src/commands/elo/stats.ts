@@ -156,7 +156,7 @@ class Stats extends SlashCommand {
 
 		let achievementLogText = "";
 		if (achievementsEnabled) {
-			const userAchievements = activeSeason == targetSeason ? user.achievements : endOfSeasonStats.achievements ?? [];
+			const userAchievements = activeSeason == targetSeason ? user.achievements : endOfSeasonStats?.achievements ?? [];
 			const achievements = userAchievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
 			const dbAchievements = await Promise.all(achievements.map(ach => app.achievementsDb.get(ach.id)));
 			const topAchievements = dbAchievements.sort((a, b) => {

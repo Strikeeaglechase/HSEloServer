@@ -125,7 +125,7 @@ class Stats extends SlashCommand {
 			.map(entry => entry[1] + " " + Weapon[entry[0]])
 			.join("\n");
 
-		const endOfSeasonStats = targetSeason.active ? null : await app.endOfSeasonStats.collection.findOne({ season: targetSeason.id, user: user.id });
+		const endOfSeasonStats = targetSeason.active ? null : await app.endOfSeasonStats.collection.findOne({ season: targetSeason.id, userId: user.id });
 		const rawRank = app.getUserRank(user, targetSeason, endOfSeasonStats);
 		const rank = rawRank == "N/A" ? 0 : rawRank;
 		const playersWithRank = targetSeason.totalRankedUsers;

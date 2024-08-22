@@ -431,6 +431,7 @@ class Application {
 			let rank = rawRank.toString().padStart(3, "0") + ". ";
 			if (rawRank == "N/A") rank = "";
 			else if (rawRank > 999) rank = "";
+			else if (!rawRank) rank = "";
 
 			// Check to see if they already have a rank in their name
 			let nick: string;

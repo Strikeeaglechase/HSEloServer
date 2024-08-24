@@ -160,6 +160,7 @@ class Stats extends SlashCommand {
 			const userAchievements = targetSeason.active ? user.achievements : endOfSeasonStats.achievements ?? [];
 			const achievements = userAchievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
 			const dbAchievements = await Promise.all(achievements.map(ach => app.achievementsDb.get(ach.id)));
+
 			const topAchievements = dbAchievements.sort((a, b) => {
 				if (a.firstAchievedBy == user.id) return -1;
 				const aCount = a.users.length;
@@ -171,6 +172,15 @@ class Stats extends SlashCommand {
 			topAchievements.forEach(dbAchievement => {
 				const achievement = achievements.find(a => a.id == dbAchievement.id);
 				const userAchievement = userAchievements.find(a => a.id == dbAchievement.id);
+				if (!achievement) {
+					console.log(`Achievement ${dbAchievement.id} was not found in the achievement list`);
+					console.log(`Achievement list: ${achievements.map(a => a?.id).join(", ")}`);
+				}
+
+				if (!userAchievement) {
+					console.log(`UserAchievement ${dbAchievement.id} was not found in the userAchievements list`);
+					console.log(`UserAchievements list: ${userAchievements.map(a => a?.id).join(", ")}`);
+				}
 
 				achievementLogText += `${achievement.name} x${userAchievement.count} \n`;
 				achievementLogText += `${achievement.description} \n`;

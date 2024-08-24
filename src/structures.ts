@@ -1,4 +1,5 @@
 import { AchievementId } from "./achievementDeclare.js";
+import { RandomEnv } from "./serverEnvProfile.js";
 
 export enum Aircraft {
 	AV42c,
@@ -262,20 +263,20 @@ export function parseTeamString(team: string): Team {
 	}
 }
 
-export function parseTimeOfDayString(time: string): TimeOfDay {
-	switch (time) {
-		case "Morning":
-			return TimeOfDay.Morning;
-		case "Day":
-			return TimeOfDay.Day;
-		case "Night":
-			return TimeOfDay.Night;
-		default: {
-			console.error(`Unknown time of day: ${time}`);
-			return TimeOfDay.Invalid;
-		}
-	}
-}
+// export function parseTimeOfDayString(time: string): TimeOfDay {
+// 	switch (time) {
+// 		case "Morning":
+// 			return TimeOfDay.Morning;
+// 		case "Day":
+// 			return TimeOfDay.Day;
+// 		case "Night":
+// 			return TimeOfDay.Night;
+// 		default: {
+// 			console.error(`Unknown time of day: ${time}`);
+// 			return TimeOfDay.Invalid;
+// 		}
+// 	}
+// }
 
 export interface KillOld {
 	killerId: string;
@@ -316,7 +317,7 @@ export interface UserAircraftInformation {
 
 export interface CurrentServerInformation {
 	onlineUsers: string[];
-	timeOfDay: TimeOfDay;
+	environment: RandomEnv;
 	missionId: string;
 }
 
@@ -459,6 +460,7 @@ export interface MissileLaunchParams {
 	team: Team;
 	launcher: UserAircraftInformation;
 	players: UserAircraftInformation[];
+	season: number;
 }
 
 export interface AchievementDBEntry {

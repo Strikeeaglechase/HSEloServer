@@ -11,7 +11,7 @@ import { Application, IAchievementManager } from "./application.js";
 import { Client } from "./client.js";
 import { hourlyReportPath } from "./elo/eloUpdater.js";
 import { createUserEloGraph } from "./graph/graph.js";
-import { getRandomEnv } from "./serverEnvProfile.js";
+import { getRandomEnv, RandomEnv } from "./serverEnvProfile.js";
 import {
 	Aircraft,
 	CurrentServerInformation,
@@ -21,7 +21,6 @@ import {
 	MissileLaunchParams,
 	parseAircraftString,
 	parseTeamString,
-	parseTimeOfDayString,
 	parseWeaponString,
 	Spawn,
 	Tracking,
@@ -66,7 +65,7 @@ interface APIUserAircraft {
 
 interface APIServerInfo {
 	onlineUsers: string[];
-	timeOfDay: string;
+	environment: RandomEnv;
 	missionId: string;
 }
 
@@ -98,7 +97,7 @@ function parseAPIUserAircraft(apiUA: APIUserAircraft): UserAircraftInformation {
 function parseAPIServerInfo(apiSI: APIServerInfo): CurrentServerInformation {
 	return {
 		onlineUsers: apiSI.onlineUsers,
-		timeOfDay: parseTimeOfDayString(apiSI.timeOfDay),
+		environment: apiSI.environment,
 		missionId: apiSI.missionId
 	};
 }
@@ -195,6 +194,16 @@ class API {
 		}
 
 		hsClient.send({ type: "kick_user", data: userId });
+	}
+
+	public sendUpdatedEnvRequest() {
+		const hsClient = this.clients.find(c => c.isAuthedHs);
+		if (!hsClient) {
+			this.log.warn(`Unable to find HS client to send weather update request`);
+			return;
+		}
+
+		hsClient.send({ type: "env_update", data: this.app.currentServerEnv });
 	}
 
 	private updateClients() {
@@ -357,7 +366,8 @@ class API {
 			type: parseWeaponString(paramReq.type),
 			team: parseTeamString(paramReq.team),
 			launcher: parseAPIUserAircraft(paramReq.launcher),
-			players: paramReq.players.map(p => parseAPIUserAircraft(p))
+			players: paramReq.players.map(p => parseAPIUserAircraft(p)),
+			season: this.app.elo.activeSeason.id
 		};
 
 		this.app.missileLaunchParams.add(mlParams);

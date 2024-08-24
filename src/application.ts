@@ -10,7 +10,7 @@ import { DummyAchievementManager, IAchievementManager } from "./achievementDecla
 import { API } from "./api.js";
 import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
-import { getRandomEnv, RandomEnv } from "./serverEnvProfile.js";
+import { getRandomEnv, RandomEnv, weatherNames } from "./serverEnvProfile.js";
 import {
 	AchievementDBEntry,
 	AchievementLogChannel,
@@ -32,6 +32,7 @@ import {
 const SERVER_MAX_PLAYERS = 16;
 const USERS_PER_PAGE = 30;
 const KILLS_TO_RANK = 10;
+const SERVER_TOD_RATE = 2;
 const achievementsEnabled = true;
 const enableRankDisplayIn = "1015729793733492756"; // Did I just hardcode a server ID? Yes, yes I did.
 
@@ -100,7 +101,7 @@ class Application {
 		await this.setupDbCollections();
 
 		this.log.info(`Loaded all collections`);
-		await this.loadAchievementManager();
+		this.loadAchievementManager();
 		this.log.info(`Loaded achievement manager`);
 		await this.api.init(this.achievementManager);
 		this.log.info(`Loaded API`);
@@ -145,6 +146,7 @@ class Application {
 		setInterval(() => this.updateScoreboards(), scoreboardUpdateRate);
 		setInterval(() => this.updateOnlineboards(), scoreboardUpdateRate);
 		setInterval(() => this.preformUserRankUpdate(), userRankUpdateRate);
+		setInterval(() => (this.currentServerEnv.tod += SERVER_TOD_RATE / 60), 1000 * 60);
 		if (process.env.IS_DEV != "true") {
 			setInterval(() => this.checkMemoryUsage(), 1000);
 			setInterval(() => this.runHourlyTasks(), eloMultiplierUpdateRate);
@@ -329,6 +331,19 @@ class Application {
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
 		resultStr += `\`\`\`ansi\n${this.table(table, 16).join("\n")}\n\`\`\`\n`;
 		resultStr += `\`\`\`Min: ${Math.round(min)} | Max: ${Math.round(max)} | Avg: ${Math.round(avg / onlineUsers.length)}\`\`\`\n`;
+
+		resultStr += `\`\`\`ansi\n[1;2m[1;37mATIS[0m[0m\n`;
+		const windKn = (this.currentServerEnv.wind.mag * 1.94384).toFixed(0);
+		const windHeading = this.currentServerEnv.wind.heading.toFixed(0).padStart(3, "0");
+		const gustKnRaw = (this.currentServerEnv.wind.gust + this.currentServerEnv.wind.mag) * 1.94384;
+		const gustKn = this.currentServerEnv.wind.gust > 1 ? `, gusting ${gustKnRaw.toFixed(0)}` : "";
+		const timeHrs = Math.floor(this.currentServerEnv.tod).toString().padStart(2, "0");
+		const timeMins = Math.floor((this.currentServerEnv.tod % 1) * 60)
+			.toString()
+			.padStart(2, "0");
+
+		resultStr += `TOD ${timeHrs}:${timeMins}\nWind ${windHeading} @ ${windKn}kts${gustKn}\nWeather ${weatherNames[this.currentServerEnv.weather]}`;
+		resultStr += `\n\`\`\``;
 
 		embed.setDescription(resultStr);
 		embed.setTimestamp();

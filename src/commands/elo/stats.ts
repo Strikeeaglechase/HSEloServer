@@ -156,8 +156,8 @@ class Stats extends SlashCommand {
 		]);
 
 		let achievementLogText = "";
-		if (achievementsEnabled) {
-			const userAchievements = activeSeason == targetSeason ? user.achievements : endOfSeasonStats?.achievements ?? [];
+		if (achievementsEnabled && (targetSeason.active || endOfSeasonStats)) {
+			const userAchievements = targetSeason.active ? user.achievements : endOfSeasonStats.achievements ?? [];
 			const achievements = userAchievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
 			const dbAchievements = await Promise.all(achievements.map(ach => app.achievementsDb.get(ach.id)));
 			const topAchievements = dbAchievements.sort((a, b) => {
@@ -170,7 +170,7 @@ class Stats extends SlashCommand {
 			achievementLogText += `\n\n\nAchievement log:\n`;
 			topAchievements.forEach(dbAchievement => {
 				const achievement = achievements.find(a => a.id == dbAchievement.id);
-				const userAchievement = user.achievements.find(a => a.id == dbAchievement.id);
+				const userAchievement = userAchievements.find(a => a.id == dbAchievement.id);
 
 				achievementLogText += `${achievement.name} x${userAchievement.count} \n`;
 				achievementLogText += `${achievement.description} \n`;

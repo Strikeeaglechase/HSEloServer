@@ -159,7 +159,12 @@ class Stats extends SlashCommand {
 		if (achievementsEnabled && (targetSeason.active || endOfSeasonStats)) {
 			const userAchievements = targetSeason.active ? user.achievements : endOfSeasonStats.achievements ?? [];
 			const achievements = userAchievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
-			const dbAchievements = await Promise.all(achievements.map(ach => app.achievementsDb.get(ach.id)));
+			const dbAchievements = await Promise.all(
+				achievements.map(ach => {
+					if (targetSeason.active) return app.achievementsDb.get(ach.id);
+					return targetSeason.endStats.achievementHistory.find(a => a.id == ach.id);
+				})
+			);
 
 			const topAchievements = dbAchievements.sort((a, b) => {
 				if (a.firstAchievedBy == user.id) return -1;

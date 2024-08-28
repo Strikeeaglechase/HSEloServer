@@ -13,6 +13,7 @@
 	"author": "",
 	"license": "ISC",
 	"dependencies": {
+		"@types/node": "^22.4.2",
 		"body-parser": "^1.20.0",
 		"cors": "^2.8.5",
 		"discord.js": "^14.14.1",
@@ -22,6 +23,7 @@
 		"google-auth-library": "^8.9.0",
 		"google-spreadsheet": "^4.0.3",
 		"jimp": "^0.22.7",
+		"JSONStream": "^1.3.5",
 		"mongodb": "^6.1.0",
 		"sharp": "^0.31.3",
 		"strike-discord-framework": "^1.5.9",

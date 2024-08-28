@@ -317,6 +317,7 @@ export interface UserAircraftInformation {
 
 export interface CurrentServerInformation {
 	onlineUsers: string[];
+	onlineUsersFull: UserAircraftInformation[];
 	environment: RandomEnv;
 	missionId: string;
 }

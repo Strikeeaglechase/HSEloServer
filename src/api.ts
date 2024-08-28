@@ -65,6 +65,7 @@ interface APIUserAircraft {
 
 interface APIServerInfo {
 	onlineUsers: string[];
+	onlineUsersFull: APIUserAircraft[];
 	environment: RandomEnv;
 	missionId: string;
 }
@@ -97,6 +98,7 @@ function parseAPIUserAircraft(apiUA: APIUserAircraft): UserAircraftInformation {
 function parseAPIServerInfo(apiSI: APIServerInfo): CurrentServerInformation {
 	return {
 		onlineUsers: apiSI.onlineUsers,
+		onlineUsersFull: apiSI.onlineUsersFull.map(parseAPIUserAircraft),
 		environment: apiSI.environment,
 		missionId: apiSI.missionId
 	};

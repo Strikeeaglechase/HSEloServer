@@ -39,9 +39,9 @@ export const teamKillPenalty = 0.0;
 // Maximum multiplier for an aircraft/weapon combo (limited by maxEloStealPrec)
 export const maxWeaponMultiplier = Infinity;
 // Controls how curved the graph is, leads to the other variables no longer perfectly linearly mapping to their name
-export const eloStealCurve = 0.69;
+export const eloStealCurve = 1; //0.69;
 // Scales the graph to correct for the curve
-export const eloStealScale = eloStealCurve * 10;
+export const eloStealScale = 1; //eloStealCurve * 10;
 
 // Aircraft specific bonuses/nerfs to correct for balance
 export const aircraftBonusMults: Record<Aircraft, { killMult: number; deathMult: number }> = {

@@ -56,6 +56,8 @@ function parseQuery(query: any, allowedQueries: string[]) {
 
 interface APIUserAircraft {
 	ownerId: string;
+	entOwnerId: string;
+	slot: number;
 	occupants: string[];
 	position: { x: number; y: number; z: number };
 	velocity: { x: number; y: number; z: number };
@@ -87,6 +89,8 @@ interface DaemonReport {
 function parseAPIUserAircraft(apiUA: APIUserAircraft): UserAircraftInformation {
 	return {
 		ownerId: apiUA.ownerId,
+		entOwnerId: apiUA.entOwnerId,
+		slot: apiUA.slot,
 		occupants: apiUA.occupants,
 		position: apiUA.position,
 		velocity: apiUA.velocity,

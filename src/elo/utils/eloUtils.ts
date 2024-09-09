@@ -98,13 +98,19 @@ async function createPullStream(db: Database, collectionName: string, fileName: 
 
 	const prom = new Promise(res => writeStream.on("finish", res));
 
+	let c = 0;
 	collection.collection
 		.find(filter)
 		.stream()
-		.on("data", data => writeStream.write(JSON.stringify(data) + "\n"))
+		.on("data", data => {
+			writeStream.write(JSON.stringify(data) + "\n");
+			c++;
+		})
 		.on("end", () => writeStream.end());
 
 	await prom;
+
+	return c;
 }
 
 async function pullOfflineLoad(filter: any) {
@@ -129,14 +135,34 @@ async function pullOfflineLoad(filter: any) {
 	console.log(`Wrote hourly report finished!`);
 }
 
+function loadFileStreamed<T>(path: string): Promise<T[]> {
+	const readStream = fs.createReadStream(path);
+	return new Promise(res => {
+		let remaining = "";
+		const result: T[] = [];
+
+		readStream.on("data", data => {
+			const parts = (remaining + data).split("\n");
+			remaining = parts.pop();
+
+			parts.forEach(part => result.push(JSON.parse(part)));
+		});
+
+		readStream.on("end", () => {
+			if (remaining.length > 0) result.push(JSON.parse(remaining));
+			res(result);
+		});
+	});
+}
+
 async function runComparison() {
 	const updater = new ComparisonUpdater();
 	await updater.runBackUpdate();
 	await updater.runCompare();
 }
 
-export { ProdDBBackUpdater, createPullStream };
+export { ProdDBBackUpdater, createPullStream, loadFileStreamed };
 
 // getInterestingMetrics();
-// runComparison();
-// pullOfflineLoad({}); //{ season: 3 }
+runComparison();
+// pullOfflineLoad({ season: 4 });

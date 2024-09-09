@@ -308,6 +308,8 @@ export function isKillOld(kill: any): kill is KillOld {
 
 export interface UserAircraftInformation {
 	ownerId: string;
+	entOwnerId: string;
+	slot: number;
 	occupants: string[];
 	position: { x: number; y: number; z: number };
 	velocity: { x: number; y: number; z: number };

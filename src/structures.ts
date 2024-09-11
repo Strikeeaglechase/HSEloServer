@@ -114,6 +114,9 @@ export interface OnlineRole {
 export interface User {
 	id: string;
 	pilotNames: string[];
+	altIds: string[];
+	isAlt : boolean;
+	altParentId: string;
 	loginTimes: number[];
 	logoutTimes: number[];
 	sessions: { startTime: number; endTime: number }[];

@@ -29,6 +29,7 @@ import {
 	User
 } from "./structures.js";
 
+const admins = ["272143648114606083", "500744458699276288"];
 const SERVER_MAX_PLAYERS = 16;
 const USERS_PER_PAGE = 30;
 const KILLS_TO_RANK = 10;
@@ -86,6 +87,7 @@ class Application {
 	private async loadAchievementManager() {
 		if (fs.existsSync("./achievementSystem/achievementManager.js") && achievementsEnabled) {
 			this.log.info(`Loading achievement manager`);
+			//@ts-ignore
 			const { AchievementManager } = await import("./achievementSystem/achievementManager.js");
 			this.achievementManager = new AchievementManager(this);
 			await this.achievementManager.init();
@@ -134,6 +136,10 @@ class Application {
 
 			if ("eloGainLossSummary" in user) {
 				await this.users.collection.updateOne({ id: user.id }, { $unset: { eloGainLossSummary: "" } });
+			}
+			if (!("altIds" in user)) {
+				// @ts-ignore
+				await this.users.collection.updateOne({ id: user.id }, { $set: { altIds: [] } });
 			}
 		});
 		await Promise.all(proms);
@@ -223,6 +229,9 @@ class Application {
 		const user: User = {
 			id: id,
 			pilotNames: [],
+			altIds: [],
+			isAlt: false,
+			altParentId: null,
 			loginTimes: [],
 			logoutTimes: [],
 			sessions: [],
@@ -644,4 +653,4 @@ class Application {
 	}
 }
 
-export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled };
+export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled,admins };

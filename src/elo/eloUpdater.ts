@@ -105,7 +105,7 @@ function shouldDeathBeCounted(death: Death, kill?: Kill) {
 }
 
 function userCanRank(user: User) {
-	return !user.isBanned && user.kills >= KILLS_TO_RANK;
+	return !user.isBanned && user.kills >= KILLS_TO_RANK && !user.isAlt;
 }
 
 class ELOUpdater {

@@ -1,7 +1,7 @@
 import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
-import { Application } from "../../application.js";
+import { admins, Application } from "../../application.js";
 
 class Wind extends SlashCommand {
 	name = "wind";
@@ -14,7 +14,7 @@ class Wind extends SlashCommand {
 		@SArg({}) variation: number,
 		@SArg({}) gust: number
 	) {
-		if (interaction.user.id != "272143648114606083") {
+		if (!admins.includes(interaction.user.id)) {
 			await interaction.reply(framework.error("No"));
 			return;
 		}

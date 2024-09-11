@@ -34,7 +34,7 @@ const SERVER_MAX_PLAYERS = 16;
 const USERS_PER_PAGE = 30;
 const KILLS_TO_RANK = 10;
 const SERVER_TOD_RATE = 2;
-const achievementsEnabled = false;
+const achievementsEnabled = true;
 const enableRankDisplayIn = "1015729793733492756"; // Did I just hardcode a server ID? Yes, yes I did.
 
 function strCmpNoWhitespace(a: string, b: string) {

@@ -82,8 +82,8 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 			`Biggest loss: ${biggestLoss.user.pilotNames[0]} (${biggestLoss.user.id}). ${biggestLoss.user.elo.toFixed(0)} ${biggestLoss.loss.toFixed(0)}`
 		);
 
-		const u = this.usersMap["76561198977269076"];
-		fs.writeFileSync("../../out-log.txt", u.history.join("\n"));
+		const u = this.usersMap["76561199775327193"];
+		fs.writeFileSync("../../../out-log.txt", u.history.join("\n"));
 	}
 }
 

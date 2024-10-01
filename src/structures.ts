@@ -115,7 +115,7 @@ export interface User {
 	id: string;
 	pilotNames: string[];
 	altIds: string[];
-	isAlt : boolean;
+	isAlt: boolean;
 	altParentId: string;
 	loginTimes: number[];
 	logoutTimes: number[];
@@ -318,6 +318,7 @@ export interface UserAircraftInformation {
 	velocity: { x: number; y: number; z: number };
 	team: Team;
 	type: Aircraft;
+	lastViffTime: number;
 }
 
 export interface CurrentServerInformation {

@@ -63,6 +63,7 @@ interface APIUserAircraft {
 	velocity: { x: number; y: number; z: number };
 	team: string;
 	type: string;
+	lastViffTime: number;
 }
 
 interface APIServerInfo {
@@ -95,7 +96,8 @@ function parseAPIUserAircraft(apiUA: APIUserAircraft): UserAircraftInformation {
 		position: apiUA.position,
 		velocity: apiUA.velocity,
 		team: parseTeamString(apiUA.team),
-		type: parseAircraftString(apiUA.type)
+		type: parseAircraftString(apiUA.type),
+		lastViffTime: apiUA.lastViffTime
 	};
 }
 

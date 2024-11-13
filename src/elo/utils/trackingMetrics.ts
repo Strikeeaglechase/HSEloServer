@@ -1,6 +1,8 @@
 import fs from "fs";
 import JSONStream from "JSONStream";
 
+import { Tracking } from "../../structures.js";
+
 function convertToJsonL(inputPath: string, outputPath: string) {
 	const inputFile = fs.createReadStream(inputPath, "utf8");
 	const outputFile = fs.createWriteStream(outputPath, "utf8");
@@ -58,7 +60,28 @@ function handleMissileData(dataStr: string) {
 	}
 }
 
-// convertToJsonL("../../../prodHourlyReport/vtol-server-elo.missiles.json", "../../../prodHourlyReport/missiles.json");
+// convertToJsonL("../../../prodHourlyReport/vtol-server-elo.tracking.json", "../../../prodHourlyReport/damage.json");
+// 76561199748259124 = Prius
+// 76561198008478379 = Rean
+async function runDamage() {
+	const targetTime = new Date("2024-10-03T13:01:07.039Z").getTime();
+	const damageAmounts: Record<string, number> = {};
+	await loadFileStreamed("../../../prodHourlyReport/damage.json", dataStr => {
+		if (!dataStr.includes("76561198008478379") || !dataStr.includes("76561199748259124")) return;
+
+		const event = JSON.parse(dataStr) as Tracking;
+		const [targetId, aId, damage, type, healthIndex, sourceId, wepEntId, wepUuid] = event.args;
+		if (targetId != "76561199748259124" || sourceId != "76561198008478379") return;
+
+		if (Math.abs(event.time - targetTime) < 1000) {
+			// console.log({ ts: event.time - targetTime, type, healthIndex, damage, wepUuid });
+			if (!damageAmounts[healthIndex]) damageAmounts[healthIndex] = 0;
+			damageAmounts[healthIndex] += +damage;
+		}
+	});
+
+	console.log(damageAmounts);
+}
 
 async function run() {
 	let start = Date.now();
@@ -69,4 +92,6 @@ async function run() {
 	console.log(`Count: ${totalCount}`);
 }
 
-run();
+// run();
+
+runDamage();

@@ -164,5 +164,5 @@ async function runComparison() {
 export { ProdDBBackUpdater, createPullStream, loadFileStreamed };
 
 // getInterestingMetrics();
-runComparison();
+// runComparison();
 // pullOfflineLoad({ season: 4 });

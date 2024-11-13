@@ -253,6 +253,7 @@ class Application {
 			eloHistory: [],
 			discordId: null,
 			isBanned: false,
+			isBahaBanned: false,
 			teamKills: 0,
 			eloFreeze: false,
 			achievements: [],
@@ -480,6 +481,29 @@ class Application {
 
 	public async runHourlyTasks() {
 		this.elo.runHourlyTasks();
+		this.updateMpBanList();
+	}
+
+	private async updateMpBanList() {
+		try {
+			const mpBanList = await fetch("https://vtolvr.bdynamicsstudio.com/mp_bans.txt");
+			const text = await mpBanList.text();
+			const lines = text.split("\n");
+			const bannedUserLines = lines.map(l => l.trim()).filter(l => l.length > 0);
+			const bannedUsers = bannedUserLines.map(l => {
+				const parts = l.split(";");
+				const [id, reason] = parts;
+
+				return { id, reason };
+			});
+
+			bannedUsers.forEach(async user => {
+				await this.users.collection.updateOne({ id: user.id }, { $set: { isBahaBanned: true, isBanned: true } });
+				console.log(`MP Banned user ${user.id} for reason: ${user.reason}`);
+			});
+		} catch (e) {
+			console.log(`Unable to fetch MP ban list: ${e}`);
+		}
 	}
 
 	public async updateOnlineRole() {
@@ -653,4 +677,4 @@ class Application {
 	}
 }
 
-export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled,admins };
+export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled, admins };

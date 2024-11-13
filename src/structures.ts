@@ -129,6 +129,7 @@ export interface User {
 	history: string[];
 	discordId: string;
 	isBanned: boolean;
+	isBahaBanned: boolean;
 	teamKills: number;
 	ignoreKillsAgainstUsers: string[];
 	eloFreeze: boolean;
@@ -464,6 +465,7 @@ export interface Tracking {
 export interface MissileLaunchParams {
 	uuid: string;
 	type: Weapon;
+	time: number;
 	team: Team;
 	launcher: UserAircraftInformation;
 	players: UserAircraftInformation[];

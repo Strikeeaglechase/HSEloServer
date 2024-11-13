@@ -375,7 +375,8 @@ class API {
 			team: parseTeamString(paramReq.team),
 			launcher: parseAPIUserAircraft(paramReq.launcher),
 			players: paramReq.players.map(p => parseAPIUserAircraft(p)),
-			season: this.app.elo.activeSeason.id
+			season: this.app.elo.activeSeason.id,
+			time: Date.now()
 		};
 
 		this.app.missileLaunchParams.add(mlParams);

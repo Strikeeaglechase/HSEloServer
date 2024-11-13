@@ -183,7 +183,7 @@ class Application {
 		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
 		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
 	}
-
+	
 	private async checkMemoryUsage() {
 		const memUsage = process.memoryUsage();
 		const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
@@ -264,6 +264,27 @@ class Application {
 		return user;
 	}
 
+	private async getUserMainAircraft(user){
+		const mainAircraftIndex = Object.entries(user.spawns).sort((a, b) => b[1] - a[1])[0][0];
+		const mainAircraft = Aircraft[parseInt(mainAircraftIndex)];
+		return mainAircraft;
+	};
+	
+	private async getUserMainWeapon(user){
+		const activeSeason = await app.getActiveSeason();
+		let kills = await app.kills.collection.find({ "killer.ownerId": user.id, "season": activeSeason.id }).toArray();
+		kills = kills.filter(k => shouldKillBeCounted(k));
+
+		const usedWeapons: Record<Weapon, number> = {} as Record<Weapon, number>;
+		kills.forEach(k => {
+			usedWeapons[k.weapon] = (usedWeapons[k.weapon] ?? 0) + 1;
+		});
+
+		const mainWeaponIndex = Object.entries(usedWeapons).sort((a, b) => b[1] - a[1])[0][0];
+		const mainWeapon = Weapon[parseInt(mainWeaponIndex)];
+		return mainWeapon;
+	}
+	
 	private async createScoreboardMessage() {
 		const embed = new Discord.EmbedBuilder({ title: "Scoreboard" });
 		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
@@ -275,7 +296,7 @@ class Application {
 		// [1;2m[1;37mOnline player[0m[0m
 		// Offline player
 		// ```
-		const table: (string | number)[][] = [["#", "Name", "ELO", "F/A-26b", "F-45A", "Kills", "Deaths", "KDR"]];
+		const table: (string | number)[][] = [["#", "Name", "ELO", "Aircraft", "Weapon", "Kills", "Deaths", "KDR"]];
 		const prefixes: string[] = [];
 		const suffixes: string[] = [];
 		filteredUsers.forEach((user, idx) => {
@@ -288,8 +309,8 @@ class Application {
 				idx + 1,
 				user.pilotNames[0],
 				Math.round(user.elo),
-				user.spawns[Aircraft.FA26b],
-				user.spawns[Aircraft.F45A],
+				getUserMainAircraft(user),
+				getUserMainWeapon(user),
 				user.kills,
 				user.deaths,
 				(user.kills / user.deaths).toFixed(2)

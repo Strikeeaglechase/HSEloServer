@@ -264,13 +264,13 @@ class Application {
 		return user;
 	}
 
-	private async getUserMainAircraft(user){
-		const mainAircraftIndex = Object.entries(user.spawns).sort((a, b) => b[1] - a[1])[0][0];
-		const mainAircraft = Aircraft[parseInt(mainAircraftIndex)];
+	private async getUserMainAircraft(user: User){
+		const mainAircraftIndex: number = parseInt(Object.entries(user.spawns).sort((a, b) => b[1] - a[1])[0][0]);
+		const mainAircraft: string = Aircraft[mainAircraftIndex];
 		return mainAircraft;
 	};
 	
-	private async getUserMainWeapon(user){
+	private async getUserMainWeapon(user: User){
 		const activeSeason = await app.getActiveSeason();
 		let kills = await app.kills.collection.find({ "killer.ownerId": user.id, "season": activeSeason.id }).toArray();
 		kills = kills.filter(k => shouldKillBeCounted(k));
@@ -280,8 +280,8 @@ class Application {
 			usedWeapons[k.weapon] = (usedWeapons[k.weapon] ?? 0) + 1;
 		});
 
-		const mainWeaponIndex = Object.entries(usedWeapons).sort((a, b) => b[1] - a[1])[0][0];
-		const mainWeapon = Weapon[parseInt(mainWeaponIndex)];
+		const mainWeaponIndex: number = parseInt(Object.entries(usedWeapons).sort((a, b) => b[1] - a[1])[0][0]);
+		const mainWeapon: string = Weapon[mainWeaponIndex];
 		return mainWeapon;
 	}
 	

@@ -165,4 +165,4 @@ export { ProdDBBackUpdater, createPullStream, loadFileStreamed };
 
 // getInterestingMetrics();
 // runComparison();
-// pullOfflineLoad({ season: 4 });
+// pullOfflineLoad({ season: 3 });

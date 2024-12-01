@@ -6,7 +6,6 @@ banlist.txt
 *ourlyReport
 testCache
 *-creds.json
-achievementSystem
 *.csv
 *.zip
 rankedUsers.txt

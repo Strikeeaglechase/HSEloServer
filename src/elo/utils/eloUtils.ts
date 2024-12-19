@@ -29,7 +29,9 @@ class ProdDBBackUpdater extends EloBackUpdater {
 	protected async loadFromHourlyReport() {
 		console.log(`Loading from hourly report...`);
 		this.kills = await this.loadFileStreamed<Kill>(`${this.reportPath}/kills.json`);
+		this.kills.forEach(kill => delete kill.serverInfo);
 		this.deaths = await this.loadFileStreamed<Death>(`${this.reportPath}/deaths.json`);
+		this.deaths.forEach(death => delete death.serverInfo);
 
 		console.log(`Loaded ${this.kills.length} kills and ${this.deaths.length} deaths.`);
 	}
@@ -164,5 +166,11 @@ async function runComparison() {
 export { ProdDBBackUpdater, createPullStream, loadFileStreamed };
 
 // getInterestingMetrics();
-// runComparison();
-// pullOfflineLoad({ season: 3 });
+runComparison();
+// pullOfflineLoad({ season: 4 });
+
+setInterval(() => {
+	const memUsage = process.memoryUsage();
+	const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
+	console.log(`Memory usage: ${usageGb.toFixed(2)}GB`);
+}, 5000);

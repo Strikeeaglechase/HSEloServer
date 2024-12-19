@@ -117,7 +117,9 @@ class EloBackUpdater {
 	protected async loadFromHourlyReport() {
 		console.log(`Loading from hourly report...`);
 		this.kills = await this.loadFileStreamed<Kill>("../hourlyReport/kills.json");
+		this.kills.forEach(kill => delete kill.serverInfo);
 		this.deaths = await this.loadFileStreamed<Death>("../hourlyReport/deaths.json");
+		this.deaths.forEach(death => delete death.serverInfo);
 
 		console.log(`Loaded ${this.kills.length} kills and ${this.deaths.length} deaths.`);
 	}
@@ -154,18 +156,20 @@ class EloBackUpdater {
 		console.log(`Calculated ${this.killMultipliers.length} kill multipliers`);
 	}
 
-	protected backupUsers(users: User[]) {
-		if (!fs.existsSync(userBackupPath)) fs.mkdirSync(userBackupPath);
-		const ts = new Date().toISOString().replace(/:/g, "-");
-		fs.writeFileSync(`${userBackupPath}${ts}.json`, JSON.stringify(users));
-	}
+	// protected backupUsers(users: User[]) {
+	// 	if (!fs.existsSync(userBackupPath)) fs.mkdirSync(userBackupPath);
+	// 	const ts = new Date().toISOString().replace(/:/g, "-");
+	// 	fs.writeFileSync(`${userBackupPath}${ts}.json`, JSON.stringify(users));
+	// }
 
 	protected async loadUsers() {
 		const usersMap: Record<string, User> = {};
 		let users: User[] = [];
 
 		if (!fullyOffline) {
-			users = await this.userDb.collection.find({ $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] }).toArray();
+			users = await this.userDb.collection
+				.find({ $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] }, { projection: { eloHistory: 0, history: 0 } })
+				.toArray();
 		} else {
 			users = await this.loadFileStreamed<User>("../hourlyReport/users.json");
 		}

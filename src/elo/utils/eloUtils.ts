@@ -10,15 +10,27 @@ config({ path: "../../.env" });
 const hourlyReportPath = "../../../prodHourlyReport";
 
 class ProdDBBackUpdater extends EloBackUpdater {
-	protected reportPath: string = hourlyReportPath;
+	// protected reportPath: string = hourlyReportPath;
+	public outLog: string = "";
+
+	protected log(str: string) {
+		this.outLog += str + "\n";
+		console.log(str);
+	}
+
+	constructor() {
+		super();
+		this.reportPath = hourlyReportPath;
+	}
 
 	public override async loadDb() {
+		console.log(`Connecting to prod db`);
 		this.db = new Database(
 			{
 				databaseName: "vtol-server-elo",
 				url: process.env.PROD_DB_URL
 			},
-			console.log
+			this.log.bind(this)
 		);
 
 		await this.db.init();
@@ -27,13 +39,13 @@ class ProdDBBackUpdater extends EloBackUpdater {
 	}
 
 	protected async loadFromHourlyReport() {
-		console.log(`Loading from hourly report...`);
+		this.log(`Loading from hourly report...`);
 		this.kills = await this.loadFileStreamed<Kill>(`${this.reportPath}/kills.json`);
 		this.kills.forEach(kill => delete kill.serverInfo);
 		this.deaths = await this.loadFileStreamed<Death>(`${this.reportPath}/deaths.json`);
 		this.deaths.forEach(death => delete death.serverInfo);
 
-		console.log(`Loaded ${this.kills.length} kills and ${this.deaths.length} deaths.`);
+		this.log(`Loaded ${this.kills.length} kills and ${this.deaths.length} deaths.`);
 	}
 }
 
@@ -42,7 +54,7 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 		// Compare the locally computed elo to the current elo in the database
 		const currentDbUsers = await this.userDb.collection.find({ $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] }).toArray();
 		currentDbUsers.sort((a, b) => b.elo - a.elo);
-		console.log(`Loaded ${currentDbUsers.length} users from the database.`);
+		this.log(`Loaded ${currentDbUsers.length} users from the database.`);
 		const results: { user: User; oldElo: number; newElo: number }[] = [];
 
 		let biggestGain: { user: User; gain: number } = { user: null, gain: 0 };
@@ -51,12 +63,12 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 		currentDbUsers.forEach(user => {
 			const localUser = this.usersMap[user.id];
 			if (!localUser) {
-				console.log(`User ${user.pilotNames[0]} (${user.id}) not found in local data.`);
+				this.log(`User ${user.pilotNames[0]} (${user.id}) not found in local data.`);
 				return;
 			}
 
 			if (Math.abs(localUser.elo - user.elo) > 25) {
-				console.log(`${user.pilotNames[0]} (${user.id}). ${user.elo.toFixed(0)} -> ${localUser.elo.toFixed(0)}`);
+				this.log(`${user.pilotNames[0]} (${user.id}). ${user.elo.toFixed(0)} -> ${localUser.elo.toFixed(0)}`);
 			}
 
 			const eloDelta = localUser.elo - user.elo;
@@ -77,12 +89,8 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 			console.log(`${orgRank + 1} -> ${i + 1}) ${results[i].user.pilotNames[0]} (${results[i].user.id}). ${oldElo} -> ${newElo}`);
 		}
 
-		console.log(
-			`Biggest gain: ${biggestGain.user.pilotNames[0]} (${biggestGain.user.id}). ${biggestGain.user.elo.toFixed(0)} +${biggestGain.gain.toFixed(0)}`
-		);
-		console.log(
-			`Biggest loss: ${biggestLoss.user.pilotNames[0]} (${biggestLoss.user.id}). ${biggestLoss.user.elo.toFixed(0)} ${biggestLoss.loss.toFixed(0)}`
-		);
+		this.log(`Biggest gain: ${biggestGain.user.pilotNames[0]} (${biggestGain.user.id}). ${biggestGain.user.elo.toFixed(0)} +${biggestGain.gain.toFixed(0)}`);
+		this.log(`Biggest loss: ${biggestLoss.user.pilotNames[0]} (${biggestLoss.user.id}). ${biggestLoss.user.elo.toFixed(0)} ${biggestLoss.loss.toFixed(0)}`);
 
 		const u = this.usersMap["76561199775327193"];
 		fs.writeFileSync("../../../out-log.txt", u.history.join("\n"));
@@ -93,7 +101,7 @@ async function createPullStream(db: Database, collectionName: string, fileName: 
 	const resultPath = `${hourlyReportPath}/${fileName}.json`;
 	if (fs.existsSync(resultPath)) fs.rmSync(resultPath);
 
-	console.log(`Pulling ${collectionName} to ${path.resolve(resultPath)}`);
+	this.log(`Pulling ${collectionName} to ${path.resolve(resultPath)}`);
 
 	const collection = await db.collection(collectionName, false, "id");
 	const writeStream = fs.createWriteStream(resultPath);
@@ -159,8 +167,11 @@ function loadFileStreamed<T>(path: string): Promise<T[]> {
 
 async function runComparison() {
 	const updater = new ComparisonUpdater();
-	await updater.runBackUpdate();
+	// await updater.runBackUpdate();
+	await updater.runStreamedBackUpdate();
 	await updater.runCompare();
+
+	fs.writeFileSync("../../../comp-log.txt", updater.outLog);
 }
 
 export { ProdDBBackUpdater, createPullStream, loadFileStreamed };

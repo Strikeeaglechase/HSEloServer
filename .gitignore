@@ -9,6 +9,7 @@ testCache
 *.csv
 *.zip
 rankedUsers.txt
+comp-log.txt
 
 # Logs
 logs

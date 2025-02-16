@@ -249,6 +249,26 @@ class ELOUpdater {
 		this.log.info(`Wrote hourly report finished!`);
 	}
 
+	public static getUserLogForKill(
+		timestamp: string,
+		killer: User,
+		victim: User,
+		metric: KillMetric,
+		kill: Kill,
+		eloSteal: number,
+		multStr: string,
+		extraInfo: string = ""
+	) {
+		const wpnStr = `${Aircraft[kill.killer.type]}->${Weapon[kill.weapon]}->${Aircraft[kill.victim.type]}`;
+		return {
+			killer: `[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${wpnStr} (${metric?.multiplier.toFixed(
+				1
+			)}) ${extraInfo} Elo gained: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)}`,
+			victim: `[${timestamp}] Death to ${killer.pilotNames[0]} (${Math.round(killer.elo)}) with ${wpnStr} (${metric?.multiplier.toFixed(
+				1
+			)}) ${extraInfo} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)}`
+		};
+	}
 	public static updateUserLogForKill(
 		timestamp: string,
 		killer: User,
@@ -259,8 +279,6 @@ class ELOUpdater {
 		multStr: string,
 		extraInfo: string = ""
 	) {
-		// const killerAc = Aircraft[kill.killer.type];
-		// const victimAc = Aircraft[kill.victim.type];
 		const wpnStr = `${Aircraft[kill.killer.type]}->${Weapon[kill.weapon]}->${Aircraft[kill.victim.type]}`;
 		killer.history.push(
 			`[${timestamp}] Kill ${victim.pilotNames[0]} (${Math.round(victim.elo)}) with ${wpnStr} (${metric?.multiplier.toFixed(
@@ -274,25 +292,49 @@ class ELOUpdater {
 		);
 	}
 
+	public static getUserLogForDeath(timestamp: string, victim: User, eloSteal: number) {
+		return `[${timestamp}] Death (unknown) Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)}`;
+	}
 	public static updateUserLogForDeath(timestamp: string, victim: User, eloSteal: number) {
-		victim.history.push(`[${timestamp}] Death (unknown) Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(victim.elo)}`);
+		victim.history.push(this.getUserLogForDeath(timestamp, victim, eloSteal));
 	}
 
+	public static getUserLogForTK(timestamp: string, killer: User, victim: User, eloSteal: number) {
+		return {
+			killer: `[${timestamp}] Teamkill ${victim.pilotNames[0]} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)}`,
+			victim: `[${timestamp}] Death to teamkill from ${killer.pilotNames[0]} no elo lost`
+		};
+	}
 	public static updateUserLogForTK(timestamp: string, killer: User, victim: User, eloSteal: number) {
-		killer.history.push(`[${timestamp}] Teamkill ${victim.pilotNames[0]} Elo lost: ${Math.round(eloSteal)}. New Elo: ${Math.round(killer.elo)}`);
-		victim.history.push(`[${timestamp}] Death to teamkill from ${killer.pilotNames[0]} no elo lost`);
+		const hist = this.getUserLogForTK(timestamp, killer, victim, eloSteal);
+		killer.history.push(hist.killer);
+		victim.history.push(hist.victim);
 	}
 
+	public static getUserLogForT55(timestamp: string, killer: User, victim: User, eloSteal: number) {
+		return {
+			killer: `[${timestamp}] Kill ${victim.pilotNames[0]} with T-55 (no elo gained)`,
+			victim: `[${timestamp}] Death from ${killer.pilotNames[0]} with T-55 lost ${eloSteal} elo`
+		};
+	}
 	public static updateUserLogForT55(timestamp: string, killer: User, victim: User, eloSteal: number) {
-		killer.history.push(`[${timestamp}] Kill ${victim.pilotNames[0]} with T-55 (no elo gained)`);
-		victim.history.push(`[${timestamp}] Death from ${killer.pilotNames[0]} with T-55 lost ${eloSteal} elo`);
+		const hist = this.getUserLogForT55(timestamp, killer, victim, eloSteal);
+		killer.history.push(hist.killer);
+		victim.history.push(hist.victim);
 	}
 
+	public static getUserLogForCollision(timestamp: string, killer: User, victim: User) {
+		return {
+			killer: `[${timestamp}] Collision with ${victim.pilotNames[0]}`,
+			victim: `[${timestamp}] Collision with ${killer.pilotNames[0]}`
+		};
+	}
 	public static updateUserLogForCollision(timestamp: string, killer: User, victim: User) {
 		// We assume the collision kill with be emitted for both users, to only log once check higher userId
 		if (killer.id < victim.id) return;
-		killer.history.push(`[${timestamp}] Collision with ${victim.pilotNames[0]}`);
-		victim.history.push(`[${timestamp}] Collision with ${killer.pilotNames[0]}`);
+		const hist = this.getUserLogForCollision(timestamp, killer, victim);
+		killer.history.push(hist.killer);
+		victim.history.push(hist.victim);
 	}
 
 	public async updateELOForKill(kill: Kill) {

@@ -124,6 +124,7 @@ export interface User {
 	deaths: number;
 	spawns: Record<Aircraft, number>;
 	elo: number;
+	maxElo: number;
 	eloHistory: { time: number; elo: number }[];
 	rank: number;
 	history: string[];
@@ -168,6 +169,7 @@ export function userToLimitedUser(user: User): LimitedUserData {
 		kills: user.kills,
 		deaths: user.deaths,
 		elo: user.elo,
+		maxElo: user.elo,
 		rank: user.rank,
 		discordId: user.discordId,
 		isBanned: user.isBanned,

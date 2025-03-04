@@ -53,7 +53,7 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 	public async runCompare() {
 		// Compare the locally computed elo to the current elo in the database
 		const currentDbUsers = await this.userDb.collection.find({ $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] }).toArray();
-		currentDbUsers.sort((a, b) => b.elo - a.elo);
+		currentDbUsers.sort(rankedUserSort);
 		this.log(`Loaded ${currentDbUsers.length} users from the database.`);
 		const results: { user: User; oldElo: number; newElo: number }[] = [];
 

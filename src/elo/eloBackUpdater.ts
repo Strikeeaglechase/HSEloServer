@@ -235,6 +235,7 @@ class EloBackUpdater {
 		users.forEach(u => {
 			this.oldUsers[u.id] = JSON.parse(JSON.stringify(u));
 			u.elo = BASE_ELO;
+			u.maxElo = BASE_ELO;
 			u.kills = 0;
 			u.deaths = 0;
 			u.eloHistory = [];
@@ -396,6 +397,7 @@ class EloBackUpdater {
 			const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1, this.season.id);
 
 			killer.elo += eloSteal;
+			killer.maxElo = Math.max(killer.elo, killer.maxElo);
 			victim.elo -= eloSteal;
 			victim.elo = Math.max(victim.elo, 1);
 			killer.kills++;
@@ -465,6 +467,7 @@ class EloBackUpdater {
 				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1, this.season.id);
 
 				killer.elo += eloSteal;
+				killer.maxElo = Math.max(killer.elo, killer.maxElo);
 				victim.elo -= eloSteal;
 				victim.elo = Math.max(victim.elo, 1);
 				killer.kills++;
@@ -536,7 +539,7 @@ class EloBackUpdater {
 
 	public async storeResults() {
 		console.log(`Beginning store results`);
-		const rankedUsers = this.users.filter(u => userCanRank(u)).sort((a, b) => b.elo - a.elo);
+		const rankedUsers = this.users.filter(u => userCanRank(u)).sort(rankedUserSort);
 		this.seasons.collection.updateOne({ id: this.season.id }, { $set: { totalRankedUsers: rankedUsers.length } });
 		console.log(`Updated total ranked users to ${rankedUsers.length}`);
 
@@ -559,6 +562,7 @@ class EloBackUpdater {
 						update: {
 							$set: {
 								elo: user.elo,
+								maxElo: user.maxElo,
 								kills: user.kills,
 								deaths: user.deaths,
 								eloHistory: user.eloHistory,
@@ -608,7 +612,7 @@ class EloBackUpdater {
 		const targetPlayerId = "76561198151068299";
 
 		const topPlayers = this.users
-			.sort((a, b) => b.elo - a.elo)
+			.sort(rankedUserSort)
 			.filter(u => userCanRank(u))
 			.slice(0, 20);
 

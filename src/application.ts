@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { DummyAchievementManager, IAchievementManager } from "./achievementDeclare.js";
 import { API } from "./api.js";
-import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
+import { BASE_ELO, ELOUpdater, userCanRank, rankedUserSort } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import { getRandomEnv, RandomEnv, weatherNames } from "./serverEnvProfile.js";
 import {
@@ -268,14 +268,14 @@ class Application {
 		const embed = new Discord.EmbedBuilder({ title: "Scoreboard" });
 		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
 		let filteredUsers = await this.users.collection.find({ rank: { $lte: USERS_PER_PAGE, $gt: 0 } }).toArray();
-		filteredUsers = filteredUsers.sort((a, b) => b.elo - a.elo);
+		filteredUsers = filteredUsers.sort(rankedUserSort);
 		// ```ansi;
 		// Offline player
 		// Offline player
 		// [1;2m[1;37mOnline player[0m[0m
 		// Offline player
 		// ```
-		const table: (string | number)[][] = [["#", "Name", "ELO", "F/A-26b", "F-45A", "Kills", "Deaths", "KDR"]];
+		const table: (string | number)[][] = [["#", "Name", "Max Elo", "Current Elo", "F/A-26b", "F-45A", "T-55", "EF-24G", "Kills", "Deaths", "KDR"]];
 		const prefixes: string[] = [];
 		const suffixes: string[] = [];
 		filteredUsers.forEach((user, idx) => {
@@ -287,9 +287,12 @@ class Application {
 			table.push([
 				idx + 1,
 				user.pilotNames[0],
+				Math.round(user.maxElo),
 				Math.round(user.elo),
 				user.spawns[Aircraft.FA26b],
 				user.spawns[Aircraft.F45A],
+				user.spawns[Aircraft.T55],
+				user.spawns[Aircraft.EF24G],
 				user.kills,
 				user.deaths,
 				(user.kills / user.deaths).toFixed(2)
@@ -411,7 +414,7 @@ class Application {
 		this.log.info(`Found ${users.length} users that have the kills to rank`);
 		const usersThatCanRank = users.filter(u => userCanRank(u));
 		this.log.info(`Of those, ${usersThatCanRank.length} can rank`);
-		usersThatCanRank.sort((a, b) => b.elo - a.elo);
+		usersThatCanRank.sort(rankedUserSort);
 
 		const proms = usersThatCanRank.map(async (user, idx) => {
 			const newUserRank = idx + 1;

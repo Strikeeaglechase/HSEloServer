@@ -15,7 +15,9 @@ import {
 	shouldDeathBeCounted,
 	shouldKillBeCounted,
 	teamKillPenalty,
-	userCanRank
+	userCanRank,
+	rankedUserSort,
+	hourlyReportPath
 } from "./eloUpdater.js";
 
 config();
@@ -59,7 +61,7 @@ interface EloActionEvent {
 type EloEvent = EloKillEvent | EloDeathEvent | EloActionEvent;
 
 class EloBackUpdater {
-	protected reportPath: string = "../hourlyReport";
+	protected reportPath: string = hourlyReportPath;
 	protected db: Database;
 	protected userDb: CollectionManager<User>;
 	protected seasons: CollectionManager<Season>;

@@ -11,7 +11,7 @@ class TopEloOverTimeUpdater extends ProdDBBackUpdater {
 	private currentDay: string;
 
 	private topPlayers: User[] = [];
-	public log: string[] = [];
+	public topLog: string[] = [];
 
 	protected override onUserUpdate(user: User, event: EloEvent, eloDelta: number): void {
 		if (event.type != "kill") return;
@@ -23,7 +23,7 @@ class TopEloOverTimeUpdater extends ProdDBBackUpdater {
 			this.topPlayers.forEach(u => {
 				logStr += `,${u.elo}`;
 			});
-			this.log.push(logStr);
+			this.topLog.push(logStr);
 		}
 
 		const day = this.day(event.time);
@@ -65,7 +65,7 @@ async function run() {
 
 	fs.writeFileSync("../../../out.csv", result);
 	fs.writeFileSync("../../../out-avg.csv", resultAvg);
-	fs.writeFileSync("../../../out-big.csv", updater.log.join("\n"));
+	fs.writeFileSync("../../../out-big.csv", updater.topLog.join("\n"));
 }
 
 run();

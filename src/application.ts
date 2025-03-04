@@ -250,6 +250,7 @@ class Application {
 				[Aircraft.EF24G]: 0
 			},
 			elo: BASE_ELO,
+			maxElo: BASE_ELO,
 			eloHistory: [],
 			discordId: null,
 			isBanned: false,

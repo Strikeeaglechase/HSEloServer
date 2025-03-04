@@ -156,6 +156,7 @@ export interface LimitedUserData {
 	kills: number;
 	deaths: number;
 	elo: number;
+	maxElo: number;
 	rank?: number;
 	discordId: string;
 	isBanned: boolean;

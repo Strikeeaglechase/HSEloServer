@@ -704,7 +704,8 @@ class Application {
 		const allTks = kills.filter(k => k.killer.team === k.victim.team);
 
 		let tkLog = "";
-		for (let i = 0; i < Math.min(allTks.length, MAX_SHOWN_TKs); i++) {
+		const killsInLog = kills.slice(Math.max(kills.length - MAX_SHOWN_TKs, 0));
+		for (let i = 0; i < killsInLog.length; i++) {
 			const tk = allTks[i];
 			const victim = await this.users.get(tk.victim.ownerId);
 
@@ -877,7 +878,7 @@ class Application {
 	}
 
 	private async handleUnbanButton(interaction: Discord.ButtonInteraction) {
-		if (!admins.includes(interaction.user.id)) return interaction.reply(this.framework.error("No", true));
+		if (!admins.includes(interaction.user.id)) return interaction.reply(this.framework.error("Only an admin can unban users", true));
 
 		const request = await this.unbanRequests.collection.findOne({ threadId: interaction.channel.id });
 		if (!request) {

@@ -16,6 +16,7 @@ class Mod extends SlashCommand {
 			return;
 		}
 
+		interaction.deferReply();
 		const embed = await app.createModerationEmbed(userEntry);
 
 		if (admins.includes(interaction.user.id) && userEntry.isBanned) {
@@ -23,7 +24,7 @@ class Mod extends SlashCommand {
 				new ButtonBuilder().setCustomId("unban").setLabel("Unban").setStyle(Discord.ButtonStyle.Success)
 			);
 
-			const message = await interaction.reply({ embeds: [embed], components: [row] });
+			const message = await interaction.editReply({ embeds: [embed], components: [row] });
 
 			const collector = message.createMessageComponentCollector({ componentType: ComponentType.Button, time: 5 * 60 * 1000 });
 			collector.on("collect", async i => {
@@ -46,7 +47,7 @@ class Mod extends SlashCommand {
 				await message.edit({ embeds: [embed], components: [] });
 			});
 		} else {
-			await interaction.reply({ embeds: [embed] });
+			await interaction.editReply({ embeds: [embed] });
 		}
 	}
 }

@@ -111,6 +111,15 @@ export interface OnlineRole {
 	id: string;
 }
 
+export interface UnbanRequest {
+	id: string;
+	userId: string;
+	threadId: string;
+	hasReceivedUserId: boolean;
+	createdAt: number;
+	closed: boolean;
+}
+
 export interface User {
 	id: string;
 	pilotNames: string[];

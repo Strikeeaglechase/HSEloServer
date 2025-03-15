@@ -26,7 +26,7 @@ const frameworkOptions: FrameworkClientOptions = {
 		logToFile: true
 	},
 	clientOptions: {
-		intents: f.Guilds | f.GuildMembers | f.GuildModeration | f.MessageContent | f.DirectMessages,
+		intents: f.Guilds | f.GuildMembers | f.GuildModeration | f.MessageContent | f.DirectMessages | f.GuildMessages,
 		partials: [Partials.Channel, Partials.GuildMember, Partials.Message]
 	},
 	defaultPrefix: ",",

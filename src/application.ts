@@ -1,4 +1,4 @@
-import Discord from "discord.js";
+import Discord, { ActionRowBuilder, ButtonBuilder, EmbedBuilder, Message, MessageActionRowComponentBuilder, ThreadAutoArchiveDuration } from "discord.js";
 import fs from "fs";
 import { memoryUsage } from "node:process";
 import FrameworkClient from "strike-discord-framework";
@@ -26,7 +26,9 @@ import {
 	Season,
 	Spawn,
 	Tracking,
-	User
+	UnbanRequest,
+	User,
+	Weapon
 } from "./structures.js";
 
 const admins = ["272143648114606083", "500744458699276288"];
@@ -36,6 +38,8 @@ const KILLS_TO_RANK = 10;
 const SERVER_TOD_RATE = 2;
 const achievementsEnabled = true;
 const enableRankDisplayIn = "1015729793733492756"; // Did I just hardcode a server ID? Yes, yes I did.
+const devUnbanReqChannel = "1350513509284446228";
+const prodUnbanReqChannel = "1350531719245336637";
 
 function strCmpNoWhitespace(a: string, b: string) {
 	return a.replace(/\s/g, "") == b.replace(/\s/g, "");
@@ -62,6 +66,7 @@ class Application {
 	public seasons: CollectionManager<Season>;
 	public tracking: CollectionManager<Tracking>;
 	public endOfSeasonStats: CollectionManager<EndOfSeasonStats>;
+	public unbanRequests: CollectionManager<UnbanRequest>;
 
 	public achievementManager: IAchievementManager = new DummyAchievementManager();
 	public achievementsDb: CollectionManager<AchievementDBEntry>;
@@ -103,7 +108,7 @@ class Application {
 		await this.setupDbCollections();
 
 		this.log.info(`Loaded all collections`);
-		this.loadAchievementManager();
+		if (process.env.IS_DEV != "true") this.loadAchievementManager();
 		this.log.info(`Loaded achievement manager`);
 		await this.api.init(this.achievementManager);
 		this.log.info(`Loaded API`);
@@ -145,6 +150,17 @@ class Application {
 		await Promise.all(proms);
 		this.log.info(`Updated all users with new spawns object`);
 
+		this.framework.client.on("messageCreate", msg => {
+			if (msg.author.bot) return;
+			const unbanReqChannel = process.env.IS_DEV == "true" ? devUnbanReqChannel : prodUnbanReqChannel;
+			if (msg.channel.isThread() && msg.channel.parentId == unbanReqChannel) this.handleUnbanRequestChannelMessage(msg);
+			else if (msg.channel.id == unbanReqChannel) this.handleUnbanRequestChannelMessage(msg);
+		});
+		this.framework.client.on("interactionCreate", async interaction => {
+			if (!interaction.isButton()) return;
+			if (interaction.customId == "unban-channel") this.handleUnbanButton(interaction);
+		});
+
 		const scoreboardUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60; // 10 seconds in dev, 1 minute in prod
 		const eloMultiplierUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 60; // 10 seconds in dev, 1 hour in prod
 		const userRankUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60 * 15; // 10 seconds in dev, 15 minutes in prod
@@ -182,6 +198,7 @@ class Application {
 		this.endOfSeasonStats = await this.framework.database.collection("end-of-season-stats", false, "id");
 		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
 		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
+		this.unbanRequests = await this.framework.database.collection("unban-requests", false, "id");
 	}
 
 	private async checkMemoryUsage() {
@@ -436,7 +453,7 @@ class Application {
 		const deltaFromLast = Date.now() - this.updatingRanksAt;
 		if (deltaFromLast < 1000 * 60 * 5) {
 			// 5 minutes
-			this.log.error(`UpdateUserRankDisplay called with short delta: ${deltaFromLast}ms`);
+			// this.log.error(`UpdateUserRankDisplay called with short delta: ${deltaFromLast}ms`);
 			return;
 		}
 		this.updatingRanksAt = Date.now();
@@ -460,7 +477,11 @@ class Application {
 
 			// Check to see if they already have a rank in their name
 			let nick: string;
-			const displayNameParts = member.displayName.split(".").map(p => p.trim());
+			if (!member.user) {
+				this.log.warn(`Member ${member.id} has no user`);
+				return;
+			}
+			const displayNameParts = (member.displayName ?? member.user.username).split(".").map(p => p.trim());
 			if (member.displayName != member.user.username && !isNaN(parseInt(displayNameParts[0]))) {
 				const name = displayNameParts.slice(1).join(".");
 				nick = `${rank}${name}`.substring(0, 32);
@@ -485,6 +506,7 @@ class Application {
 	}
 
 	private async updateMpBanList() {
+		this.log.info(`Updating MP ban list`);
 		try {
 			const mpBanList = await fetch("https://vtolvr.bdynamicsstudio.com/mp_bans.txt");
 			const text = await mpBanList.text();
@@ -499,10 +521,10 @@ class Application {
 
 			bannedUsers.forEach(async user => {
 				await this.users.collection.updateOne({ id: user.id }, { $set: { isBahaBanned: true, isBanned: true } });
-				console.log(`MP Banned user ${user.id} for reason: ${user.reason}`);
+				this.log.info(`MP Banned user ${user.id} for reason: ${user.reason}`);
 			});
 		} catch (e) {
-			console.log(`Unable to fetch MP ban list: ${e}`);
+			this.log.error(`Unable to fetch MP ban list: ${e}`);
 		}
 	}
 
@@ -674,6 +696,217 @@ class Application {
 	public async deleteOnlineRole(onlinerole: OnlineRole) {
 		this.log.info(`Deleting onlinerole ${onlinerole.id}`);
 		await this.onlineRoles.remove(onlinerole.id);
+	}
+
+	public async createModerationEmbed(userEntry: User) {
+		const MAX_SHOWN_TKs = 10;
+		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id }).toArray();
+		const allTks = kills.filter(k => k.killer.team === k.victim.team);
+
+		let tkLog = "";
+		for (let i = 0; i < Math.min(allTks.length, MAX_SHOWN_TKs); i++) {
+			const tk = allTks[i];
+			const victim = await this.users.get(tk.victim.ownerId);
+
+			const time = new Date(tk.time).toISOString().split(".")[0];
+			if (tk.weapon == Weapon.Gun) {
+				const victimSpeed = Math.sqrt(tk.victim.velocity.x ** 2 + tk.victim.velocity.y ** 2 + tk.victim.velocity.z ** 2);
+				const victimSpeedKnots = (victimSpeed * 1.94384).toFixed(0);
+				const victimAltFt = (tk.victim.position.y * 3.28084).toFixed(0);
+				tkLog += `[${time}] ${victim.pilotNames[0] ?? victim.id} ${Weapon[tk.weapon]} ${victimSpeedKnots}kts ${victimAltFt}ft\n`;
+			} else {
+				tkLog += `[${time}] ${victim.pilotNames[0] ?? victim.id} ${Weapon[tk.weapon]}\n`;
+			}
+		}
+
+		const season = await this.getActiveSeason();
+		const killsThisSeason = kills.filter(k => k.season == season.id);
+		const tksThisSeason = allTks.filter(k => k.season == season.id);
+
+		const names = [...new Set(userEntry.pilotNames)];
+
+		const embed = new EmbedBuilder();
+		embed.setTitle(`Moderation info for ${userEntry.pilotNames[0] ?? userEntry.id}`);
+		const fields: { name: string; value: string; inline?: boolean }[] = [
+			{
+				name: "Names",
+				value: names.join("\n") || "Unknown",
+				inline: true
+			},
+			{
+				name: "Kills",
+				value: `Season: ${killsThisSeason.length}\nTotal: ${kills.length}`,
+				inline: true
+			},
+			{
+				name: "TKs",
+				value: `Season: ${tksThisSeason.length}\nTotal: ${allTks.length}\nDB: ${userEntry.teamKills}`,
+				inline: true
+			}
+		];
+
+		if (userEntry.isAlt) {
+			const parent = await this.users.get(userEntry.altParentId);
+			fields.push({ name: "Alt of", value: `${parent.pilotNames[0]} (${parent.id})`, inline: true });
+		}
+
+		if (userEntry.altIds.length > 0) {
+			const alts = await Promise.all(
+				userEntry.altIds.map(async id => {
+					return await this.users.get(id);
+				})
+			);
+			fields.push({ name: "Alts", value: alts.map(a => `${a.pilotNames[0]} (${a.id})`).join("\n"), inline: true });
+		}
+
+		if (userEntry.discordId) {
+			fields.push({ name: "Discord", value: `<@${userEntry.discordId}>`, inline: true });
+		}
+
+		embed.addFields(fields);
+
+		embed.setDescription(`\`\`\`\n${tkLog}\n\`\`\``);
+		embed.setFooter({ text: `${userEntry.id} | Is banned: ${!!userEntry.isBanned}` });
+
+		return embed;
+	}
+
+	private tryExtractSteamId(content: string) {
+		const match = content.match(/(?:\D(\d{17})\D)|(?:^(\d{17})\D)|(?:\D(\d{17})$)|(?:^(\d{17})$)/);
+		if (!match) return null;
+		return match[1] ?? match[2] ?? match[3] ?? match[4];
+	}
+
+	private async handleUnbanRequestChannelMessage(message: Message) {
+		if (message.channel.isThread()) {
+			const request = await this.unbanRequests.collection.findOne({ threadId: message.channel.id });
+			if (!request) return;
+			if (request.hasReceivedUserId) return;
+
+			const userId = this.tryExtractSteamId(message.content);
+			if (!userId) return;
+
+			const user = await this.users.get(userId);
+			if (!user) {
+				message.reply(
+					`This message appears to contain the SteamID \`${userId}\`, however that user has never connected to the server. Please make sure to provide your own SteamID64`
+				);
+				return;
+			}
+
+			if (!user.isBanned) {
+				message.reply(
+					`This message appears to contain the SteamID \`${userId}\`, however that user is not banned. Please make sure to provide your own SteamID64`
+				);
+				return;
+			}
+
+			await this.unbanRequests.collection.updateOne({ threadId: message.channel.id }, { $set: { hasReceivedUserId: true, userId: user.id } });
+			const name = user.pilotNames[0] ?? user.id;
+			message.channel.setName(`Unban Request - ${name}`);
+
+			const embed = await this.createModerationEmbed(user);
+			const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+				new ButtonBuilder().setCustomId("unban-channel").setLabel("Unban").setStyle(Discord.ButtonStyle.Success)
+			);
+
+			message.channel.send({ content: `Received SteamID \`${userId}\``, embeds: [embed], components: [row] });
+		} else {
+			if (!message.channel.isTextBased() || !(message.channel instanceof Discord.TextChannel)) return;
+
+			const userId = this.tryExtractSteamId(message.content);
+			const user = userId ? await this.users.get(userId) : null;
+			if (user && !user.isBanned) {
+				await message.author
+					.send(
+						this.framework.error(
+							`The unban request you created for ${user.pilotNames[0]} (${user.id}) has been automatically closed as they are not banned`
+						)
+					)
+					.catch(() => {});
+				await message.delete().catch(() => {});
+				return;
+			}
+			const name = user ? user.pilotNames[0] ?? user.id : "Unknown";
+
+			const thread = await message.channel.threads.create({
+				name: `Unban Request - ${name}`,
+				autoArchiveDuration: ThreadAutoArchiveDuration.ThreeDays,
+				reason: "Unban request thread",
+				startMessage: message
+			});
+
+			const request: UnbanRequest = {
+				createdAt: Date.now(),
+				hasReceivedUserId: false,
+				closed: false,
+				userId: userId,
+				threadId: thread.id,
+				id: uuidv4()
+			};
+			await this.unbanRequests.add(request);
+
+			if (!userId) {
+				const embed = new EmbedBuilder();
+				embed.setTitle("Unban Request");
+				embed.setDescription(
+					`You did not provide a SteamID64 in your message, please send it here. If you are unsure how to find it this website may help: https://steamid.io/, additionally a link to your steam profile will work if you do not have a vanity URL. \n\If you didn't already please provide an explanation as to why you are banned/what happened/other context that may be important`
+				);
+				thread.send({ embeds: [embed] });
+			} else if (!user) {
+				const embed = new EmbedBuilder();
+				embed.setTitle("Unban Request");
+				embed.setDescription(
+					`The SteamID64 ${userId} was provided, however that user has never connected to the server, please provide your own SteamID64. If you are unsure how to find it this website may help: https://steamid.io/, additionally a link to your steam profile will work if you do not have a vanity URL. \n\If you didn't already please provide an explanation as to why you are banned/what happened/other context that may be important`
+				);
+				thread.send({ embeds: [embed] });
+			} else {
+				const embed = new EmbedBuilder();
+				embed.setTitle("Unban Request");
+				embed.setDescription(
+					`If you didn't already please provide an explanation as to why you are banned/what happened/other context that may be important`
+				);
+
+				const modEmbed = await this.createModerationEmbed(user);
+				const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
+					new ButtonBuilder().setCustomId("unban-channel").setLabel("Unban").setStyle(Discord.ButtonStyle.Success)
+				);
+				thread.send({ embeds: [embed, modEmbed], components: [row] });
+			}
+		}
+	}
+
+	private async handleUnbanButton(interaction: Discord.ButtonInteraction) {
+		if (!admins.includes(interaction.user.id)) return interaction.reply(this.framework.error("No", true));
+
+		const request = await this.unbanRequests.collection.findOne({ threadId: interaction.channel.id });
+		if (!request) {
+			return interaction.reply(this.framework.error("The unban request for that interaction could not be found", true));
+		}
+
+		const thread = interaction.channel;
+		if (!thread.isThread() || thread.id != request.threadId) {
+			return interaction.reply(this.framework.error("The interaction origin channel does not match the request thread id", true));
+		}
+
+		const user = await this.users.collection.findOne({ id: request.userId });
+		if (!user) {
+			return interaction.reply(this.framework.error("The user for the unban request could not be found", true));
+		}
+
+		await this.users.collection.updateOne({ id: user.id }, { $set: { isBanned: false, teamKills: 0 } });
+		await this.unbanRequests.collection.updateOne({ threadId: interaction.channel.id }, { $set: { closed: true } });
+		await interaction.channel.send(this.framework.success(`User ${user.pilotNames[0]} (${user.id}) has been unbanned`));
+		await interaction.reply(this.framework.success(`Unbanned`, true));
+
+		const builder = new EmbedBuilder(interaction.message.embeds[interaction.message.embeds.length - 1]);
+		builder.setFooter({ text: `${user.id} | Is banned: ${false}` });
+		builder.setColor("Green");
+		const allEmbeds = interaction.message.embeds.length > 1 ? [interaction.message.embeds[0], builder] : [builder];
+		await interaction.message.edit({ embeds: allEmbeds, components: [] });
+
+		await thread.setLocked(true);
+		await thread.setArchived(true);
 	}
 }
 

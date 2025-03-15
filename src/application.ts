@@ -701,11 +701,11 @@ class Application {
 	public async createModerationEmbed(userEntry: User) {
 		const MAX_SHOWN_TKs = 10;
 		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id }).toArray();
+		kills.sort((a, b) => b.time - a.time);
 		const allTks = kills.filter(k => k.killer.team === k.victim.team);
 
 		let tkLog = "";
-		const killsInLog = kills.slice(Math.max(kills.length - MAX_SHOWN_TKs, 0));
-		for (let i = 0; i < killsInLog.length; i++) {
+		for (let i = 0; i < Math.min(kills.length, MAX_SHOWN_TKs); i++) {
 			const tk = allTks[i];
 			const victim = await this.users.get(tk.victim.ownerId);
 

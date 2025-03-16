@@ -705,8 +705,11 @@ class Application {
 		const allTks = kills.filter(k => k.killer.team === k.victim.team);
 
 		let tkLog = "";
-		for (let i = 0; i < Math.min(kills.length, MAX_SHOWN_TKs); i++) {
+		for (let i = 0; i < Math.min(allTks.length, MAX_SHOWN_TKs); i++) {
 			const tk = allTks[i];
+			if (!tk) {
+				this.log.warn(`Null TK for mod embed of ${userEntry.id}`);
+			}
 			const victim = await this.users.get(tk.victim.ownerId);
 
 			const time = new Date(tk.time).toISOString().split(".")[0];

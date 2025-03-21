@@ -214,6 +214,16 @@ class API {
 		hsClient.send({ type: "env_update", data: this.app.currentServerEnv });
 	}
 
+	public sendCommandRequest(targetId: string, command: string, args: string[]) {
+		const hsClient = this.clients.find(c => c.isAuthedHs);
+		if (!hsClient) {
+			this.log.warn(`Unable to find HS client to send command request`);
+			return;
+		}
+
+		hsClient.send({ type: "action", data: { targetId, command, arguments: args } });
+	}
+
 	private updateClients() {
 		this.clients = this.clients.filter(c => c.alive);
 	}

@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { DummyAchievementManager, IAchievementManager } from "./achievementDeclare.js";
 import { API } from "./api.js";
-import { BASE_ELO, ELOUpdater, userCanRank } from "./elo/eloUpdater.js";
+import { BASE_ELO, ELOUpdater, shouldKillBeCounted, userCanRank } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import { getRandomEnv, RandomEnv, weatherNames } from "./serverEnvProfile.js";
 import {
@@ -702,7 +702,10 @@ class Application {
 		const MAX_SHOWN_TKs = 10;
 		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id }).toArray();
 		kills.sort((a, b) => b.time - a.time);
-		const allTks = kills.filter(k => k.killer.team === k.victim.team);
+		const realKills = kills.filter(k => k.killer.team != k.victim.team && shouldKillBeCounted(k) && k.weapon != Weapon.Collision && k.weapon != Weapon.CFIT);
+		const killsWithoutCollisions = kills.filter(k => k.weapon != Weapon.Collision);
+		const collisionTks = kills.filter(k => k.weapon == Weapon.Collision && k.killer.team === k.victim.team);
+		const allTks = killsWithoutCollisions.filter(k => k.killer.team === k.victim.team);
 
 		let tkLog = "";
 		for (let i = 0; i < Math.min(allTks.length, MAX_SHOWN_TKs); i++) {
@@ -724,7 +727,7 @@ class Application {
 		}
 
 		const season = await this.getActiveSeason();
-		const killsThisSeason = kills.filter(k => k.season == season.id);
+		const killsThisSeason = realKills.filter(k => k.season == season.id);
 		const tksThisSeason = allTks.filter(k => k.season == season.id);
 
 		const names = [...new Set(userEntry.pilotNames)];
@@ -739,12 +742,12 @@ class Application {
 			},
 			{
 				name: "Kills",
-				value: `Season: ${killsThisSeason.length}\nTotal: ${kills.length}`,
+				value: `Season: ${killsThisSeason.length}\nRKT: ${realKills.length}\nTotal: ${kills.length}`,
 				inline: true
 			},
 			{
 				name: "TKs",
-				value: `Season: ${tksThisSeason.length}\nTotal: ${allTks.length}\nDB: ${userEntry.teamKills}`,
+				value: `Season: ${tksThisSeason.length}\nTotal: ${allTks.length}\nDB: ${userEntry.teamKills}\nCollision: ${collisionTks.length}`,
 				inline: true
 			}
 		];

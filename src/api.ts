@@ -141,6 +141,7 @@ class API {
 		this.server.use(cors());
 
 		this.registerRoute("GET", "users", this.getUserStats, false);
+		this.registerRoute("GET", "relevantUsers", this.getRelevantUserStats, false);
 		this.registerRoute("GET", "users/:id", this.getUser, false);
 		this.registerRoute("GET", "users_did/:id", this.getUserByDiscordId, false);
 		this.registerRoute("GET", "kills", this.getKills, false);
@@ -231,6 +232,29 @@ class API {
 	private async getUserStats(req: express.Request, res: express.Response) {
 		const users = await this.app.users.get();
 		res.send(users.map(u => userToLimitedUser(u)));
+	}
+
+	private async getRelevantUserStats(req: express.Request, res: express.Response) {
+		const users = await this.app.users.collection
+			.find(
+				{ elo: { $ne: 2000 } },
+				{
+					projection: {
+						id: 1,
+						pilotNames: 1,
+						kills: 1,
+						deaths: 1,
+						elo: 1,
+						rank: 1,
+						discordId: 1,
+						isBanned: 1,
+						teamKills: 1
+					}
+				}
+			)
+			.toArray();
+
+		res.send(users);
 	}
 
 	private async getUser(req: express.Request, res: express.Response) {

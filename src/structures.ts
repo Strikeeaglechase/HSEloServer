@@ -67,7 +67,7 @@ export const weaponCategoryMap: Record<Weapon, WeaponCategory> = {
 	[Weapon.CFIT]: WeaponCategory.Invalid,
 	[Weapon.DCCFIT]: WeaponCategory.Invalid,
 	[Weapon.Collision]: WeaponCategory.Invalid,
-	[Weapon.AIM54]: WeaponCategory.LowTechRadar,
+	[Weapon.AIM54]: WeaponCategory.HighTechRadar,
 	[Weapon.MALD]: WeaponCategory.Invalid
 };
 

@@ -92,7 +92,7 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 		this.log(`Biggest gain: ${biggestGain.user.pilotNames[0]} (${biggestGain.user.id}). ${biggestGain.user.elo.toFixed(0)} +${biggestGain.gain.toFixed(0)}`);
 		this.log(`Biggest loss: ${biggestLoss.user.pilotNames[0]} (${biggestLoss.user.id}). ${biggestLoss.user.elo.toFixed(0)} ${biggestLoss.loss.toFixed(0)}`);
 
-		const u = this.usersMap["76561199775327193"];
+		const u = this.usersMap["76561198050265265"];
 		fs.writeFileSync("../../../out-log.txt", u.history.join("\n"));
 	}
 }
@@ -101,7 +101,7 @@ async function createPullStream(db: Database, collectionName: string, fileName: 
 	const resultPath = `${hourlyReportPath}/${fileName}.json`;
 	if (fs.existsSync(resultPath)) fs.rmSync(resultPath);
 
-	this.log(`Pulling ${collectionName} to ${path.resolve(resultPath)}`);
+	console.log(`Pulling ${collectionName} to ${path.resolve(resultPath)}`);
 
 	const collection = await db.collection(collectionName, false, "id");
 	const writeStream = fs.createWriteStream(resultPath);

@@ -226,7 +226,8 @@ class EloBackUpdater {
 		if (!fullyOffline) {
 			users = await this.userDb.collection
 				.find(
-					{ $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] },
+					// { $or: [{ deaths: { $gt: 0 } }, { elo: { $ne: 2000 } }] },
+					{},
 					{ projection: { eloHistory: 0, history: 0, endOfSeasonStats: 0, loginTimes: 0, logoutTimes: 0 } }
 				)
 				.toArray();
@@ -328,11 +329,17 @@ class EloBackUpdater {
 		await this.loadUsers();
 		await this.loadKillsAndDeaths();
 		this.loadEvents();
+		this.calculateEloMultipliers();
 	}
 
 	protected async collapseHistory() {
 		this.users.forEach(u => {
 			const history: string[] = [];
+			if (this.userHistory[u.id] == undefined) {
+				console.log(`No history for ${u.pilotNames[0]} (${u.id})`);
+				return;
+			}
+
 			const keys = Object.keys(this.userHistory[u.id]);
 			keys.forEach(k => history.push(this.userHistory[u.id][k]));
 			delete this.userHistory[u.id];
@@ -372,8 +379,8 @@ class EloBackUpdater {
 				const loss = killer.elo * teamKillPenalty;
 				killer.elo -= loss;
 				const tkLog = ELOUpdater.getUserLogForTK(timestamp, killer, victim, loss);
-				this.userHistory[killer.id][kill.time] = tkLog.victim;
-				this.userHistory[victim.id][kill.time] = tkLog.killer;
+				this.userHistory[killer.id][kill.time] = tkLog.killer;
+				this.userHistory[victim.id][kill.time] = tkLog.victim;
 				killer.eloHistory.push({ elo: killer.elo, time: kill.time });
 				return;
 			}

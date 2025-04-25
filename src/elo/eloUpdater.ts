@@ -42,6 +42,8 @@ export const maxWeaponMultiplier = Infinity;
 export const eloStealCurve = 1; //0.69;
 // Scales the graph to correct for the curve
 export const eloStealScale = 1; //eloStealCurve * 10;
+// Rank based on max elo
+export const maxEloRanking = true;
 
 // Aircraft specific bonuses/nerfs to correct for balance
 export const aircraftBonusMults: Record<Aircraft, { killMult: number; deathMult: number }> = {
@@ -106,6 +108,13 @@ function shouldDeathBeCounted(death: Death, kill?: Kill) {
 
 function userCanRank(user: User) {
 	return !user.isBanned && user.kills >= KILLS_TO_RANK && !user.isAlt;
+}
+
+function rankedUserSort(a: User, b: User) {
+	if (maxEloRanking) {
+		return b.maxElo - a.maxElo;
+	}
+	return b.elo - a.elo;
 }
 
 class ELOUpdater {
@@ -518,4 +527,4 @@ class ELOUpdater {
 	}
 }
 
-export { ELOUpdater, BASE_ELO, shouldKillBeCounted, shouldDeathBeCounted, userCanRank, getKillStr, KillString, KillMetric, hourlyReportPath };
+export { ELOUpdater, BASE_ELO, shouldKillBeCounted, shouldDeathBeCounted, userCanRank, rankedUserSort, getKillStr, KillString, KillMetric, hourlyReportPath };

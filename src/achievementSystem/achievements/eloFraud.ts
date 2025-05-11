@@ -1,4 +1,3 @@
-import { getKillStr } from "../../elo/eloUpdater.js";
 import { Kill } from "../../structures.js";
 import { Achievement, AchievementId } from "../achievement.js";
 
@@ -11,11 +10,12 @@ class ELOFraudAchievement extends Achievement {
 				// const finalWeaponKillStr: KillString = `${Aircraft[kill.killer.type]}->${Weapon[kill.weapon]}->${Aircraft[kill.victim.type]}`;
 				// const firstWeaponKillStr: KillString = `${Aircraft[kill.killer.type]}->${Weapon[kill.previousDamagedByWeapon]}->${Aircraft[kill.victim.type]}`;
 
-				const finalWeaponKillStr = getKillStr(kill);
-				const firstWeaponKillStr = getKillStr(kill, kill.previousDamagedByWeapon);
+				// const finalWeaponKillStr = getKillStr(kill);
+				// const firstWeaponKillStr = getKillStr(kill, kill.previousDamagedByWeapon);
 
-				const finalWeaponMult = this.manager.app.elo.getMultiplier(finalWeaponKillStr);
-				const firstWeaponMult = this.manager.app.elo.getMultiplier(firstWeaponKillStr);
+				const finalWeaponMult = this.manager.app.elo.getMultiplier(kill);
+				const prevWeaponHypotheticalKill = { ...kill, weapon: kill.previousDamagedByWeapon };
+				const firstWeaponMult = this.manager.app.elo.getMultiplier(prevWeaponHypotheticalKill);
 
 				// console.log({
 				// 	finalWeaponKillStr,

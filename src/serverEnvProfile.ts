@@ -32,7 +32,7 @@ export const serverEnvProfile: EnvProfile = {
 		1, 1, 1, 1, 1, 3, 8, 5, 4, 3, 3, 3, 3, 3, 4, 8, 5, 3, 1, 1, 1, 1, 1, 1
 	],
 	weatherWeights: [
-		150, // Clear
+		250, // Clear
 		250, // Few
 		250, // Scattered,
 		350, // Broken
@@ -42,14 +42,16 @@ export const serverEnvProfile: EnvProfile = {
 		100 // Storm
 	],
 	windProfiles: [
+		// Completely calm
+		{ magMin: 0, magMax: 0, weight: 50, gustMin: 0, gustMax: 0, variMin: 0, variMax: 0 },
 		// Average random wind
 		{ magMin: 0, magMax: 25, weight: 100, gustMin: 0, gustMax: 5, variMin: 0, variMax: 10 },
 		// Calm with gusts
 		{ magMin: 0, magMax: 5, weight: 50, gustMin: 5, gustMax: 10, variMin: 0, variMax: 0 },
 		// Constantly changing direction
-		{ magMin: 0, magMax: 5, weight: 50, gustMin: 0, gustMax: 3, variMin: 10, variMax: 20 },
+		{ magMin: 0, magMax: 5, weight: 50, gustMin: 0, gustMax: 3, variMin: 10, variMax: 20 }
 		// Hurricane :)
-		{ magMin: 35, magMax: 125, weight: 5, gustMin: 15, gustMax: 45, variMin: 0, variMax: 50 }
+		// { magMin: 35, magMax: 125, weight: 5, gustMin: 15, gustMax: 45, variMin: 0, variMax: 50 }
 	]
 };
 
@@ -63,7 +65,7 @@ function logProfileWeights() {
 	serverEnvProfile.windProfiles.forEach((w, i) => console.log(`Wind ${i + 1}: ${((w.weight / windSum) * 100).toFixed(2)}%`));
 }
 
-logProfileWeights();
+// logProfileWeights();
 
 function getRandomTod() {
 	const sum = serverEnvProfile.todWeights.reduce((a, b) => a + b, 0);

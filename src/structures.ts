@@ -120,6 +120,12 @@ export interface UnbanRequest {
 	closed: boolean;
 }
 
+export interface UserServerOptions {
+	spawncampWarnRadius: number;
+	killSoundEffect: number;
+	pilotSuitCustomData: string;
+}
+
 export interface User {
 	id: string;
 	pilotNames: string[];
@@ -145,6 +151,7 @@ export interface User {
 	achievements: { id: AchievementId; count: number; firstAchieved: number }[];
 	canBeFirstWithAchievement: boolean;
 	voiceMuted: boolean;
+	options: Partial<UserServerOptions>;
 }
 
 export interface EndOfSeasonStats {
@@ -329,6 +336,8 @@ export interface UserAircraftInformation {
 	team: Team;
 	type: Aircraft;
 	lastViffTime: number;
+	alive: boolean;
+	aoa: number;
 }
 
 export interface CurrentServerInformation {
@@ -354,7 +363,7 @@ export interface Kill {
 }
 
 export const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
-	[Aircraft.AV42c]: [],
+	[Aircraft.AV42c]: [Weapon.Gun, Weapon.AIM9, Weapon.AIM9E, Weapon.AIRST, Weapon.CFIT],
 	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
 	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.HARM, Weapon.CFIT],
 	[Aircraft.AH94]: [],

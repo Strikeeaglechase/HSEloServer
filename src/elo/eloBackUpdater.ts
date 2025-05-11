@@ -4,17 +4,21 @@ import fs from "fs";
 import { CollectionManager } from "../db/collectionManager.js";
 import Database from "../db/database.js";
 import { createUserEloGraph } from "../graph/graph.js";
-import { Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
+import { Aircraft, Death, isKillValid, Kill, Season, User, Weapon } from "../structures.js";
 import {
 	BASE_ELO,
 	ELOUpdater,
+	excludeTopNPlayersFromMults,
+	getKillMultiplier,
 	getKillStr,
 	KillMetric,
 	KillString,
 	maxWeaponMultiplier,
+	MultiplierMap,
 	shouldDeathBeCounted,
 	shouldKillBeCounted,
 	teamKillPenalty,
+	useNewMultiplierSystem,
 	userCanRank
 } from "./eloUpdater.js";
 
@@ -34,7 +38,7 @@ interface UserResult {
 	user: User;
 	log: string;
 }
-type IPCMessage = { users: UserResult[]; type: "users" } | { type: "mults"; mults: KillMetric[] };
+type IPCMessage = { users: UserResult[]; type: "users" } | { type: "mults"; mults: KillMetric[] } | { type: "new_mults"; mults: MultiplierMap };
 
 // type UserLogsObj = Record<string, string>;
 type Action = { action: "Login" | "Logout"; userId: string };
@@ -70,6 +74,7 @@ class EloBackUpdater {
 	protected deaths: Death[] = [];
 
 	protected killMultipliers: KillMetric[] = [];
+	protected aircraftKillMultipliers: MultiplierMap;
 
 	protected users: User[] = [];
 	protected oldUsers: Record<string, User> = {};
@@ -144,6 +149,111 @@ class EloBackUpdater {
 		this.deaths.forEach(death => delete death.serverInfo);
 
 		console.log(`Loaded ${this.kills.length} kills and ${this.deaths.length} deaths.`);
+	}
+
+	async calculateNewMultipliersStreamed(killerExcludeList: string[]) {
+		const killCounts: MultiplierMap = {} as any;
+
+		const aircraft = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
+
+		aircraft.forEach(ac => {
+			killCounts[ac] = {
+				totalKillSeen: 0,
+				totalKills: 0,
+				mult: 0,
+				weaponsUsed: {} as any,
+				aircraftKilled: {} as any,
+				aircraftSeenWhenKill: {} as any,
+
+				weaponMultipliers: {} as any,
+				aircraftMultipliers: {} as any
+			};
+		});
+
+		let totalCountedKills = 0;
+		let totalCountedAircraft = 0;
+
+		await this.streamFile<Kill>(`${this.reportPath}/kills.json`, kill => {
+			if (!shouldKillContributeToMultipliers(kill)) return;
+			if (!kill.serverInfo.onlineUsersFull) return;
+			if (killerExcludeList.includes(kill.killer.ownerId)) return;
+
+			const acBucket = killCounts[kill.killer.type];
+			acBucket.totalKills++;
+			acBucket.aircraftKilled[kill.victim.type] = (acBucket.aircraftKilled[kill.victim.type] || 0) + 1;
+			acBucket.weaponsUsed[kill.weapon] = (acBucket.weaponsUsed[kill.weapon] || 0) + 1;
+
+			kill.serverInfo.onlineUsersFull.forEach(user => {
+				if (user.type == Aircraft.Invalid) return;
+				if (user.ownerId != user.entOwnerId) return; // Avoid double counting multicrew aircraft
+
+				killCounts[user.type].totalKillSeen++;
+				acBucket.aircraftSeenWhenKill[user.type] = (acBucket.aircraftSeenWhenKill[user.type] || 0) + 1;
+
+				totalCountedAircraft++;
+			});
+
+			totalCountedKills++;
+		});
+
+		aircraft.forEach(ac => {
+			const metrics = killCounts[ac];
+			const killPrec = metrics.totalKills / totalCountedKills;
+			const aroundPrec = metrics.totalKillSeen / totalCountedAircraft;
+
+			const mult = aroundPrec / killPrec;
+			metrics.mult = mult;
+
+			// console.log(
+			// 	`Aircraft ${Aircraft[ac]} has ${(killPrec * 100).toFixed(2)}% kills, compared to being present for ${(aroundPrec * 100).toFixed(
+			// 		2
+			// 	)}% of kills. Aircraft multiplier: ${mult.toFixed(2)}x`
+			// );
+
+			let totalSeenDuringKills = 0;
+			aircraft.forEach(a => (totalSeenDuringKills += metrics.aircraftSeenWhenKill[a]));
+
+			aircraft.forEach(a => {
+				const seenDuringKill = metrics.aircraftSeenWhenKill[a] / totalSeenDuringKills;
+				const killPrec = metrics.aircraftKilled[a] / metrics.totalKills;
+				const mult = seenDuringKill / killPrec;
+
+				// console.log(
+				// 	` - Aircraft killed ${Aircraft[a]} ${(killPrec * 100).toFixed(2)}% of the time, compared to being present for ${(seenDuringKill * 100).toFixed(
+				// 		2
+				// 	)}% of the time. Aircraft  multiplier: ${mult.toFixed(2)}x`
+				// );
+
+				metrics.aircraftMultipliers[a] = {
+					mult,
+					seenPrec: seenDuringKill,
+					killedPrec: killPrec,
+					count: metrics.aircraftKilled[a]
+				};
+			});
+
+			let totalWeaponTypesUsed = 0;
+			for (const w in metrics.weaponsUsed) totalWeaponTypesUsed++;
+
+			const expectPrec = 1 / totalWeaponTypesUsed;
+			const normalizerMetricPrec = metrics.weaponsUsed[Weapon.AIM120] ? metrics.weaponsUsed[Weapon.AIM120] / metrics.totalKills : expectPrec;
+			const normalizer = 1 / (expectPrec / normalizerMetricPrec);
+
+			for (const w in metrics.weaponsUsed) {
+				const weapon = +w as Weapon;
+
+				const prec = metrics.weaponsUsed[weapon] / metrics.totalKills;
+				const mult = (expectPrec / prec) * normalizer;
+
+				metrics.weaponMultipliers[weapon] = {
+					mult,
+					prec,
+					count: metrics.weaponsUsed[weapon]
+				};
+			}
+		});
+
+		this.aircraftKillMultipliers = killCounts;
 	}
 
 	protected calculateEloMultipliers() {
@@ -326,7 +436,12 @@ class EloBackUpdater {
 		await this.loadUsers();
 		await this.loadKillsAndDeaths();
 		this.loadEvents();
-		this.calculateEloMultipliers();
+		if (useNewMultiplierSystem) {
+			const topNUsers = this.users.filter(u => u.rank > 0 && u.rank <= excludeTopNPlayersFromMults).map(u => u.id);
+			await this.calculateNewMultipliersStreamed(topNUsers);
+		} else {
+			this.calculateEloMultipliers();
+		}
 	}
 
 	protected async collapseHistory() {
@@ -351,9 +466,27 @@ class EloBackUpdater {
 		console.log(`Active season: ${this.season.id} (${this.season.name})`);
 
 		await this.loadUsers();
-		await this.calculateEloMultipliersStreamed();
+		if (useNewMultiplierSystem) {
+			const topNUsers = this.users.filter(u => u.rank > 0 && u.rank <= excludeTopNPlayersFromMults).map(u => u.id);
+			await this.calculateNewMultipliersStreamed(topNUsers);
+		} else {
+			await this.calculateEloMultipliersStreamed();
+		}
 		this.loadSessionHistory();
 		// this.loadEvents();
+	}
+
+	public getKillMultiplier(kill: Kill) {
+		const aircraft = this.aircraftKillMultipliers[kill.killer.type];
+		if (!aircraft) return 1;
+
+		const weapon = aircraft.weaponMultipliers[kill.weapon];
+		if (!weapon) return 1;
+
+		const victimMult = aircraft.aircraftMultipliers[kill.victim.type];
+		if (!victimMult) return 1;
+
+		return aircraft.mult * weapon.mult * victimMult.mult;
 	}
 
 	public async runStreamedBackUpdate() {
@@ -365,7 +498,6 @@ class EloBackUpdater {
 			const timestamp = new Date(kill.time).toISOString();
 			const killer = this.usersMap[kill.killer.ownerId];
 			const victim = this.usersMap[kill.victim.ownerId];
-			const killStr = getKillStr(kill);
 
 			if (!killer || !victim || !shouldKillBeCounted(kill, killer, victim)) {
 				this.onInvalidKill(kill, killer, victim);
@@ -384,11 +516,25 @@ class EloBackUpdater {
 
 			if (killer.ignoreKillsAgainstUsers && killer.ignoreKillsAgainstUsers.includes(victim.id)) return;
 
-			let metric = this.killMultipliers.find(m => m.killStr == killStr);
+			// let metric = this.killMultipliers.find(m => m.killStr == killStr);
+			// let mult = this.getKillMultiplier(kill);
+
+			let multiplier: number;
+			if (useNewMultiplierSystem) {
+				multiplier = getKillMultiplier(kill, this.aircraftKillMultipliers);
+			} else {
+				const killStr = getKillStr(kill);
+				let metric = this.killMultipliers.find(m => m.killStr == killStr);
+				multiplier = metric?.multiplier ?? 1;
+			}
+
 			let info = "";
 			if (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT) {
-				const { cfitMetric, extraInfo } = ELOUpdater.getCFITMultiplier(kill, this.killMultipliers);
-				if (cfitMetric == null) {
+				const { cfitMultiplier, extraInfo } = useNewMultiplierSystem
+					? ELOUpdater.getCFITMultiplierForNewMultiplierSystem(kill, this.aircraftKillMultipliers)
+					: ELOUpdater.getCFITMultiplier(kill, this.killMultipliers);
+
+				if (extraInfo == null) {
 					// this.log.info(`Target was too far away, so CFIT being dropped`);
 					victim.deaths++;
 					const log = ELOUpdater.getUserLogForDeath(timestamp, victim, 0);
@@ -396,11 +542,11 @@ class EloBackUpdater {
 					return;
 				}
 				info = extraInfo;
-				metric = cfitMetric;
+				multiplier = cfitMultiplier;
 			}
 
 			const aircraftOffset = ELOUpdater.getKillAircraftOffset(kill);
-			const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1, this.season.id);
+			const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, multiplier, this.season.id);
 
 			killer.elo += eloSteal;
 			victim.elo -= eloSteal;
@@ -408,7 +554,7 @@ class EloBackUpdater {
 			killer.kills++;
 			victim.deaths++;
 
-			const log = ELOUpdater.getUserLogForKill(timestamp, killer, victim, metric, kill, eloSteal, killStr, info);
+			const log = ELOUpdater.getUserLogForKill(timestamp, killer, victim, multiplier, kill, eloSteal, info);
 			this.userHistory[killer.id][kill.time] = log.killer;
 			this.userHistory[victim.id][kill.time] = log.victim;
 
@@ -435,7 +581,6 @@ class EloBackUpdater {
 				const kill = e.event as Kill;
 				const killer = this.usersMap[kill.killer.ownerId];
 				const victim = this.usersMap[kill.victim.ownerId];
-				const killStr = getKillStr(kill);
 
 				if (!killer || !victim || !shouldKillBeCounted(kill, killer, victim)) {
 					this.onInvalidKill(kill, killer, victim);
@@ -454,22 +599,32 @@ class EloBackUpdater {
 
 				if (killer.ignoreKillsAgainstUsers && killer.ignoreKillsAgainstUsers.includes(victim.id)) continue;
 
-				let metric = this.killMultipliers.find(m => m.killStr == killStr);
+				let multiplier: number;
+				if (useNewMultiplierSystem) {
+					multiplier = getKillMultiplier(kill, this.aircraftKillMultipliers);
+				} else {
+					const killStr = getKillStr(kill);
+					const metric = this.killMultipliers.find(m => m.killStr == killStr);
+					multiplier = metric?.multiplier ?? 1;
+				}
+
 				let info = "";
 				if (kill.weapon == Weapon.CFIT || kill.weapon == Weapon.DCCFIT) {
-					const { cfitMetric, extraInfo } = ELOUpdater.getCFITMultiplier(kill, this.killMultipliers);
-					if (cfitMetric == null) {
+					const { cfitMultiplier, extraInfo } = useNewMultiplierSystem
+						? ELOUpdater.getCFITMultiplierForNewMultiplierSystem(kill, this.aircraftKillMultipliers)
+						: ELOUpdater.getCFITMultiplier(kill, this.killMultipliers);
+					if (extraInfo == null) {
 						// this.log.info(`Target was too far away, so CFIT being dropped`);
 						victim.deaths++;
 						ELOUpdater.updateUserLogForDeath(timestamp, victim, 0);
 						continue;
 					}
 					info = extraInfo;
-					metric = cfitMetric;
+					multiplier = cfitMultiplier;
 				}
 
 				const aircraftOffset = ELOUpdater.getKillAircraftOffset(kill);
-				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, metric?.multiplier ?? 1, this.season.id);
+				const eloSteal = ELOUpdater.calculateEloSteal(killer.elo, victim.elo, aircraftOffset, multiplier, this.season.id);
 
 				killer.elo += eloSteal;
 				victim.elo -= eloSteal;
@@ -477,7 +632,7 @@ class EloBackUpdater {
 				killer.kills++;
 				victim.deaths++;
 
-				ELOUpdater.updateUserLogForKill(timestamp, killer, victim, metric, kill, eloSteal, killStr, info);
+				ELOUpdater.updateUserLogForKill(timestamp, killer, victim, multiplier, kill, eloSteal, info);
 				killer.eloHistory.push({ elo: killer.elo, time: e.time });
 				victim.eloHistory.push({ elo: victim.elo, time: e.time });
 				this.onUserUpdate(killer, e, eloSteal);
@@ -606,8 +761,13 @@ class EloBackUpdater {
 		// console.log(`Done sending users`);
 
 		console.log(`About to send`);
-		const message: IPCMessage = { type: "mults", mults: this.killMultipliers };
-		process.send(message);
+		if (useNewMultiplierSystem) {
+			const message: IPCMessage = { type: "new_mults", mults: this.aircraftKillMultipliers };
+			process.send(message);
+		} else {
+			const message: IPCMessage = { type: "mults", mults: this.killMultipliers };
+			process.send(message);
+		}
 		console.log(`Sent`);
 	}
 

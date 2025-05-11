@@ -13,9 +13,8 @@ class WellTimedAchievement extends Achievement {
 			if (kill.killer.team == kill.victim.team) return;
 
 			if (!this.userKillRecords[kill.killer.ownerId]) this.userKillRecords[kill.killer.ownerId] = [];
-			const now = Date.now();
-			this.userKillRecords[kill.killer.ownerId].push(now);
-			this.userKillRecords[kill.killer.ownerId] = this.userKillRecords[kill.killer.ownerId].filter(time => now - time < TIME_THRESH);
+			this.userKillRecords[kill.killer.ownerId].push(kill.time);
+			this.userKillRecords[kill.killer.ownerId] = this.userKillRecords[kill.killer.ownerId].filter(time => kill.time - time < TIME_THRESH);
 
 			if (this.userKillRecords[kill.killer.ownerId].length >= KILLS_REQ) {
 				this.giveToUser(kill.killer.ownerId);

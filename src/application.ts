@@ -77,6 +77,7 @@ class Application {
 
 	public onlineUsers: { name: string; id: string; team: string }[] = [];
 	public currentServerEnv: RandomEnv;
+	private currentMission: string = "";
 	public lastOnlineUserUpdateAt = 0;
 
 	private updatingRanksAt = 0;
@@ -96,6 +97,7 @@ class Application {
 			const { AchievementManager } = await import("./achievementSystem/achievementManager.js");
 			this.achievementManager = new AchievementManager(this);
 			await this.achievementManager.init();
+			this.log.info(`Loaded achievement manager`);
 		} else {
 			this.log.warn(`Unable to find achievementManager.js`);
 			return;
@@ -108,9 +110,13 @@ class Application {
 		await this.setupDbCollections();
 
 		this.log.info(`Loaded all collections`);
-		if (process.env.IS_DEV != "true") this.loadAchievementManager();
+		// if (process.env.IS_DEV != "true") this.loadAchievementManager();
+		this.loadAchievementManager();
 		this.log.info(`Loaded achievement manager`);
-		await this.api.init(this.achievementManager);
+		await this.api.init();
+		this.api.on("tracking", (tracking: Tracking) => {
+			this.handleTracking(tracking);
+		});
 		this.log.info(`Loaded API`);
 		await this.elo.init();
 		this.log.info(`Loaded ELO updater`);
@@ -146,6 +152,10 @@ class Application {
 				// @ts-ignore
 				await this.users.collection.updateOne({ id: user.id }, { $set: { altIds: [] } });
 			}
+			if (!("options" in user)) {
+				// @ts-ignore
+				await this.users.collection.updateOne({ id: user.id }, { $set: { options: {} } });
+			}
 		});
 		await Promise.all(proms);
 		this.log.info(`Updated all users with new spawns object`);
@@ -178,6 +188,42 @@ class Application {
 
 		// this.createSeason(4, "Season 4 (Weather)");
 		// this.migrateDb();
+	}
+
+	private async handleTracking(tracking: Tracking) {
+		switch (tracking.type) {
+			case "mission":
+				const missionName = tracking.args[0].match(/\/([\w ]+).vts/)[1];
+				this.currentMission = missionName;
+				this.log.info(`Received mission name via tracking: ${missionName}`);
+				break;
+
+			case "invalid_user_nid":
+				const [_, userId] = tracking.args;
+				this.log.info(`Received invalid user nid: ${userId}`);
+
+				const user = await this.users.get(userId);
+
+				if (!user) {
+					this.log.error(`Unable to find user ${userId} in database`);
+					return;
+				}
+				const modEmbed = await this.createModerationEmbed(user);
+				const embed = new EmbedBuilder().setTitle("Invalid User NID").setDescription(`User ID: ${userId}`).setColor(0xff0000).setTimestamp();
+
+				admins.forEach(async adminId => {
+					const admin = await this.framework.client.users.fetch(adminId).catch(() => {});
+					if (!admin) return;
+
+					const dmChannel = await admin.createDM().catch(() => {});
+					if (!dmChannel) return;
+
+					await dmChannel.send({ embeds: [embed, modEmbed] }).catch(e => {
+						this.log.error(`Unable to send DM to admin ${adminId}: ${e}`);
+					});
+				});
+				break;
+		}
 	}
 
 	private async setupDbCollections() {
@@ -275,7 +321,8 @@ class Application {
 			eloFreeze: false,
 			achievements: [],
 			canBeFirstWithAchievement: true,
-			voiceMuted: false
+			voiceMuted: false,
+			options: {}
 		};
 		await this.users.add(user);
 		return user;
@@ -771,6 +818,15 @@ class Application {
 		}
 
 		embed.addFields(fields);
+
+		const nidFails = await this.tracking.collection.find({ "type": "invalid_user_nid", "args.1": userEntry.id }).toArray();
+		if (nidFails.length > 0) {
+			embed.setColor(Discord.Colors.Red);
+			embed.addFields({
+				name: "NID Fails",
+				value: nidFails.length.toString()
+			});
+		}
 
 		embed.setDescription(`\`\`\`\n${tkLog}\n\`\`\``);
 		embed.setFooter({ text: `${userEntry.id} | Is banned: ${!!userEntry.isBanned}` });

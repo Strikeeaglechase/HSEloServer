@@ -11,12 +11,11 @@ class CFITAfterKillAchievement extends Achievement {
 		this.manager.on("user_kill", async (kill: Kill) => {
 			if (kill.killer.team == kill.victim.team) return;
 
-			const now = Date.now();
-			this.userKillRecords[kill.killer.ownerId] = now;
+			this.userKillRecords[kill.killer.ownerId] = kill.time;
 
 			if (kill.weapon == Weapon.CFIT) {
 				// Check if the victim just got a kill
-				if (this.userKillRecords[kill.victim.ownerId] && now - this.userKillRecords[kill.victim.ownerId] < TIME_THRESH) {
+				if (this.userKillRecords[kill.victim.ownerId] && kill.time - this.userKillRecords[kill.victim.ownerId] < TIME_THRESH) {
 					this.giveToUser(kill.victim.ownerId);
 				}
 			}

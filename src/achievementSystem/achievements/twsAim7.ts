@@ -10,8 +10,8 @@ class TWSAIM7 extends Achievement {
 			if (kill.weapon != Weapon.AIM7) return;
 
 			if (this.killTimes[kill.killer.ownerId] == undefined) this.killTimes[kill.killer.ownerId] = [];
-			this.killTimes[kill.killer.ownerId].push(Date.now());
-			this.killTimes[kill.killer.ownerId] = this.killTimes[kill.killer.ownerId].filter(time => Date.now() - time < 1000 * 15);
+			this.killTimes[kill.killer.ownerId].push(kill.time);
+			this.killTimes[kill.killer.ownerId] = this.killTimes[kill.killer.ownerId].filter(time => kill.time - time < 1000 * 15);
 			if (this.killTimes[kill.killer.ownerId].length >= 2) this.giveToUser(kill.killer.ownerId);
 		});
 

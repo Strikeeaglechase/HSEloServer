@@ -30,6 +30,9 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 	private extraUserStats: Record<string, ExtraUserStats> = {};
 	private killPairs: Record<string, number> = {};
 	private eloTransfers: Record<string, number> = {};
+	private userKillsBySession: Record<string, number[]> = {};
+
+	private eloChangeByF45GunKills = 0;
 
 	// protected async loadDb(): Promise<void> {
 	// 	await super.loadDb();
@@ -79,6 +82,19 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 
 				this.eloTransfers[fromKillerToVictim] -= eloDelta;
 				this.eloTransfers[fromVictimToKiller] += eloDelta;
+
+				// Track how much elo was gained from F45A gun kills
+				if (kill.killer.type == Aircraft.F45A && kill.weapon == Weapon.Gun) {
+					this.eloChangeByF45GunKills += eloDelta;
+				}
+
+				// Find session this kill happened in and count
+				const s = (user.sessions ?? []).findIndex(s => s.startTime < kill.time && s.endTime > kill.time);
+				if (s > -1) {
+					if (!this.userKillsBySession[user.id]) this.userKillsBySession[user.id] = [];
+					if (!this.userKillsBySession[user.id][s]) this.userKillsBySession[user.id][s] = 0;
+					this.userKillsBySession[user.id][s]++;
+				}
 			} else {
 				// Otherwise we were killed
 				if (!extraStats.deathsByWeapon[kill.weapon]) extraStats.deathsByWeapon[kill.weapon] = 0;
@@ -221,11 +237,11 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		console.log(`${strUser(highestUser)} had the most deaths with ${highestDeaths}`);
 	}
 
-	private findBestKDRWithMoreThan10Kills() {
+	private findBestKDRWithMoreThan30Kills() {
 		let highestKDR = -Infinity;
 		let highestUser: User;
 		this.users.forEach(user => {
-			if (user.kills < 20) return;
+			if (user.kills < 30) return;
 			const kdr = user.kills / user.deaths;
 			if (kdr > highestKDR) {
 				highestKDR = kdr;
@@ -498,14 +514,141 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		console.log(`${strUser(mostFooledUser)} was fooled the most with ${mostFooled} times`);
 	}
 
-	public getMetrics() {
+	private getUserPlayTimeHrs(user: User, seasonStartTime: number) {
+		// (user.sessions ?? [])
+		// 	.filter(s => s.startTime > seasonStartTime && !!s.endTime)
+		// 	.forEach(s => {
+		// 		const dur = s.endTime - s.startTime;
+		// 		if (dur < 0) {
+		// 			console.log(`Negative duration for ${user.pilotNames[0]}: ${new Date(s.startTime)} - ${new Date(s.endTime)}`);
+		// 		}
+		// 		if (dur > 1000 * 60 * 60 * 1.1) {
+		// 			console.log(`Duration over a one hour for ${user.pilotNames[0]}: ${new Date(s.startTime)} - ${new Date(s.endTime)}`);
+		// 		}
+		// 	});
+
+		const userPlayTimeMs = (user.sessions ?? [])
+			.filter(s => s.startTime > seasonStartTime && !!s.endTime)
+			.map(s => s.endTime - s.startTime)
+			.filter(s => s > 0 && s < 1000 * 60 * 60 * 1.1) // Ignore negative durations and durations over an hour
+			.reduce((acc, s) => acc + s, 0);
+
+		return userPlayTimeMs / 1000 / 60 / 60; // Convert to hours
+	}
+
+	private async findBestKPH() {
+		let highestKPH = -Infinity;
+		let highestUser: User;
+
+		const seasonStartTime = new Date((await this.getActiveSeason()).started).getTime();
+		this.users.forEach(user => {
+			const userPlayTimeHr = this.getUserPlayTimeHrs(user, seasonStartTime);
+			if (userPlayTimeHr < 5) return; // Ignore users with less than 5 hours of playtime
+
+			const kph = user.kills / userPlayTimeHr;
+			if (kph > highestKPH) {
+				highestKPH = kph;
+				highestUser = user;
+			}
+		});
+
+		console.log(
+			`${strUser(highestUser)} had the best KPH, getting ${highestUser.kills} in ${this.getUserPlayTimeHrs(
+				highestUser,
+				seasonStartTime
+			)}hrs. ${highestKPH} KPH`
+		);
+	}
+
+	private findBestSession() {
+		let bestSessionKills = -Infinity;
+		let bestSessionUser: User;
+		let bestSessionIdx = -1;
+
+		this.users.forEach(user => {
+			(user.sessions ?? []).forEach((session, i) => {
+				if (!this.userKillsBySession[user.id]) return;
+
+				const kills = this.userKillsBySession[user.id][i];
+				if (kills > bestSessionKills) {
+					bestSessionKills = kills;
+					bestSessionUser = user;
+					bestSessionIdx = i;
+				}
+			});
+		});
+
+		const session = bestSessionUser.sessions[bestSessionIdx];
+		const startTime = new Date(session.startTime);
+		const endTime = new Date(session.endTime);
+		console.log(
+			`${strUser(bestSessionUser)} had the best session with ${bestSessionKills} kills. ${startTime.toLocaleString()} - ${endTime.toLocaleString()}`
+		);
+	}
+
+	private findTopSessions() {
+		const bestSessions = this.users.map(user => {
+			let userBestSessionKills = -Infinity;
+			let userBestSessionIdx = -1;
+			(user.sessions ?? []).forEach((session, i) => {
+				if (!this.userKillsBySession[user.id]) return;
+
+				const kills = this.userKillsBySession[user.id][i];
+				if (kills > userBestSessionKills) {
+					userBestSessionKills = kills;
+					userBestSessionIdx = i;
+				}
+			});
+
+			return {
+				user,
+				bestSessionKills: userBestSessionKills,
+				bestSessionIdx: userBestSessionIdx
+			};
+		});
+
+		bestSessions.sort((a, b) => b.bestSessionKills - a.bestSessionKills);
+		for (let i = 0; i < 10; i++) {
+			const { user, bestSessionKills, bestSessionIdx } = bestSessions[i];
+
+			const session = user.sessions[bestSessionIdx];
+			const startTime = new Date(session.startTime);
+			const endTime = new Date(session.endTime);
+			console.log(
+				`${i + 1}. ${strUser(user)} had the best session with ${bestSessionKills} kills. ${startTime.toLocaleString()} - ${endTime.toLocaleString()}`
+			);
+		}
+	}
+
+	private async findTopPlaytime() {
+		const seasonStartTime = new Date((await this.getActiveSeason()).started).getTime();
+		const playtime = this.users.map(user => {
+			const userPlayTimeHr = this.getUserPlayTimeHrs(user, seasonStartTime);
+			return {
+				user,
+				playtime: userPlayTimeHr
+			};
+		});
+
+		playtime.sort((a, b) => b.playtime - a.playtime);
+		for (let i = 0; i < 10; i++) {
+			const { user, playtime: playHrs } = playtime[i];
+			console.log(`${i + 1}. ${strUser(user)} had ${playHrs} hours of playtime`);
+		}
+	}
+
+	private findF45GunEloTransfer() {
+		console.log(`Elo gained from F45A gun kills: ${this.eloChangeByF45GunKills}`);
+	}
+
+	public async getMetrics() {
 		console.log(`----- Metrics -----`);
 		this.findHighestDeltaUser();
 		this.findHighestDeltaUserBelow4k();
 		this.findHighestFallAtEnd();
 		this.findHighestKills();
 		this.findHighestDeaths();
-		this.findBestKDRWithMoreThan10Kills();
+		this.findBestKDRWithMoreThan30Kills();
 		this.findMostTKs();
 		this.findMostKillsPerWeaponType();
 		// this.findMostDeathsByWeaponType();
@@ -520,6 +663,10 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 		this.findLongestNoTKStreak();
 		this.findMostCollisions();
 		this.findMostFooledUser();
+		await this.findBestKPH();
+		this.findBestSession();
+		this.findF45GunEloTransfer();
+		// await this.findTopPlaytime();
 
 		// const u = this.usersMap["76561198177819141"];
 		// fs.writeFileSync("../../out-log.txt", u.history.join("\n"));
@@ -543,7 +690,7 @@ class InterestingMetricsExtractor extends ProdDBBackUpdater {
 async function getInterestingMetrics() {
 	const updater = new InterestingMetricsExtractor();
 	await updater.runBackUpdate();
-	updater.getMetrics();
+	await updater.getMetrics();
 }
 
 getInterestingMetrics();

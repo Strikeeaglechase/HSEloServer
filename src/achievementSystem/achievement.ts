@@ -59,7 +59,9 @@ type AchievementId =
 	| "high_alt_120"
 	| "post_mortum"
 	| "uneventful"
-	| "poor_planning";
+	| "poor_planning"
+	| "cobra"
+	| "asat";
 type AchievementCondition = "many_ranked_users" | "many_missiles_shot";
 
 interface AchievementDef {

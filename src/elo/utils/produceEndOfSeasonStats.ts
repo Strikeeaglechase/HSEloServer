@@ -3,7 +3,7 @@ import { AchievementDBEntry, Aircraft, EndOfSeasonStats, Season, User } from "..
 import { BASE_ELO, userCanRank } from "../eloUpdater.js";
 import { ProdDBBackUpdater } from "./eloUtils.js";
 
-const targetSeason = 1;
+const targetSeason = 4;
 
 class EndOfSeasonStatsUpdater extends ProdDBBackUpdater {
 	private endOfSeasonStats: CollectionManager<EndOfSeasonStats>;
@@ -141,7 +141,7 @@ async function runUpdate() {
 	// await updater.storeSeasonStats();
 
 	await updater.loadDb();
-	// await updater.createSeason(4, "Season 4 (Weather)");
+	// await updater.createSeason(5, "Season 5");
 	await updater.clearAllUserStats();
 }
 

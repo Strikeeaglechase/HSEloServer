@@ -11,19 +11,19 @@ import { Aircraft, User, Weapon } from "../../structures.js";
 
 async function lookupUser(users: CollectionManager<User>, query: string) {
 	// SteamID
-	if (query.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gmi)) {
-		const userIdUser = await users.get(query.replace(/(https):\/\/steamcommunity\.com\/profiles\/|(http):\/\/steamcommunity\.com\/profiles\//gmi, ''));
+	if (query.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gim)) {
+		const userIdUser = await users.get(query.replace(/(https):\/\/steamcommunity\.com\/profiles\/|(http):\/\/steamcommunity\.com\/profiles\//gim, ""));
 		if (userIdUser) return userIdUser;
-	} else if (query.match(/[0-9]+/gmi)) {
+	} else if (query.match(/[0-9]+/gim)) {
 		const userIdUser = await users.get(query);
 		if (userIdUser) return userIdUser;
 	}
 
 	// DiscordID
-	if (query.match(/<@[0-9]+>/gmi)) {
-		const discordIdUser = await users.collection.findOne({ discordId: query.replace(/<@|>/gmi, '') });
+	if (query.match(/<@[0-9]+>/gim)) {
+		const discordIdUser = await users.collection.findOne({ discordId: query.replace(/<@|>/gim, "") });
 		if (discordIdUser) return discordIdUser;
-	} else if (query.match(/[0-9]+/gmi)) {
+	} else if (query.match(/[0-9]+/gim)) {
 		const discordIdUser = await users.collection.findOne({ discordId: query });
 		if (discordIdUser) return discordIdUser;
 	}
@@ -102,7 +102,7 @@ class Stats extends SlashCommand {
 		kills = kills.filter(k => shouldKillBeCounted(k));
 		deaths = deaths.filter(k => shouldKillBeCounted(k));
 
-		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G];
+		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 		let killsWith = ``;
 		let killsAgainst = ``;
 		let deathsAgainst = ``;

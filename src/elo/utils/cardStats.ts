@@ -1,6 +1,7 @@
-import { Aircraft, User } from "../../structures.js";
+import Database from "../../db/database.js";
+import { Aircraft, Kill, Season, User, Weapon } from "../../structures.js";
 import { EloEvent } from "../eloBackUpdater.js";
-import { ProdDBBackUpdater } from "./eloUtils.js";
+import { loadFileStreamedCb, ProdDBBackUpdater } from "./eloUtils.js";
 
 class CardStatsUpdater extends ProdDBBackUpdater {
 	private userAircraftEloGained: Record<string, Record<Aircraft, number>> = {};
@@ -78,4 +79,107 @@ async function runCardStats() {
 	updater.log();
 }
 
-runCardStats();
+function getUserStatObject(user: User, killsMap: Record<string, Kill[]>, kills: Kill[], seasons: Season) {
+	let maxElo = 0;
+	user.eloHistory.forEach(h => (maxElo = Math.max(maxElo, h.elo)));
+
+	// if (!killsMap[user.id]) {
+	// 	console.log(user);
+	// }
+	const numKills = killsMap[user.id].length;
+	const numDeaths = kills.filter(kill => kill.victim.ownerId === user.id).length;
+
+	const killsWith26b = killsMap[user.id].filter(kill => kill.killer.type === Aircraft.FA26b).length;
+	const killsWithF45A = killsMap[user.id].filter(kill => kill.killer.type === Aircraft.F45A).length;
+	const killsWithT55 = killsMap[user.id].filter(kill => kill.killer.type === Aircraft.T55).length;
+	const killsWithEF24G = killsMap[user.id].filter(kill => kill.killer.type === Aircraft.EF24G).length;
+
+	const killsAgainst26b = killsMap[user.id].filter(kill => kill.victim.type === Aircraft.FA26b).length;
+	const killsAgainstF45A = killsMap[user.id].filter(kill => kill.victim.type === Aircraft.F45A).length;
+	const killsAgainstT55 = killsMap[user.id].filter(kill => kill.victim.type === Aircraft.T55).length;
+	const killsAgainstEF24G = killsMap[user.id].filter(kill => kill.victim.type === Aircraft.EF24G).length;
+
+	const weapons = [Weapon.AIM120, Weapon.AIM54, Weapon.AIM7, Weapon.AIM9, Weapon.AIM9E, Weapon.AIM9X, Weapon.AIRST, Weapon.Gun, Weapon.HARM, Weapon.Collision];
+	const killsWithWeapons = {};
+	const deathsToWeapons = {};
+
+	weapons.forEach(weapon => {
+		killsWithWeapons[`killsWith${Weapon[weapon]}`] = killsMap[user.id].filter(kill => kill.weapon == weapon).length;
+		deathsToWeapons[`deathsTo${Weapon[weapon]}`] = kills.filter(kill => kill.victim.ownerId == user.id && kill.weapon == weapon).length;
+	});
+
+	return {
+		elo: user.elo,
+		rank: user.rank,
+		topPrec: (user.rank / seasons.totalRankedUsers) * 100,
+		peakElo: maxElo,
+
+		kills: numKills,
+		deaths: numDeaths,
+		kdr: numKills / Math.max(1, numDeaths),
+
+		killsWith26b,
+		killsWithF45A,
+		killsWithT55,
+		killsWithEF24G,
+
+		killsAgainst26b,
+		killsAgainstF45A,
+		killsAgainstT55,
+		killsAgainstEF24G,
+
+		...killsWithWeapons,
+		...deathsToWeapons
+	};
+}
+
+async function runNewCardStats() {
+	const db = new Database(
+		{
+			databaseName: "vtol-server-elo",
+			url: process.env.PROD_DB_URL
+		},
+		console.log
+	);
+	await db.init();
+	const seasonsDb = await db.collection<Season>("seasons", false, "id");
+	const userDb = await db.collection<User>("users", false, "id");
+
+	const activeSeason = await seasonsDb.collection.findOne({ active: true });
+	const users = await userDb.collection.find({}).toArray();
+
+	const usersWithDids = users
+		.filter(user => !!user.discordId && user.discordId != "")
+		.sort((a, b) => b.elo - a.elo)
+		.slice(0, 128);
+
+	const kills: Record<string, Kill[]> = {};
+	const allKills: Kill[] = [];
+	await loadFileStreamedCb<Kill>("../../../prodHourlyReport/kills.json", kill => {
+		if (!kills[kill.killer.ownerId]) kills[kill.killer.ownerId] = [];
+		kills[kill.killer.ownerId].push(kill);
+
+		allKills.push(kill);
+	});
+
+	const averagesObj = {};
+	usersWithDids.forEach((user, idx) => {
+		const stats = getUserStatObject(user, kills, allKills, activeSeason);
+		console.log(idx);
+		// if (idx == 0) console.log(stats);
+
+		for (const key in stats) {
+			if (!averagesObj[key]) averagesObj[key] = 0;
+			averagesObj[key] += stats[key];
+		}
+	});
+
+	for (const key in averagesObj) {
+		averagesObj[key] /= usersWithDids.length;
+
+		console.log(`${key}: ${averagesObj[key]}`);
+	}
+}
+
+// runCardStats();
+runNewCardStats();

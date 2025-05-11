@@ -92,7 +92,7 @@ class ComparisonUpdater extends ProdDBBackUpdater {
 		this.log(`Biggest gain: ${biggestGain.user.pilotNames[0]} (${biggestGain.user.id}). ${biggestGain.user.elo.toFixed(0)} +${biggestGain.gain.toFixed(0)}`);
 		this.log(`Biggest loss: ${biggestLoss.user.pilotNames[0]} (${biggestLoss.user.id}). ${biggestLoss.user.elo.toFixed(0)} ${biggestLoss.loss.toFixed(0)}`);
 
-		const u = this.usersMap["76561198050265265"];
+		const u = this.usersMap["76561198840940036"];
 		fs.writeFileSync("../../../out-log.txt", u.history.join("\n"));
 	}
 }
@@ -114,6 +114,11 @@ async function createPullStream(db: Database, collectionName: string, fileName: 
 		.stream()
 		.on("data", data => {
 			writeStream.write(JSON.stringify(data) + "\n");
+
+			if (c % 100_000 == 0) {
+				console.log(`Pulled ${c} ${collectionName}...`);
+			}
+
 			c++;
 		})
 		.on("end", () => writeStream.end());
@@ -139,6 +144,7 @@ async function pullOfflineLoad(filter: any) {
 		createPullStream(db, "kills-v2", "kills", filter),
 		createPullStream(db, "deaths-v2", "deaths", filter),
 		createPullStream(db, "users", "users", {})
+		// createPullStream(db, "tracking", "tracking", filter)
 	];
 	await Promise.all(proms);
 
@@ -165,6 +171,44 @@ function loadFileStreamed<T>(path: string): Promise<T[]> {
 	});
 }
 
+function loadFileStreamedCb<T>(path: string, cb: (data: T) => void): Promise<void> {
+	const readStream = fs.createReadStream(path);
+	return new Promise(res => {
+		let remaining = "";
+
+		readStream.on("data", data => {
+			const parts = (remaining + data).split("\n");
+			remaining = parts.pop();
+
+			parts.forEach(part => cb(JSON.parse(part)));
+		});
+
+		readStream.on("end", () => {
+			if (remaining.length > 0) cb(JSON.parse(remaining));
+			res();
+		});
+	});
+}
+
+function loadFileStreamedNoParseCb(path: string, cb: (data: string) => void): Promise<void> {
+	const readStream = fs.createReadStream(path);
+	return new Promise(res => {
+		let remaining = "";
+
+		readStream.on("data", data => {
+			const parts = (remaining + data).split("\n");
+			remaining = parts.pop();
+
+			parts.forEach(part => cb(part));
+		});
+
+		readStream.on("end", () => {
+			if (remaining.length > 0) cb(remaining);
+			res();
+		});
+	});
+}
+
 async function runComparison() {
 	const updater = new ComparisonUpdater();
 	// await updater.runBackUpdate();
@@ -174,10 +218,10 @@ async function runComparison() {
 	fs.writeFileSync("../../../comp-log.txt", updater.outLog);
 }
 
-export { ProdDBBackUpdater, createPullStream, loadFileStreamed };
+export { ProdDBBackUpdater, createPullStream, loadFileStreamed, loadFileStreamedCb, loadFileStreamedNoParseCb };
 
 // getInterestingMetrics();
-runComparison();
+// runComparison();
 // pullOfflineLoad({ season: 4 });
 
 setInterval(() => {

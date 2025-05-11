@@ -7,9 +7,10 @@ import Logger from "strike-discord-framework/dist/logger.js";
 import { v4 as uuidv4 } from "uuid";
 import WebSocket from "ws";
 
-import { Application, IAchievementManager } from "./application.js";
+import { Application } from "./application.js";
 import { Client } from "./client.js";
 import { hourlyReportPath } from "./elo/eloUpdater.js";
+import { EventEmitter } from "./eventEmitter.js";
 import { createUserEloGraph } from "./graph/graph.js";
 import { getRandomEnv, RandomEnv } from "./serverEnvProfile.js";
 import {
@@ -25,6 +26,7 @@ import {
 	Spawn,
 	Tracking,
 	UserAircraftInformation,
+	UserServerOptions,
 	userToLimitedUser,
 	Weapon
 } from "./structures.js";
@@ -64,6 +66,8 @@ interface APIUserAircraft {
 	team: string;
 	type: string;
 	lastViffTime: number;
+	alive: boolean;
+	aoa: number;
 }
 
 interface APIServerInfo {
@@ -97,7 +101,9 @@ function parseAPIUserAircraft(apiUA: APIUserAircraft): UserAircraftInformation {
 		velocity: apiUA.velocity,
 		team: parseTeamString(apiUA.team),
 		type: parseAircraftString(apiUA.type),
-		lastViffTime: apiUA.lastViffTime
+		lastViffTime: apiUA.lastViffTime,
+		alive: apiUA.alive,
+		aoa: apiUA.aoa
 	};
 }
 
@@ -110,20 +116,21 @@ function parseAPIServerInfo(apiSI: APIServerInfo): CurrentServerInformation {
 	};
 }
 
-class API {
+class API extends EventEmitter<"tracking"> {
 	private server: express.Express = express();
 	private websocketServer: WebSocket.Server;
 	private log: Logger;
 	public daemonReportCb: (report: DaemonReport) => void;
 	public clients: Client[] = [];
 
-	private achievementManager: IAchievementManager;
+	// private achievementManager: IAchievementManager;
 	constructor(private app: Application) {
+		super();
 		this.log = app.log;
 	}
 
-	public async init(achievementManager: IAchievementManager) {
-		this.achievementManager = achievementManager;
+	public async init(/*achievementManager: IAchievementManager*/) {
+		// this.achievementManager = achievementManager;
 		const port = parseInt(process.env.PORT);
 
 		this.server.use(bodyParser.json());
@@ -203,6 +210,16 @@ class API {
 		}
 
 		hsClient.send({ type: "kick_user", data: userId });
+	}
+
+	public sendNewClientOptions(clientId: string, options: Partial<UserServerOptions>) {
+		const hsClient = this.clients.find(c => c.isAuthedHs);
+		if (!hsClient) {
+			this.log.warn(`Unable to find HS client to send new client options`);
+			return;
+		}
+
+		hsClient.send({ type: "new_client_options", data: { clientId, options } });
 	}
 
 	public sendUpdatedEnvRequest() {
@@ -326,7 +343,7 @@ class API {
 
 		this.log.info(`User ${logUser(user)} logged in`);
 		await this.app.users.collection.updateOne({ id: user.id }, { $push: { sessions: { startTime: Date.now(), endTime: 0 } } });
-		this.achievementManager.onUserLogin(user);
+		this.app.achievementManager.onUserLogin(user);
 		return 200;
 	}
 
@@ -340,7 +357,7 @@ class API {
 		const lastSession = user.sessions[user.sessions.length - 1];
 		if (lastSession && lastSession.endTime == 0) lastSession.endTime = Date.now();
 		await this.app.users.update(user, user.id);
-		this.achievementManager.onUserLogout(user);
+		this.app.achievementManager.onUserLogout(user);
 		return 200;
 	}
 
@@ -391,8 +408,8 @@ class API {
 
 		const { killer, victim, eloSteal } = update;
 
-		this.achievementManager.onKill(kill, eloSteal);
-		this.achievementManager.onDeath(death, eloSteal);
+		this.app.achievementManager.onKill(kill, eloSteal);
+		this.app.achievementManager.onDeath(death, eloSteal);
 
 		return {
 			killerElo: killer.elo,
@@ -414,7 +431,7 @@ class API {
 		};
 
 		this.app.missileLaunchParams.add(mlParams);
-		this.achievementManager.onMissileLaunchParams(mlParams);
+		this.app.achievementManager.onMissileLaunchParams(mlParams);
 
 		return 200;
 	}
@@ -432,7 +449,7 @@ class API {
 
 		this.app.deaths.add(death);
 		const { eloSteal } = await this.app.elo.updateELOForDeath(death);
-		this.achievementManager.onDeath(death, eloSteal);
+		this.app.achievementManager.onDeath(death, eloSteal);
 
 		return 200;
 	}
@@ -467,7 +484,7 @@ class API {
 		user.spawns[spawn.user.type]++;
 		await this.app.users.collection.updateOne({ id: user.id }, { $set: { spawns: user.spawns } });
 
-		this.achievementManager.onUserSpawn(spawn);
+		this.app.achievementManager.onUserSpawn(spawn);
 
 		return 200;
 	}
@@ -484,7 +501,8 @@ class API {
 		};
 		await this.app.tracking.add(trackingObject);
 
-		this.achievementManager.onTrackingEvent(trackingObject);
+		this.app.achievementManager.onTrackingEvent(trackingObject);
+		this.emit("tracking", trackingObject);
 
 		return 200;
 	}

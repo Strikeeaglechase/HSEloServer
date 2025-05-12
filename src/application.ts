@@ -416,7 +416,9 @@ class Application {
 			.toString()
 			.padStart(2, "0");
 
-		resultStr += `TOD ${timeHrs}:${timeMins}\nWind ${windHeading} @ ${windKn}kts${gustKn}\nWeather ${weatherNames[this.currentServerEnv.weather]}`;
+		resultStr += `${this.currentMission ?? ""}\nTOD ${timeHrs}:${timeMins}\nWind ${windHeading} @ ${windKn}kts${gustKn}\nWeather ${
+			weatherNames[this.currentServerEnv.weather]
+		}`;
 		resultStr += `\n\`\`\``;
 
 		embed.setDescription(resultStr);

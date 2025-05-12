@@ -25,7 +25,8 @@ export enum Weapon {
 	Collision,
 	AIM54,
 	MALD,
-	DCCFIT
+	DCCFIT,
+	AGM145
 }
 
 export enum WeaponCategory {
@@ -35,7 +36,8 @@ export enum WeaponCategory {
 	LowTechRadar,
 	HighTechIR,
 	HighTechRadar,
-	HARM
+	HARM,
+	AGM
 }
 
 export enum AircraftCategory {
@@ -68,7 +70,8 @@ export const weaponCategoryMap: Record<Weapon, WeaponCategory> = {
 	[Weapon.DCCFIT]: WeaponCategory.Invalid,
 	[Weapon.Collision]: WeaponCategory.Invalid,
 	[Weapon.AIM54]: WeaponCategory.LowTechRadar,
-	[Weapon.MALD]: WeaponCategory.Invalid
+	[Weapon.MALD]: WeaponCategory.Invalid,
+	[Weapon.AGM145]: WeaponCategory.AGM
 };
 
 export enum Team {
@@ -250,6 +253,8 @@ export function parseWeaponString(weapon: string): Weapon {
 		case "ADM-160J":
 		case "DDJ-44":
 			return Weapon.MALD;
+		case "AGM-145":
+			return Weapon.AGM145;
 
 		default: {
 			console.error(`Unknown weapon: ${weapon}`);

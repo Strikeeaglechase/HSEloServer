@@ -370,7 +370,7 @@ export interface Kill {
 export const aircraftLoadoutMap: Record<Aircraft, Weapon[]> = {
 	[Aircraft.AV42c]: [Weapon.Gun, Weapon.AIM9, Weapon.AIM9E, Weapon.AIRST, Weapon.CFIT],
 	[Aircraft.FA26b]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],
-	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.HARM, Weapon.CFIT],
+	[Aircraft.F45A]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9X, Weapon.HARM, Weapon.AGM145, Weapon.CFIT],
 	[Aircraft.AH94]: [],
 	[Aircraft.Invalid]: [],
 	[Aircraft.T55]: [Weapon.Gun, Weapon.AIM120, Weapon.AIM9, Weapon.AIM7, Weapon.AIRST, Weapon.HARM, Weapon.AIM9E, Weapon.CFIT],

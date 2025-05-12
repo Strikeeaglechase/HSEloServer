@@ -82,7 +82,7 @@ async function calculateNewMultipliersStreamed(excludeKillerList: string[]) {
 	// const killCounts: Partial<Record<Aircraft, Record<KillString, number>>> = {};
 	const killCounts: Record<Aircraft, AircraftKillMetrics> = {} as any;
 
-	const aircraft = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
+	const aircraft = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G];
 
 	aircraft.forEach(ac => {
 		killCounts[ac] = {

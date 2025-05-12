@@ -15,11 +15,11 @@ class Link extends SlashCommand {
 
 		// Check steamid is numeric
 		const isNumeric = id.split("").every(c => nums.includes(c));
-		if (!isNumeric || !id.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gmi)) {
+		if (!isNumeric && !id.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gim)) {
 			interaction.reply(framework.error(`Please provide your steamID64 (https://steamid.io/lookup/${id})`));
 			return;
-		} else if (id.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gmi)) {
-			id = id.replace(/(https):\/\/steamcommunity\.com\/profiles\/|(http):\/\/steamcommunity\.com\/profiles\//gmi, '')
+		} else if (id.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gim)) {
+			id = id.replace(/(https):\/\/steamcommunity\.com\/profiles\/|(http):\/\/steamcommunity\.com\/profiles\//gim, "");
 		}
 
 		// Check existing

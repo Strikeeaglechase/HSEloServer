@@ -70,6 +70,20 @@ class ServerCommand extends SlashCommand {
 				}
 				break;
 
+			case "wind_lerp":
+				if (args.length != 7) {
+					interaction.reply(framework.error(`Expected 7 arguments. Usage: \`wind_lerp x1 y1 z1 x2 y2 z2 t\``, true));
+					return;
+				}
+
+				if (!args.every(validateFloat)) {
+					interaction.reply(framework.error(`Expected float arguments`, true));
+					return;
+				}
+
+				this.runWindLerp(app, user, args);
+				break;
+
 			default:
 				interaction.reply(framework.error(`Unknown command "${commandName}"\nCommands:\n${usageText}`, true));
 				return;
@@ -78,6 +92,28 @@ class ServerCommand extends SlashCommand {
 		app.api.sendCommandRequest(user, commandName, args);
 
 		return framework.success(`Target: ${user}\nCommand: \`${command}\``);
+	}
+
+	private async runWindLerp(app: Application, user: string, args: string[]) {
+		const [x1, y1, z1, x2, y2, z2, t] = args.map(parseFloat);
+
+		const xStep = (x2 - x1) / t;
+		const yStep = (y2 - y1) / t;
+		const zStep = (z2 - z1) / t;
+
+		let x = x1;
+		let y = y1;
+		let z = z1;
+
+		for (let i = 0; i < t; i++) {
+			x += xStep;
+			y += yStep;
+			z += zStep;
+
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			// console.log({ x, y, z });
+			app.api.sendCommandRequest(user, "wind", [x.toString(), y.toString(), z.toString(), "0", "0"]);
+		}
 	}
 
 	public override handleAutocomplete({ interaction, app }: SlashCommandAutocompleteEvent<Application>) {

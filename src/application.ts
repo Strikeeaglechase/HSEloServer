@@ -110,8 +110,8 @@ class Application {
 		await this.setupDbCollections();
 
 		this.log.info(`Loaded all collections`);
-		// if (process.env.IS_DEV != "true") this.loadAchievementManager();
-		this.loadAchievementManager();
+		if (process.env.IS_DEV != "true") this.loadAchievementManager();
+		// this.loadAchievementManager();
 		this.log.info(`Loaded achievement manager`);
 		await this.api.init();
 		this.api.on("tracking", (tracking: Tracking) => {

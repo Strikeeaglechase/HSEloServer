@@ -41,7 +41,7 @@ class Option extends SlashCommand {
 	async run({ interaction, framework, app }: SlashCommandEvent<Application>, @SArg({ choices: options }) setting: string, @SArg() value: string | number) {
 		const user = await app.users.collection.findOne({ discordId: interaction.user.id });
 		if (!user) {
-			await interaction.reply("You are not linked to a user. Please link your account first.");
+			await interaction.reply(framework.error("You are not linked to a user. Please link your account first."));
 			return;
 		}
 

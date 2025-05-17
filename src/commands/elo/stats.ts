@@ -102,6 +102,74 @@ class Stats extends SlashCommand {
 		kills = kills.filter(k => shouldKillBeCounted(k));
 		deaths = deaths.filter(k => shouldKillBeCounted(k));
 
+		// Count kills per victim
+		const killsPerVictim: Record<string, number> = {};
+		kills.forEach(kill => {
+			const victimId = kill.victim.ownerId;
+			killsPerVictim[victimId] = (killsPerVictim[victimId] ?? 0) + 1;
+		});
+
+		// Most killed victim
+		let mostKilledVictimId = null;
+		let mostKillsVsVictim = 0;
+		for (const [victimId, count] of Object.entries(killsPerVictim)) {
+			if (count > mostKillsVsVictim) {
+				mostKillsVsVictim = count;
+				mostKilledVictimId = victimId;
+			}
+		}
+		// Most deaths vs
+		const deathsPerKiller: Record<string, number> = {};
+		deaths.forEach(death => {
+			const killerId = death.killer.ownerId;
+			deathsPerKiller[killerId] = (deathsPerKiller[killerId] ?? 0) + 1;
+		});
+
+		let mostDeathsVsId = null;
+		let mostDeathsVsCount = 0;
+		for (const [killerId, count] of Object.entries(deathsPerKiller)) {
+			if (count > mostDeathsVsCount) {
+				mostDeathsVsCount = count;
+				mostDeathsVsId = killerId;
+			}
+		}
+
+		let mostDeathsVsName = "";
+		if (mostDeathsVsId) {
+			const killerUser = await app.users.get(mostDeathsVsId);
+			mostDeathsVsName = killerUser ? killerUser.pilotNames[0] : mostDeathsVsId;
+		}
+		// Victims pilotname (if available)
+		let mostEloLost = 0;
+		let mostKilledVictimName = "";
+		if (mostKilledVictimId) {
+			const victimUser = await app.users.get(mostKilledVictimId);
+			mostKilledVictimName = victimUser ? victimUser.pilotNames[0] : mostKilledVictimId;
+		}
+
+		// Longest killstreak and deathstreak
+		const events = [
+			...kills.map(k => ({ type: "kill", time: k.time })),
+			...deaths.map(d => ({ type: "death", time: d.time }))
+		].sort((a, b) => a.time - b.time);
+		
+		let currentKillStreak = 0;
+		let longestKillstreak = 0;
+		let currentDeathStreak = 0;
+		let longestDeathstreak = 0;
+		
+		for (const event of events) {
+			if (event.type === "kill") {
+				currentKillStreak++;
+				if (currentKillStreak > longestKillstreak) longestKillstreak = currentKillStreak;
+				currentDeathStreak = 0;
+			} else if (event.type === "death") {
+				currentDeathStreak++;
+				if (currentDeathStreak > longestDeathstreak) longestDeathstreak = currentDeathStreak;
+				currentKillStreak = 0;
+			}
+		}
+		
 		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 		let killsWith = ``;
 		let killsAgainst = ``;
@@ -147,9 +215,18 @@ class Stats extends SlashCommand {
 		user.eloHistory.forEach(h => (maxElo = Math.max(maxElo, h.elo)));
 
 		const embed = new Discord.EmbedBuilder();
+		embed.setColor(0x0099ff);
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
+		const discordUser = await interaction.client.users.fetch(user.discordId).catch(() => null);
+		if (discordUser) {
+			embed.setThumbnail(discordUser.displayAvatarURL({ extension: "png", size: 256 }));
+		}
 		embed.addFields([
-			{ name: "Metrics", value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`, inline: true},
+			{ 
+				name: "Metrics",
+				 value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`, 
+				 inline: true
+			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
 			{ name: "Online Stats", value: `Last Online: ${lastOnlineTimeStamp}\nOnline Time: ${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
 			//end row 1
@@ -161,8 +238,9 @@ class Stats extends SlashCommand {
 			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
 			{ name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
 			//end row 3
-			{// name: "Interesting Stats", value: `Longest Killstreak ${}\nLongest Deathstreak ${}`, inline: true },
-			{// name: "Nemesis Stats", value `Most Elo Lost To ${}\nMost Elo Gained From ${}\Most Kills VS ${}, Most Deaths VS ${}`,
+			{ name: "Interesting Stats", value: `Longest Killstreak ${longestKillstreak}\nLongest Deathstreak ${longestDeathstreak}`, inline: true },
+			{ name: "VS Stats", value: `Most Elo Lost To: ${mostEloLostToName} (${mostEloLost})\nMost Elo Gained From: ${mostEloGainedFromName} (${mostEloGained})
+					\nMost Kills VS: ${mostKilledVictimName} (${mostKillsVsVictim})\nMost Deaths VS: ${mostDeathsVsName} (${mostDeathsVsCount})`, inline: true },
 			//end row 4
 			
 		

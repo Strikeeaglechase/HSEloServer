@@ -170,6 +170,52 @@ class Stats extends SlashCommand {
 			}
 		}
 		
+		
+		const eloGainedFrom: Record<string, number> = {};
+		const eloLostTo: Record<string, number> = {};
+		
+		kills.forEach(kill => {
+			const victimId = kill.victim.ownerId;
+			if (typeof kill.eloChange === "number") {
+				eloGainedFrom[victimId] = (eloGainedFrom[victimId] ?? 0) + kill.eloChange;
+			}
+		});
+		deaths.forEach(death => {
+			const killerId = death.killer.ownerId;
+			if (typeof death.eloChange === "number") {
+				eloLostTo[killerId] = (eloLostTo[killerId] ?? 0) - death.eloChange;
+			}
+		});
+		
+		let mostEloGainedFromId = null;
+		let mostEloGained = -Infinity;
+		for (const [id, elo] of Object.entries(eloGainedFrom)) {
+			if (elo > mostEloGained) {
+				mostEloGained = elo;
+				mostEloGainedFromId = id;
+			}
+		}
+		
+		let mostEloLostToId = null;
+		let mostEloLost = -Infinity;
+		for (const [id, elo] of Object.entries(eloLostTo)) {
+			if (elo > mostEloLost) {
+				mostEloLost = elo;
+				mostEloLostToId = id;
+			}
+		}
+		
+		let mostEloGainedFromName = "";
+		if (mostEloGainedFromId) {
+			const userObj = await app.users.get(mostEloGainedFromId);
+			mostEloGainedFromName = userObj ? userObj.pilotNames[0] : mostEloGainedFromId;
+		}
+		let mostEloLostToName = "";
+		if (mostEloLostToId) {
+			const userObj = await app.users.get(mostEloLostToId);
+			mostEloLostToName = userObj ? userObj.pilotNames[0] : mostEloLostToId;
+		}
+		
 		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 		let killsWith = ``;
 		let killsAgainst = ``;

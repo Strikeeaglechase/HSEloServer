@@ -60,6 +60,23 @@ function calculateTimeOnServer(user: User) {
 	return timeOnServer;
 }
 
+function getKillsPerHour(user: User, kills: any[], seasonId: number): string {
+    if (!user.sessions || user.sessions.length === 0) return "0.00";
+    const seasonSessions = user.sessions.filter(
+        (session: any) => session.season === seasonId
+    );
+    const sessionsToUse = seasonSessions.length > 0 ? seasonSessions : user.sessions;
+    const totalOnlineMs = sessionsToUse.reduce((acc, session) => {
+        if (session.startTime && session.endTime && session.endTime > session.startTime) {
+            return acc + (session.endTime - session.startTime);
+        }
+        return acc;
+    }, 0);
+    const totalOnlineHours = totalOnlineMs / 1000 / 60 / 60;
+    if (totalOnlineHours === 0) return "0.00";
+    return (kills.length / totalOnlineHours).toFixed(2);
+}
+
 class Stats extends SlashCommand {
 	name = "stats";
 	description = "Gets the stats for yourself or another user";
@@ -102,6 +119,169 @@ class Stats extends SlashCommand {
 		kills = kills.filter(k => shouldKillBeCounted(k));
 		deaths = deaths.filter(k => shouldKillBeCounted(k));
 
+		// Count kills per victim
+		const killsPerVictim: Record<string, number> = {};
+		kills.forEach(kill => {
+			const victimId = kill.victim.ownerId;
+			killsPerVictim[victimId] = (killsPerVictim[victimId] ?? 0) + 1;
+		});
+
+		// Most killed victim
+		let mostKilledVictimId = null;
+		let mostKillsVsVictim = 0;
+		for (const [victimId, count] of Object.entries(killsPerVictim)) {
+			if (count > mostKillsVsVictim) {
+				mostKillsVsVictim = count;
+				mostKilledVictimId = victimId;
+			}
+		}
+		// Most deaths vs
+		const deathsPerKiller: Record<string, number> = {};
+		deaths.forEach(death => {
+			const killerId = death.killer.ownerId;
+			deathsPerKiller[killerId] = (deathsPerKiller[killerId] ?? 0) + 1;
+		});
+
+		let mostDeathsVsId = null;
+		let mostDeathsVsCount = 0;
+		for (const [killerId, count] of Object.entries(deathsPerKiller)) {
+			if (count > mostDeathsVsCount) {
+				mostDeathsVsCount = count;
+				mostDeathsVsId = killerId;
+			}
+		}
+
+		let mostDeathsVsName = "";
+		if (mostDeathsVsId) {
+			const killerUser = await app.users.get(mostDeathsVsId);
+			mostDeathsVsName = killerUser ? killerUser.pilotNames[0] : mostDeathsVsId;
+		}
+		// Victims pilotname (if available)
+		let mostEloLost = 0;
+		let mostKilledVictimName = "";
+		if (mostKilledVictimId) {
+			const victimUser = await app.users.get(mostKilledVictimId);
+			mostKilledVictimName = victimUser ? victimUser.pilotNames[0] : mostKilledVictimId;
+		}
+
+		// Longest killstreak and deathstreak
+		const events = [
+			...kills.map(k => ({ type: "kill", time: k.time })),
+			...deaths.map(d => ({ type: "death", time: d.time }))
+		].sort((a, b) => a.time - b.time);
+		
+		let currentKillStreak = 0;
+		let longestKillstreak = 0;
+		let currentDeathStreak = 0;
+		let longestDeathstreak = 0;
+		
+		for (const event of events) {
+			if (event.type === "kill") {
+				currentKillStreak++;
+				if (currentKillStreak > longestKillstreak) longestKillstreak = currentKillStreak;
+				currentDeathStreak = 0;
+			} else if (event.type === "death") {
+				currentDeathStreak++;
+				if (currentDeathStreak > longestDeathstreak) longestDeathstreak = currentDeathStreak;
+				currentKillStreak = 0;
+			}
+		}
+		const missileShots = await app.missiles.collection.find({
+			shooterId: user.id,
+			season: targetSeason.id
+		}).toArray();
+		
+		const shotsFiredPerMissile: Record<string, number> = {};
+		missileShots.forEach(missile => {
+			shotsFiredPerMissile[missile.weapon] = (shotsFiredPerMissile[missile.weapon] ?? 0) + 1;
+		});
+		
+		const missileKillsPerWeapon: Record<string, number> = {};
+		kills.forEach(kill => {
+			if (shotsFiredPerMissile[kill.weapon] !== undefined) {
+				missileKillsPerWeapon[kill.weapon] = (missileKillsPerWeapon[kill.weapon] ?? 0) + 1;
+			}
+		});
+		
+		const missilePkStats: { weapon: string, pk: number }[] = [];
+		for (const weapon of Object.keys(shotsFiredPerMissile)) {
+			const shots = shotsFiredPerMissile[weapon];
+			const kills = missileKillsPerWeapon[weapon] ?? 0;
+			if (shots > 0) {
+				missilePkStats.push({ weapon, pk: kills / shots });
+			}
+		}
+		
+		let bestMissile: string | null = null;
+		let bestPk = -Infinity;
+		let worstMissile: string | null = null;
+		let worstPk = Infinity;
+		
+		for (const stat of missilePkStats) {
+			if (stat.pk > bestPk) {
+				bestPk = stat.pk;
+				bestMissile = stat.weapon;
+			}
+			if (stat.pk < worstPk) {
+				worstPk = stat.pk;
+				worstMissile = stat.weapon;
+			}
+		}
+		
+		const bestMissilePkStr = bestMissile !== null
+			? `${bestMissile} (${(bestPk * 100).toFixed(2)}%)`
+			: "<No Data>";
+		const worstMissilePkStr = worstMissile !== null
+			? `${worstMissile} (${(worstPk * 100).toFixed(2)}%)`
+			: "<No Data>";		
+		
+// eloChange logic perhaps working?
+
+const eloGainedFrom: Record<string, number> = {};
+const eloLostTo: Record<string, number> = {};
+
+kills.forEach(kill => {
+    const victimId = kill.victim.ownerId;
+    if (kill && typeof (kill as any).eloChange === "number") {
+        eloGainedFrom[victimId] = (eloGainedFrom[victimId] ?? 0) + (kill as any).eloChange;
+    }
+});
+deaths.forEach(death => {
+    const killerId = death.killer.ownerId;
+    if (death && typeof (death as any).eloChange === "number") {
+        eloLostTo[killerId] = (eloLostTo[killerId] ?? 0) + (death as any).eloChange;
+    }
+});
+
+let mostEloGainedFromId = null;
+let mostEloGained = -Infinity;
+for (const [id, elo] of Object.entries(eloGainedFrom)) {
+    if (elo > mostEloGained) {
+        mostEloGained = elo;
+        mostEloGainedFromId = id;
+    }
+}
+
+let mostEloLostToId = null;
+let mostEloLostValue = 0;
+for (const [id, elo] of Object.entries(eloLostTo)) {
+    if (elo < mostEloLostValue) {
+        mostEloLostValue = elo;
+        mostEloLostToId = id;
+    }
+}
+
+let mostEloGainedFromName = "";
+if (mostEloGainedFromId) {
+    const userObj = await app.users.get(mostEloGainedFromId);
+    mostEloGainedFromName = userObj ? userObj.pilotNames[0] : mostEloGainedFromId;
+}
+let mostEloLostToName = "";
+if (mostEloLostToId) {
+    const userObj = await app.users.get(mostEloLostToId);
+    mostEloLostToName = userObj ? userObj.pilotNames[0] : mostEloLostToId;
+}
+
 		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 		let killsWith = ``;
 		let killsAgainst = ``;
@@ -134,7 +314,62 @@ class Stats extends SlashCommand {
 			.sort((a, b) => b[1] - a[1])
 			.map(entry => entry[1] + " " + Weapon[entry[0]])
 			.join("\n");
+		
+		const aircraftList = [
+			{ key: Aircraft.FA26b, label: "FA-26B" },
+			{ key: Aircraft.F45A, label: "F-45A" },
+			{ key: Aircraft.T55, label: "T-55" },
+			{ key: Aircraft.EF24G, label: "EF-24G" },
+			{ key: Aircraft.AV42c, label: "AV-42C" }
+		];
+		
+		const aircraftStatsMap: Record<string, { kills: any[], deaths: any[] }> = {};
+		aircraftList.forEach(ac => {
+			aircraftStatsMap[ac.label] = { kills: [], deaths: [] };
+		});
+		kills.forEach(k => {
+			const ac = aircraftList.find(a => a.key === k.killer.type);
+			if (ac) aircraftStatsMap[ac.label].kills.push(k);
+		});
+		deaths.forEach(d => {
+			const ac = aircraftList.find(a => a.key === d.victim.type);
+			if (ac) aircraftStatsMap[ac.label].deaths.push(d);
+		});
+		const aircraftStats = aircraftList.map(ac => {
+			const acKills = aircraftStatsMap[ac.label].kills;
+			const acDeaths = aircraftStatsMap[ac.label].deaths;
+			const acKDR = acDeaths.length === 0 ? acKills.length : (acKills.length / acDeaths.length).toFixed(2);
 
+			const acSeasonSessions = user.sessions
+				? user.sessions.filter((session: any) => session.season === targetSeason.id)
+				: [];
+			const acTotalOnlineMs = acSeasonSessions.reduce((acc, session) => {
+				if (session.startTime && session.endTime && session.endTime > session.startTime) {
+					return acc + (session.endTime - session.startTime);
+				}
+				return acc;
+			}, 0);
+			const acTotalOnlineHours = acTotalOnlineMs / 1000 / 60 / 60;
+			const acKillsPerHour = acTotalOnlineHours === 0
+				? "0.00"
+				: (acKills.length / acTotalOnlineHours).toFixed(2);
+
+			const acWeaponKills: Record<Weapon, number> = {} as Record<Weapon, number>;
+			acKills.forEach(k => {
+				acWeaponKills[k.weapon] = (acWeaponKills[k.weapon] ?? 0) + 1;
+			});
+			const acWeaponKillsArr = Object.entries(acWeaponKills)
+				.sort((a, b) => b[1] - a[1])
+				.map(entry => ({ weapon: entry[0], count: entry[1] }));
+
+			return {
+				label: ac.label,
+				kdr: acKDR,
+				killsPerHour: acKillsPerHour,
+				weaponKills: acWeaponKillsArr
+			};
+		});
+		
 		const endOfSeasonStats = targetSeason.active ? null : await app.endOfSeasonStats.collection.findOne({ season: targetSeason.id, userId: user.id });
 		const rawRank = app.getUserRank(user, targetSeason, endOfSeasonStats);
 		const rank = rawRank == "N/A" ? 0 : rawRank;
@@ -143,27 +378,102 @@ class Stats extends SlashCommand {
 		const mostRecentSession = user.sessions?.length > 0 ? user.sessions[user.sessions.length - 1] : null;
 		const lastOnlineTimeStamp = mostRecentSession ? `<t:${Math.floor((mostRecentSession?.startTime ?? 0) / 1000)}:R>` : "Never";
 
+		let totalOnlineMs = 0;
+		if (user.sessions && user.sessions.length > 0) {
+			totalOnlineMs = user.sessions.reduce((acc, session) => {
+				if (session.startTime && session.endTime && session.endTime > session.startTime) {
+					return acc + (session.endTime - session.startTime);
+				}
+				return acc;
+			}, 0);
+		}
+		const totalOnlineHours = (totalOnlineMs / 1000 / 60 / 60).toFixed(2);
+
 		let maxElo = 0;
 		user.eloHistory.forEach(h => (maxElo = Math.max(maxElo, h.elo)));
 
 		const embed = new Discord.EmbedBuilder();
+		embed.setColor(#1abc9c);
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
+		try {
+            const steamApiKey = process.env.STEAM_API_KEY;
+            if (!steamApiKey) {
+                throw new Error("STEAM_API_KEY is not set in environment variables.");
+            }
+            const steamApiUrl = `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${steamApiKey}&steamids=${user.id}`;
+            const response = await fetch(steamApiUrl);
+            const data = await response.json();
+            console.log("Steam API response data:", data);
+            const avatarUrl = data.response?.players?.[0]?.avatarfull;
+            if (avatarUrl) {
+                embed.setThumbnail(avatarUrl);
+            }
+        } catch (err) {
+            console.warn("Could not fetch Steam avatar:", err);
+        }
 		embed.addFields([
-			{
+			{ 
 				name: "Metrics",
-				value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`,
-				inline: true
+				 value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`, 
+				 inline: true
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
-			// { name: "Online time", value: `${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
-			{ name: "Last Online", value: lastOnlineTimeStamp, inline: true },
+			{ name: "Online Stats", value: `Last Online: ${lastOnlineTimeStamp}\nOnline Time: ${totalOnlineHours} hours`, inline: true },
+			//end row 1
 			{ name: "Kills with", value: killsWith, inline: true },
 			{ name: "Kills against", value: killsAgainst, inline: true },
 			{ name: "Deaths against", value: deathsAgainst, inline: true },
+			//end row 2
 			{ name: "Weapons", value: weaponKillsStr || "<No Data>", inline: true },
-			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true }
-			// { name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
-		]);
+			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
+			{ name: "Interesting Stats", 
+				value: `Longest Killstreak ${longestKillstreak}
+						Longest Deathstreak ${longestDeathstreak}
+						Kills per hour ${getKillsPerHour(user, kills, targetSeason.id)}
+						Best Weapon pK ${bestMissilePkStr}
+						Worst Weapon pK ${worstMissilePkStr}`, 
+				inline: true 
+			},
+			//end row 3
+			{ 
+				name: "VS Stats", 
+				value: `MostKillsAgainst: ${mostKilledVictimName} (${mostKillsVsVictim})
+						MostDeathsAgainst: ${mostDeathsVsName} (${mostDeathsVsCount})
+						Most Elo Lost To: ${mostEloLostToName} (${mostEloLostValue.toFixed(0)})
+						Most Elo Gained From: ${mostEloGainedFromName} (${mostEloGained.toFixed(0)})`,
+				inline: true
+			},
+			{
+				name: "EF-24G Stats",
+				value: `KDR ${aircraftStats.find(a => a.label === "EF-24G")?.kdr}
+			Kills/Hr ${aircraftStats.find(a => a.label === "EF-24G")?.killsPerHour}
+			Weapon Kills ${aircraftStats.find(a => a.label === "EF-24G")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
+				inline: true},
+			{
+				name: "T-55 Stats",
+				value: `KDR ${aircraftStats.find(a => a.label === "T-55")?.kdr}
+			Kills/Hr ${aircraftStats.find(a => a.label === "T-55")?.killsPerHour}
+			Weapon Kills ${aircraftStats.find(a => a.label === "T-55")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
+				inline: true},
+			{
+				name: "FA-26B Stats",
+				value: `KDR ${aircraftStats.find(a => a.label === "FA-26B")?.kdr}
+			Kills/Hr ${aircraftStats.find(a => a.label === "FA-26B")?.killsPerHour}
+			Weapon Kills${aircraftStats.find(a => a.label === "FA-26B")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
+				inline: true},
+			{
+				name: "F-45A Stats",
+				value: `KDR ${aircraftStats.find(a => a.label === "F-45A")?.kdr}
+			Kills/Hr ${aircraftStats.find(a => a.label === "F-45A")?.killsPerHour}
+			Weapon Kills ${aircraftStats.find(a => a.label === "F-45A")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
+				inline: true},
+			{
+				name: "AV-42C Stats",
+				value: `KDR ${aircraftStats.find(a => a.label === "AV-42C")?.kdr}
+			Kills/Hr ${aircraftStats.find(a => a.label === "AV-42C")?.killsPerHour}
+			Weapon Kills ${aircraftStats.find(a => a.label === "AV-42C")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
+				inline: true},
+			]); 
 
 		let achievementLogText = "";
 		if (achievementsEnabled && (targetSeason.active || endOfSeasonStats)) {

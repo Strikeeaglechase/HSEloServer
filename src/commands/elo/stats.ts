@@ -149,20 +149,23 @@ class Stats extends SlashCommand {
 		const embed = new Discord.EmbedBuilder();
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
 		embed.addFields([
-			{
-				name: "Metrics",
-				value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`,
-				inline: true
-			},
+			{ name: "Metrics", value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`, inline: true},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
-			// { name: "Online time", value: `${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
-			{ name: "Last Online", value: lastOnlineTimeStamp, inline: true },
+			{ name: "Online Stats", value: `Last Online: ${lastOnlineTimeStamp}\nOnline Time: ${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
+			//end row 1
 			{ name: "Kills with", value: killsWith, inline: true },
 			{ name: "Kills against", value: killsAgainst, inline: true },
 			{ name: "Deaths against", value: deathsAgainst, inline: true },
+			//end row 2
 			{ name: "Weapons", value: weaponKillsStr || "<No Data>", inline: true },
-			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true }
-			// { name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
+			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
+			{ name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
+			//end row 3
+			{// name: "Interesting Stats", value: `Longest Killstreak ${}\nLongest Deathstreak ${}`, inline: true },
+			{// name: "Nemesis Stats", value `Most Elo Lost To ${}\nMost Elo Gained From ${}\Most Kills VS ${}, Most Deaths VS ${}`,
+			//end row 4
+			
+		
 		]);
 
 		let achievementLogText = "";

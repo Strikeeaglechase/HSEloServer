@@ -236,22 +236,24 @@ class Stats extends SlashCommand {
 		const worstMissilePkStr = worstMissile !== null
 			? `${worstMissile} (${(worstPk * 100).toFixed(2)}%)`
 			: "<No Data>";		
-		*/
+		
+//*/
 
-// eloChange logic perhaps working?
+
+		 //eloChange logic perhaps working?
 
 const eloGainedFrom: Record<string, number> = {};
 const eloLostTo: Record<string, number> = {};
 
 kills.forEach(kill => {
     const victimId = kill.victim.ownerId;
-    if (kill && typeof (kill as any).eloChange === "number") {
+    if (kill && typeof (kill as any).eloChange === "number" && isFinite((kill as any).eloChange)) {
         eloGainedFrom[victimId] = (eloGainedFrom[victimId] ?? 0) + (kill as any).eloChange;
     }
 });
 deaths.forEach(death => {
     const killerId = death.killer.ownerId;
-    if (death && typeof (death as any).eloChange === "number") {
+    if (death && typeof (death as any).eloChange === "number" && isFinite((death as any).eloChange)) {
         eloLostTo[killerId] = (eloLostTo[killerId] ?? 0) + (death as any).eloChange;
     }
 });
@@ -259,7 +261,7 @@ deaths.forEach(death => {
 let mostEloGainedFromId = null;
 let mostEloGained = -Infinity;
 for (const [id, elo] of Object.entries(eloGainedFrom)) {
-    if (elo > mostEloGained) {
+    if (elo > mostEloGained && isFinite(elo)) {
         mostEloGained = elo;
         mostEloGainedFromId = id;
     }
@@ -268,7 +270,7 @@ for (const [id, elo] of Object.entries(eloGainedFrom)) {
 let mostEloLostToId = null;
 let mostEloLostValue = 0;
 for (const [id, elo] of Object.entries(eloLostTo)) {
-    if (elo < mostEloLostValue) {
+    if (elo < mostEloLostValue && isFinite(elo)) {
         mostEloLostValue = elo;
         mostEloLostToId = id;
     }
@@ -284,6 +286,31 @@ if (mostEloLostToId) {
     const userObj = await app.users.get(mostEloLostToId);
     mostEloLostToName = userObj ? userObj.pilotNames[0] : mostEloLostToId;
 }
+
+// Prepare lists for embed, filtering out Infinity/NaN
+const eloGainedFromList = await Promise.all(
+    Object.entries(eloGainedFrom)
+        .filter(([_, elo]) => isFinite(elo))
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(async ([id, elo]) => {
+            const userObj = await app.users.get(id);
+            const name = userObj?.pilotNames?.[0] || id;
+            return `${name}: ${elo.toFixed(0)}`;
+        })
+);
+
+const eloLostToList = await Promise.all(
+    Object.entries(eloLostTo)
+        .filter(([_, elo]) => isFinite(elo))
+        .sort((a, b) => a[1] - b[1])
+        .slice(0, 5)
+        .map(async ([id, elo]) => {
+            const userObj = await app.users.get(id);
+            const name = userObj?.pilotNames?.[0] || id;
+            return `${name}: ${elo.toFixed(0)}`;
+        })
+);
 
 		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 		let killsWith = ``;
@@ -344,7 +371,11 @@ if (mostEloLostToId) {
 			const acKDR = acDeaths.length === 0 ? acKills.length : (acKills.length / acDeaths.length).toFixed(2);
 
 			const acSeasonSessions = user.sessions
-				? user.sessions.filter((session: any) => session.season === targetSeason.id)
+				? user.sessions.filter(
+        (session: any) =>
+            session.season === targetSeason.id &&
+            session.aircraftType === ac.key
+    )
 				: [];
 			const acTotalOnlineMs = acSeasonSessions.reduce((acc, session) => {
 				if (session.startTime && session.endTime && session.endTime > session.startTime) {
@@ -417,67 +448,87 @@ if (mostEloLostToId) {
 		embed.addFields([
 			{ 
 				name: "Metrics",
-				 value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`, 
-				 inline: true
+				value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`, 
+				inline: true
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
 			{ name: "Online Stats", value: `Last Online: ${lastOnlineTimeStamp}\nOnline Time: ${totalOnlineHours} hours`, inline: true },
 			//end row 1
-			{ name: "Kills with", value: killsWith, inline: true },
 			{ name: "Kills against", value: killsAgainst, inline: true },
 			{ name: "Deaths against", value: deathsAgainst, inline: true },
 			//end row 2
 			{ name: "Weapons", value: weaponKillsStr || "<No Data>", inline: true },
 			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
-			{ name: "Interesting Stats", 
-				value: `Longest Killstreak ${longestKillstreak}
-						Longest Deathstreak ${longestDeathstreak}
-						Kills per hour ${getKillsPerHour(user, kills, targetSeason.id)}`, 
+			{ 
+				name: "Interesting Stats", 
+				value: `Longest Killstreak: ${longestKillstreak}
+					Longest Deathstreak: ${longestDeathstreak}
+					Kills per hour: ${getKillsPerHour(user, kills, targetSeason.id)}`,
 				inline: true 
 			},
-						//Best Weapon pK ${bestMissilePkStr}
-						//Worst Weapon pK ${worstMissilePkStr}
 			//end row 3
-			{ 
-				name: "VS Stats", 
-				value: `MostKillsAgainst: ${mostKilledVictimName} (${mostKillsVsVictim})
-						MostDeathsAgainst: ${mostDeathsVsName} (${mostDeathsVsCount})
-						Most Elo Lost To: ${mostEloLostToName} (${mostEloLostValue.toFixed(0)})
-						Most Elo Gained From: ${mostEloGainedFromName} (${mostEloGained.toFixed(0)})`,
+			{
+				name: "EF-24G Stats",
+				value: `Total Kills: ${aircraftStats.find(a => a.label === "EF-24G")?.weaponKills.reduce((sum, w) => sum + w.count, 0) || 0}
+					KDR: ${aircraftStats.find(a => a.label === "EF-24G")?.kdr}
+					Weapon Kills
+					${aircraftStats.find(a => a.label === "EF-24G")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join("\n") || "<No Data>"}`,
 				inline: true
 			},
 			{
-				name: "EF-24G Stats",
-				value: `KDR ${aircraftStats.find(a => a.label === "EF-24G")?.kdr}
-			Kills/Hr ${aircraftStats.find(a => a.label === "EF-24G")?.killsPerHour}
-			Weapon Kills ${aircraftStats.find(a => a.label === "EF-24G")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
-				inline: true},
-			{
 				name: "T-55 Stats",
-				value: `KDR ${aircraftStats.find(a => a.label === "T-55")?.kdr}
-			Kills/Hr ${aircraftStats.find(a => a.label === "T-55")?.killsPerHour}
-			Weapon Kills ${aircraftStats.find(a => a.label === "T-55")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
-				inline: true},
+				value: `Total Kills: ${aircraftStats.find(a => a.label === "T-55")?.weaponKills.reduce((sum, w) => sum + w.count, 0) || 0}
+					KDR: ${aircraftStats.find(a => a.label === "T-55")?.kdr}
+					Weapon Kills
+					${aircraftStats.find(a => a.label === "T-55")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join("\n") || "<No Data>"}`,
+				inline: true
+			},
 			{
 				name: "FA-26B Stats",
-				value: `KDR ${aircraftStats.find(a => a.label === "FA-26B")?.kdr}
-			Kills/Hr ${aircraftStats.find(a => a.label === "FA-26B")?.killsPerHour}
-			Weapon Kills${aircraftStats.find(a => a.label === "FA-26B")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
-				inline: true},
+				value: `Total Kills: ${aircraftStats.find(a => a.label === "FA-26B")?.weaponKills.reduce((sum, w) => sum + w.count, 0) || 0}
+					KDR: ${aircraftStats.find(a => a.label === "FA-26B")?.kdr}
+					Weapon Kills
+					${aircraftStats.find(a => a.label === "FA-26B")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join("\n") || "<No Data>"}`,
+				inline: true
+			},
 			{
 				name: "F-45A Stats",
-				value: `KDR ${aircraftStats.find(a => a.label === "F-45A")?.kdr}
-			Kills/Hr ${aircraftStats.find(a => a.label === "F-45A")?.killsPerHour}
-			Weapon Kills ${aircraftStats.find(a => a.label === "F-45A")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
-				inline: true},
+				value: `Total Kills: ${aircraftStats.find(a => a.label === "F-45A")?.weaponKills.reduce((sum, w) => sum + w.count, 0) || 0}
+					KDR: ${aircraftStats.find(a => a.label === "F-45A")?.kdr}
+					Weapon Kills
+					${aircraftStats.find(a => a.label === "F-45A")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join("\n") || "<No Data>"}`,
+				inline: true
+			},
 			{
 				name: "AV-42C Stats",
-				value: `KDR ${aircraftStats.find(a => a.label === "AV-42C")?.kdr}
-			Kills/Hr ${aircraftStats.find(a => a.label === "AV-42C")?.killsPerHour}
-			Weapon Kills ${aircraftStats.find(a => a.label === "AV-42C")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join(", ") || "<No Data>"}`,
-				inline: true},
-			]); 
-
+				value: `Total Kills: ${aircraftStats.find(a => a.label === "AV-42C")?.weaponKills.reduce((sum, w) => sum + w.count, 0) || 0}
+					KDR: ${aircraftStats.find(a => a.label === "AV-42C")?.kdr}
+					Weapon Kills
+					${aircraftStats.find(a => a.label === "AV-42C")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join("\n") || "<No Data>"}`,
+				inline: true
+			},
+			// VS Stats moved after all aircraft stats
+			{ 
+				name: "VS Stats", 
+				value: [
+					`MostKillsAgainst: ${mostKilledVictimName} (${mostKillsVsVictim})`,
+					`MostDeathsAgainst: ${mostDeathsVsName} (${mostDeathsVsCount})`,
+					`Most Elo Lost To: ${
+				mostEloLostToName
+			} (${isFinite(mostEloLostValue) ? mostEloLostValue.toFixed(0) : "void"})`,
+					`Most Elo Gained From: ${
+				mostEloGainedFromName
+			} (${isFinite(mostEloGained) ? mostEloGained.toFixed(0) : "void"})`,
+					"",
+					"**Elo Gained From:**",
+					...[...new Set(eloGainedFromList)],
+					"",
+					"**Elo Lost To:**",
+					...[...new Set(eloLostToList)]
+				].join("\n"),
+				inline: true
+			}
+		]);
 		let achievementLogText = "";
 		if (achievementsEnabled && (targetSeason.active || endOfSeasonStats)) {
 			const userAchievements = targetSeason.active ? user.achievements : endOfSeasonStats.achievements ?? [];

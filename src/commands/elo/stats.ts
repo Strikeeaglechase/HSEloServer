@@ -393,7 +393,7 @@ if (mostEloLostToId) {
 		user.eloHistory.forEach(h => (maxElo = Math.max(maxElo, h.elo)));
 
 		const embed = new Discord.EmbedBuilder();
-		embed.setColor(#1abc9c);
+		embed.setColor("#1abc9c");
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
 		try {
             const steamApiKey = process.env.STEAM_API_KEY;

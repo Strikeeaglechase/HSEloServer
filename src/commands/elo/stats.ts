@@ -186,6 +186,8 @@ class Stats extends SlashCommand {
 				currentKillStreak = 0;
 			}
 		}
+		/*
+		//commenting out for now, will fix later
 		const missileShots = await app.missiles.collection.find({
 			shooterId: user.id,
 			season: targetSeason.id
@@ -234,7 +236,8 @@ class Stats extends SlashCommand {
 		const worstMissilePkStr = worstMissile !== null
 			? `${worstMissile} (${(worstPk * 100).toFixed(2)}%)`
 			: "<No Data>";		
-		
+		*/
+
 // eloChange logic perhaps working?
 
 const eloGainedFrom: Record<string, number> = {};
@@ -429,11 +432,11 @@ if (mostEloLostToId) {
 			{ name: "Interesting Stats", 
 				value: `Longest Killstreak ${longestKillstreak}
 						Longest Deathstreak ${longestDeathstreak}
-						Kills per hour ${getKillsPerHour(user, kills, targetSeason.id)}
-						Best Weapon pK ${bestMissilePkStr}
-						Worst Weapon pK ${worstMissilePkStr}`, 
+						Kills per hour ${getKillsPerHour(user, kills, targetSeason.id)}`, 
 				inline: true 
 			},
+						//Best Weapon pK ${bestMissilePkStr}
+						//Worst Weapon pK ${worstMissilePkStr}
 			//end row 3
 			{ 
 				name: "VS Stats", 

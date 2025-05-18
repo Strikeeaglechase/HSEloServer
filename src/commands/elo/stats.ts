@@ -188,53 +188,132 @@ class Stats extends SlashCommand {
 				currentKillStreak = 0;
 			}
 		}
+		/*
+		//commenting out for now, will fix later
+		const missileShots = await app.missiles.collection.find({
+			shooterId: user.id,
+			season: targetSeason.id
+		}).toArray();
 		
+		const shotsFiredPerMissile: Record<string, number> = {};
+		missileShots.forEach(missile => {
+			shotsFiredPerMissile[missile.weapon] = (shotsFiredPerMissile[missile.weapon] ?? 0) + 1;
+		});
 		
-		const eloGainedFrom: Record<string, number> = {};
-		const eloLostTo: Record<string, number> = {};
-		
+		const missileKillsPerWeapon: Record<string, number> = {};
 		kills.forEach(kill => {
-			const victimId = kill.victim.ownerId;
-			if (typeof(kill.eloChange) === "number") {
-				eloGainedFrom[victimId] = (eloGainedFrom[victimId] ?? 0) + kill.eloChange;
-			}
-		});
-		deaths.forEach(death => {
-			const killerId = death.killer.ownerId;
-			if (typeof(death.eloChange) === "number") {
-				eloLostTo[killerId] = (eloLostTo[killerId] ?? 0) - death.eloChange;
+			if (shotsFiredPerMissile[kill.weapon] !== undefined) {
+				missileKillsPerWeapon[kill.weapon] = (missileKillsPerWeapon[kill.weapon] ?? 0) + 1;
 			}
 		});
 		
-		let mostEloGainedFromId = null;
-		let mostEloGained = -Infinity;
-		for (const [id, elo] of Object.entries(eloGainedFrom)) {
-			if (elo > mostEloGained) {
-				mostEloGained = elo;
-				mostEloGainedFromId = id;
+		const missilePkStats: { weapon: string, pk: number }[] = [];
+		for (const weapon of Object.keys(shotsFiredPerMissile)) {
+			const shots = shotsFiredPerMissile[weapon];
+			const kills = missileKillsPerWeapon[weapon] ?? 0;
+			if (shots > 0) {
+				missilePkStats.push({ weapon, pk: kills / shots });
 			}
 		}
 		
-		let mostEloLostToId = null;
-		let mostEloLost = -Infinity;
-		for (const [id, elo] of Object.entries(eloLostTo)) {
-			if (elo > mostEloLost) {
-				mostEloLost = elo;
-				mostEloLostToId = id;
+		let bestMissile: string | null = null;
+		let bestPk = -Infinity;
+		let worstMissile: string | null = null;
+		let worstPk = Infinity;
+		
+		for (const stat of missilePkStats) {
+			if (stat.pk > bestPk) {
+				bestPk = stat.pk;
+				bestMissile = stat.weapon;
+			}
+			if (stat.pk < worstPk) {
+				worstPk = stat.pk;
+				worstMissile = stat.weapon;
 			}
 		}
 		
-		let mostEloGainedFromName = "";
-		if (mostEloGainedFromId) {
-			const userObj = await app.users.get(mostEloGainedFromId);
-			mostEloGainedFromName = userObj ? userObj.pilotNames[0] : mostEloGainedFromId;
-		}
-		let mostEloLostToName = "";
-		if (mostEloLostToId) {
-			const userObj = await app.users.get(mostEloLostToId);
-			mostEloLostToName = userObj ? userObj.pilotNames[0] : mostEloLostToId;
-		}
+		const bestMissilePkStr = bestMissile !== null
+			? `${bestMissile} (${(bestPk * 100).toFixed(2)}%)`
+			: "<No Data>";
+		const worstMissilePkStr = worstMissile !== null
+			? `${worstMissile} (${(worstPk * 100).toFixed(2)}%)`
+			: "<No Data>";		
 		
+//*/
+
+
+		 //eloChange logic perhaps working?
+
+const eloGainedFrom: Record<string, number> = {};
+const eloLostTo: Record<string, number> = {};
+
+kills.forEach(kill => {
+    const victimId = kill.victim.ownerId;
+    if (kill && typeof (kill as any).eloChange === "number" && isFinite((kill as any).eloChange)) {
+        eloGainedFrom[victimId] = (eloGainedFrom[victimId] ?? 0) + (kill as any).eloChange;
+    }
+});
+deaths.forEach(death => {
+    const killerId = death.killer.ownerId;
+    if (death && typeof (death as any).eloChange === "number" && isFinite((death as any).eloChange)) {
+        eloLostTo[killerId] = (eloLostTo[killerId] ?? 0) + (death as any).eloChange;
+    }
+});
+
+let mostEloGainedFromId = null;
+let mostEloGained = -Infinity;
+for (const [id, elo] of Object.entries(eloGainedFrom)) {
+    if (elo > mostEloGained && isFinite(elo)) {
+        mostEloGained = elo;
+        mostEloGainedFromId = id;
+    }
+}
+
+let mostEloLostToId = null;
+let mostEloLostValue = 0;
+for (const [id, elo] of Object.entries(eloLostTo)) {
+    if (elo < mostEloLostValue && isFinite(elo)) {
+        mostEloLostValue = elo;
+        mostEloLostToId = id;
+    }
+}
+
+let mostEloGainedFromName = "";
+if (mostEloGainedFromId) {
+    const userObj = await app.users.get(mostEloGainedFromId);
+    mostEloGainedFromName = userObj ? userObj.pilotNames[0] : mostEloGainedFromId;
+}
+let mostEloLostToName = "";
+if (mostEloLostToId) {
+    const userObj = await app.users.get(mostEloLostToId);
+    mostEloLostToName = userObj ? userObj.pilotNames[0] : mostEloLostToId;
+}
+
+// Prepare lists for embed, filtering out Infinity/NaN
+const eloGainedFromList = await Promise.all(
+    Object.entries(eloGainedFrom)
+        .filter(([_, elo]) => isFinite(elo))
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(async ([id, elo]) => {
+            const userObj = await app.users.get(id);
+            const name = userObj?.pilotNames?.[0] || id;
+            return `${name}: ${elo.toFixed(0)}`;
+        })
+);
+
+const eloLostToList = await Promise.all(
+    Object.entries(eloLostTo)
+        .filter(([_, elo]) => isFinite(elo))
+        .sort((a, b) => a[1] - b[1])
+        .slice(0, 5)
+        .map(async ([id, elo]) => {
+            const userObj = await app.users.get(id);
+            const name = userObj?.pilotNames?.[0] || id;
+            return `${name}: ${elo.toFixed(0)}`;
+        })
+);
+
 		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 		let killsWith = ``;
 		let killsAgainst = ``;

@@ -60,6 +60,25 @@ function calculateTimeOnServer(user: User) {
 	return timeOnServer;
 }
 
+function getKillsPerHour(user: User, kills: any[], seasonId: number): string {
+    if (!user.sessions || user.sessions.length === 0) return "0.00";
+    // Filter sessions to only those in the selected season, if possible
+    // This assumes session objects have a 'season' property. If not, remove this filter.
+    const seasonSessions = user.sessions.filter(
+        (session: any) => session.season === seasonId
+    );
+    const sessionsToUse = seasonSessions.length > 0 ? seasonSessions : user.sessions;
+    const totalOnlineMs = sessionsToUse.reduce((acc, session) => {
+        if (session.startTime && session.endTime && session.endTime > session.startTime) {
+            return acc + (session.endTime - session.startTime);
+        }
+        return acc;
+    }, 0);
+    const totalOnlineHours = totalOnlineMs / 1000 / 60 / 60;
+    if (totalOnlineHours === 0) return "0.00";
+    return (kills.length / totalOnlineHours).toFixed(2);
+}
+
 class Stats extends SlashCommand {
 	name = "stats";
 	description = "Gets the stats for yourself or another user";
@@ -257,15 +276,25 @@ class Stats extends SlashCommand {
 		const mostRecentSession = user.sessions?.length > 0 ? user.sessions[user.sessions.length - 1] : null;
 		const lastOnlineTimeStamp = mostRecentSession ? `<t:${Math.floor((mostRecentSession?.startTime ?? 0) / 1000)}:R>` : "Never";
 
+		let totalOnlineMs = 0;
+		if (user.sessions && user.sessions.length > 0) {
+			totalOnlineMs = user.sessions.reduce((acc, session) => {
+				if (session.startTime && session.endTime && session.endTime > session.startTime) {
+					return acc + (session.endTime - session.startTime);
+				}
+				return acc;
+			}, 0);
+		}
+		const totalOnlineHours = (totalOnlineMs / 1000 / 60 / 60).toFixed(2);
+
 		let maxElo = 0;
 		user.eloHistory.forEach(h => (maxElo = Math.max(maxElo, h.elo)));
 
 		const embed = new Discord.EmbedBuilder();
 		embed.setColor(0x0099ff);
 		embed.setTitle(`Stats for ${user.pilotNames[0]}`);
-		const discordUser = await interaction.client.users.fetch(user.discordId).catch(() => null);
-		if (discordUser) {
-			embed.setThumbnail(discordUser.displayAvatarURL({ extension: "png", size: 256 }));
+		if (user.steamAvatar) {
+			embed.setThumbnail(user.steamAvatar);
 		}
 		embed.addFields([
 			{ 
@@ -274,7 +303,7 @@ class Stats extends SlashCommand {
 				 inline: true
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
-			{ name: "Online Stats", value: `Last Online: ${lastOnlineTimeStamp}\nOnline Time: ${(timeOnServer / 1000 / 60 / 60).toFixed(2)} hours`, inline: true },
+			{ name: "Online Stats", value: `Last Online: ${lastOnlineTimeStamp}\nOnline Time: ${totalOnlineHours} hours`, inline: true },
 			//end row 1
 			{ name: "Kills with", value: killsWith, inline: true },
 			{ name: "Kills against", value: killsAgainst, inline: true },
@@ -282,7 +311,7 @@ class Stats extends SlashCommand {
 			//end row 2
 			{ name: "Weapons", value: weaponKillsStr || "<No Data>", inline: true },
 			{ name: "Died to", value: weaponDeathsStr || "<No Data>", inline: true },
-			{ name: "Kills per hour", value: `${(user.kills / (timeOnServer / 1000 / 60 / 60)).toFixed(2)}`, inline: true },
+			{ name: "Kills per hour", value: getKillsPerHour(user, kills, targetSeason.id), inline: true },
 			//end row 3
 			{ name: "Interesting Stats", value: `Longest Killstreak ${longestKillstreak}\nLongest Deathstreak ${longestDeathstreak}`, inline: true },
 			{ name: "VS Stats", value: `Most Elo Lost To: ${mostEloLostToName} (${mostEloLost})\nMost Elo Gained From: ${mostEloGainedFromName} (${mostEloGained})

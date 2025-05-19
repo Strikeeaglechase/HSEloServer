@@ -242,77 +242,80 @@ class Stats extends SlashCommand {
 //*/
 
 
-		 //eloChange logic perhaps working?
+		 //eloChange logic not working correctly. Need to make it a new property
+		 //and update the back updater and api
 
-const eloGainedFrom: Record<string, number> = {};
-const eloLostTo: Record<string, number> = {};
+				/*
+				const eloGainedFrom: Record<string, number> = {};
+				const eloLostTo: Record<string, number> = {};
 
-kills.forEach(kill => {
-    const victimId = kill.victim.ownerId;
-    if (kill && typeof (kill as any).eloChange === "number" && isFinite((kill as any).eloChange)) {
-        eloGainedFrom[victimId] = (eloGainedFrom[victimId] ?? 0) + (kill as any).eloChange;
-    }
-});
-deaths.forEach(death => {
-    const killerId = death.killer.ownerId;
-    if (death && typeof (death as any).eloChange === "number" && isFinite((death as any).eloChange)) {
-        eloLostTo[killerId] = (eloLostTo[killerId] ?? 0) + (death as any).eloChange;
-    }
-});
+				kills.forEach(kill => {
+					const victimId = kill.victim.ownerId;
+					if (kill && typeof (kill as any).eloChange === "number" && isFinite((kill as any).eloChange)) {
+						eloGainedFrom[victimId] = (eloGainedFrom[victimId] ?? 0) + (kill as any).eloChange;
+					}
+				});
+				deaths.forEach(death => {
+					const killerId = death.killer.ownerId;
+					if (death && typeof (death as any).eloChange === "number" && isFinite((death as any).eloChange)) {
+						eloLostTo[killerId] = (eloLostTo[killerId] ?? 0) + (death as any).eloChange;
+					}
+				});
 
-let mostEloGainedFromId = null;
-let mostEloGained = -Infinity;
-for (const [id, elo] of Object.entries(eloGainedFrom)) {
-    if (elo > mostEloGained && isFinite(elo)) {
-        mostEloGained = elo;
-        mostEloGainedFromId = id;
-    }
-}
+				let mostEloGainedFromId = null;
+				let mostEloGained = -Infinity;
+				for (const [id, elo] of Object.entries(eloGainedFrom)) {
+					if (elo > mostEloGained && isFinite(elo)) {
+						mostEloGained = elo;
+						mostEloGainedFromId = id;
+					}
+				}
 
-let mostEloLostToId = null;
-let mostEloLostValue = 0;
-for (const [id, elo] of Object.entries(eloLostTo)) {
-    if (elo < mostEloLostValue && isFinite(elo)) {
-        mostEloLostValue = elo;
-        mostEloLostToId = id;
-    }
-}
+				let mostEloLostToId = null;
+				let mostEloLostValue = 0;
+				for (const [id, elo] of Object.entries(eloLostTo)) {
+					if (elo < mostEloLostValue && isFinite(elo)) {
+						mostEloLostValue = elo;
+						mostEloLostToId = id;
+					}
+				}
 
-let mostEloGainedFromName = "";
-if (mostEloGainedFromId) {
-    const userObj = await app.users.get(mostEloGainedFromId);
-    mostEloGainedFromName = userObj ? userObj.pilotNames[0] : mostEloGainedFromId;
-}
-let mostEloLostToName = "";
-if (mostEloLostToId) {
-    const userObj = await app.users.get(mostEloLostToId);
-    mostEloLostToName = userObj ? userObj.pilotNames[0] : mostEloLostToId;
-}
+				let mostEloGainedFromName = "";
+				if (mostEloGainedFromId) {
+					const userObj = await app.users.get(mostEloGainedFromId);
+					mostEloGainedFromName = userObj ? userObj.pilotNames[0] : mostEloGainedFromId;
+				}
+				let mostEloLostToName = "";
+				if (mostEloLostToId) {
+					const userObj = await app.users.get(mostEloLostToId);
+					mostEloLostToName = userObj ? userObj.pilotNames[0] : mostEloLostToId;
+				}
 
-// Prepare lists for embed, filtering out Infinity/NaN
-const eloGainedFromList = await Promise.all(
-    Object.entries(eloGainedFrom)
-        .filter(([_, elo]) => isFinite(elo))
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(async ([id, elo]) => {
-            const userObj = await app.users.get(id);
-            const name = userObj?.pilotNames?.[0] || id;
-            return `${name}: ${elo.toFixed(0)}`;
-        })
-);
+				// Prepare lists for embed, filtering out Infinity/NaN
+				const eloGainedFromList = await Promise.all(
+					Object.entries(eloGainedFrom)
+						.filter(([_, elo]) => isFinite(elo))
+						.sort((a, b) => b[1] - a[1])
+						.slice(0, 5)
+						.map(async ([id, elo]) => {
+							const userObj = await app.users.get(id);
+							const name = userObj?.pilotNames?.[0] || id;
+							return `${name}: ${elo.toFixed(0)}`;
+						})
+				);
 
-const eloLostToList = await Promise.all(
-    Object.entries(eloLostTo)
-        .filter(([_, elo]) => isFinite(elo))
-        .sort((a, b) => a[1] - b[1])
-        .slice(0, 5)
-        .map(async ([id, elo]) => {
-            const userObj = await app.users.get(id);
-            const name = userObj?.pilotNames?.[0] || id;
-            return `${name}: ${elo.toFixed(0)}`;
-        })
-);
+				const eloLostToList = await Promise.all(
+					Object.entries(eloLostTo)
+						.filter(([_, elo]) => isFinite(elo))
+						.sort((a, b) => a[1] - b[1])
+						.slice(0, 5)
+						.map(async ([id, elo]) => {
+							const userObj = await app.users.get(id);
+							const name = userObj?.pilotNames?.[0] || id;
+							return `${name}: ${elo.toFixed(0)}`;
+						})
+				);
+				*/
 
 		const aircraftMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 		let killsWith = ``;
@@ -365,6 +368,65 @@ const eloLostToList = await Promise.all(
 			}, 0);
 		}
 		const totalOnlineHours = (totalOnlineMs / 1000 / 60 / 60).toFixed(2);
+
+		const aircraftList = [
+			{ key: Aircraft.FA26b, label: "FA-26B" },
+			{ key: Aircraft.F45A, label: "F-45A" },
+			{ key: Aircraft.T55, label: "T-55" },
+			{ key: Aircraft.EF24G, label: "EF-24G" },
+			{ key: Aircraft.AV42c, label: "AV-42C" }
+		];
+		
+		const aircraftStatsMap: Record<string, { kills: any[], deaths: any[] }> = {};
+		aircraftList.forEach(ac => {
+			aircraftStatsMap[ac.label] = { kills: [], deaths: [] };
+		});
+		kills.forEach(k => {
+			const ac = aircraftList.find(a => a.key === k.killer.type);
+			if (ac) aircraftStatsMap[ac.label].kills.push(k);
+		});
+		deaths.forEach(d => {
+			const ac = aircraftList.find(a => a.key === d.victim.type);
+			if (ac) aircraftStatsMap[ac.label].deaths.push(d);
+		});
+		const aircraftStats = aircraftList.map(ac => {
+			const acKills = aircraftStatsMap[ac.label].kills;
+			const acDeaths = aircraftStatsMap[ac.label].deaths;
+			const acKDR = acDeaths.length === 0 ? acKills.length : (acKills.length / acDeaths.length).toFixed(2);
+
+			const acSeasonSessions = user.sessions
+				? user.sessions.filter(
+        (session: any) =>
+            session.season === targetSeason.id &&
+            session.aircraftType === ac.key
+    )
+				: [];
+			const acTotalOnlineMs = acSeasonSessions.reduce((acc, session) => {
+				if (session.startTime && session.endTime && session.endTime > session.startTime) {
+					return acc + (session.endTime - session.startTime);
+				}
+				return acc;
+			}, 0);
+			const acTotalOnlineHours = acTotalOnlineMs / 1000 / 60 / 60;
+			const acKillsPerHour = acTotalOnlineHours === 0
+				? "0.00"
+				: (acKills.length / acTotalOnlineHours).toFixed(2);
+
+			const acWeaponKills: Record<Weapon, number> = {} as Record<Weapon, number>;
+			acKills.forEach(k => {
+				acWeaponKills[k.weapon] = (acWeaponKills[k.weapon] ?? 0) + 1;
+			});
+			const acWeaponKillsArr = Object.entries(acWeaponKills)
+				.sort((a, b) => b[1] - a[1])
+				.map(entry => ({ weapon: entry[0], count: entry[1] }));
+
+			return {
+				label: ac.label,
+				kdr: acKDR,
+				killsPerHour: acKillsPerHour,
+				weaponKills: acWeaponKillsArr
+			};
+		});
 
 		let maxElo = 0;
 		user.eloHistory.forEach(h => (maxElo = Math.max(maxElo, h.elo)));
@@ -468,11 +530,12 @@ const eloLostToList = await Promise.all(
 				name: "VS Stats", 
 				value: [
 				`Most Kills Against: ${mostKilledVictimName} (${mostKillsVsVictim})`,
-				`Most Deaths Against: ${mostDeathsVsName} (${mostDeathsVsCount})`,
-				`Most Elo Gained From: ${mostEloGainedFromName} (${isFinite(mostEloGained) ? mostEloGained.toFixed(0) : "N/A"})`,
-				`Most Elo Lost To: ${mostEloLostToName} (${isFinite(mostEloLostValue) ? mostEloLostValue.toFixed(0) : "N/A"})`
+				`Most Deaths Against: ${mostDeathsVsName} (${mostDeathsVsCount})`
+				//re-add Most Elo Gained From and Most Elo Lost To when fixed
 			].join("\n"),
-			inline: true
+			inline: true			
+				//`Most Elo Gained From: ${mostEloGainedFromName} (${isFinite(mostEloGained) ? mostEloGained.toFixed(0) : "N/A"})`,
+				//`Most Elo Lost To: ${mostEloLostToName} (${isFinite(mostEloLostValue) ? mostEloLostValue.toFixed(0) : "N/A"})`
 				//end row 4/5 depending on population
 			}
 		]);

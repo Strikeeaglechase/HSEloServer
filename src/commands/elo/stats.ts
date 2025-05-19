@@ -400,21 +400,16 @@ const eloLostToList = await Promise.all(
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
 			{ 
-    name: "Online Stats", 
-    value: `First Online: ${
-        user.sessions && user.sessions.length > 0
-            ? new Date(
-                user.sessions
-                    .map(s => s.startTime)
-                    .filter(Boolean)
-                    .sort((a, b) => a - b)[0]
-              ).toLocaleDateString()
+			name: "Online Stats", 
+			value: `First Online: ${
+			user.loginTimes && user.loginTimes.length > 0
+            ? new Date(Math.min(...user.loginTimes.filter(Number.isFinite))).toLocaleDateString()
             : "Never"
     }
-Last Online: ${lastOnlineTimeStamp}
-Online Time: ${totalOnlineHours} hours`,
-    inline: true 
-},
+					Last Online: ${lastOnlineTimeStamp}
+					Online Time: ${totalOnlineHours} hours`,
+    				inline: true 
+			},
 			//end row 1
 			{ name: "Aircraft Kills", value: killsWith || "<No Data>", inline: true },
 			{ name: "Weapons", value: weaponKillsStr || "<No Data>", inline: true },

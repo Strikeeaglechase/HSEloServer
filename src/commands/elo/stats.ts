@@ -464,10 +464,15 @@ class Stats extends SlashCommand {
 			{ 
 			name: "Online Stats", 
 			value: `First Online: ${
-			user.loginTimes && user.loginTimes.length > 0
-            ? new Date(Math.min(...user.loginTimes.filter(Number.isFinite))).toLocaleDateString()
-            : "Never"
-    }
+				user.loginTimes && user.loginTimes.length > 0
+					? (() => {
+						const validTimes = user.loginTimes.filter(t => Number.isFinite(t) && t > 0);
+						return validTimes.length > 0
+							? new Date(Math.min(...validTimes)).toLocaleDateString()
+							: "Never";
+					})()
+					: "Never"
+			}
 					Last Online: ${lastOnlineTimeStamp}
 					Online Time: ${totalOnlineHours} hours`,
     				inline: true 

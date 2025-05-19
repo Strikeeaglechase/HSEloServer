@@ -448,8 +448,17 @@ const eloLostToList = await Promise.all(
 		embed.addFields([
 			{ 
 				name: "Metrics",
-				value: `ELO: ${Math.floor(elo)}\nRank: ${rank || "No rank"}\nTop ${((rank / playersWithRank) * 100).toFixed(0)}%\nPeak: ${Math.floor(maxElo)}`, 
-				inline: true
+				value: `ELO: ${Math.floor(elo)}
+					Rank: ${rank || "No rank"}
+					Top ${((rank / playersWithRank) * 100).toFixed(0)}%
+					Peak: ${Math.floor(maxElo)}
+					Avg: ${
+			user.eloHistory.filter(h => h.season === targetSeason.id).length > 0
+				? user.eloHistory.filter(h => h.season === targetSeason.id).reduce((acc, h, _, arr) => acc + h.elo / arr.length, 0).toFixed(0)
+				: "0"
+}
+`,
+						inline: true
 			},
 			{ name: "KDR", value: `K: ${kills.length} \nD: ${deaths.length} \nR: ${(kills.length / deaths.length).toFixed(2)}`, inline: true },
 			{ name: "Online Stats", value: `Last Online: ${lastOnlineTimeStamp}\nOnline Time: ${totalOnlineHours} hours`, inline: true },
@@ -507,28 +516,20 @@ const eloLostToList = await Promise.all(
 					${aircraftStats.find(a => a.label === "AV-42C")?.weaponKills.map(w => `${w.count} ${Weapon[w.weapon]}`).join("\n") || "<No Data>"}`,
 				inline: true
 			},
-			// VS Stats moved after all aircraft stats
+			
 			{ 
 				name: "VS Stats", 
 				value: [
-					`MostKillsAgainst: ${mostKilledVictimName} (${mostKillsVsVictim})`,
-					`MostDeathsAgainst: ${mostDeathsVsName} (${mostDeathsVsCount})`,
-					`Most Elo Lost To: ${
-				mostEloLostToName
-			} (${isFinite(mostEloLostValue) ? mostEloLostValue.toFixed(0) : "void"})`,
-					`Most Elo Gained From: ${
-				mostEloGainedFromName
-			} (${isFinite(mostEloGained) ? mostEloGained.toFixed(0) : "void"})`,
-					"",
-					"**Elo Gained From:**",
-					...[...new Set(eloGainedFromList)],
-					"",
-					"**Elo Lost To:**",
-					...[...new Set(eloLostToList)]
-				].join("\n"),
-				inline: true
+    `Most Kills Against: ${mostKilledVictimName} (${mostKillsVsVictim})`,
+    `Most Deaths Against: ${mostDeathsVsName} (${mostDeathsVsCount})`,
+    `Most Elo Gained From: ${mostEloGainedFromName} (${isFinite(mostEloGained) ? mostEloGained.toFixed(0) : "N/A"})`,
+    `Most Elo Lost To: ${mostEloLostToName} (${isFinite(mostEloLostValue) ? mostEloLostValue.toFixed(0) : "N/A"})`
+].join("\n"),
+inline: true
+				//end row 4/5 depending on population
 			}
 		]);
+
 		let achievementLogText = "";
 		if (achievementsEnabled && (targetSeason.active || endOfSeasonStats)) {
 			const userAchievements = targetSeason.active ? user.achievements : endOfSeasonStats.achievements ?? [];

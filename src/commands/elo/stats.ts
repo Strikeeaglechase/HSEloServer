@@ -108,6 +108,7 @@ function getKillsPerHour(
   return (kills.length / totalOnlineHours).toFixed(2);
 }
 
+
 function getAvgSessionLength(
   user: User,
   targetSeason: { startTime: number; endTime?: number }
@@ -416,8 +417,25 @@ class Stats extends SlashCommand {
     });
 
     // Calculate aircraft stats, filtering sessions by season time window and session length
-    const seasonStart = targetSeason.startTime;
-    const seasonEnd = targetSeason.endTime ?? Date.now();
+    // Use the same logic as getKillsPerHour/getAvgSessionLength for season filtering
+    let seasonStart = 0;
+    let seasonEnd = Date.now();
+    if (targetSeason.active) {
+      // Active season: use current time window
+      // Optionally, you could set seasonStart to the earliest session startTime for the user in this season
+      // but here we use all sessions that overlap with now
+      seasonEnd = Date.now();
+    } else if (typeof targetSeason.id === "number") {
+      // For ended seasons, find the min/max session times for this season's kills/deaths
+      const allSessionTimes = (user.sessions ?? [])
+        .map(s => [s.startTime, s.endTime])
+        .flat()
+        .filter(t => typeof t === "number" && Number.isFinite(t));
+      if (allSessionTimes.length > 0) {
+        seasonStart = Math.min(...allSessionTimes);
+        seasonEnd = Math.max(...allSessionTimes);
+      }
+    }
 
     const aircraftStats = aircraftList.map((ac) => {
       const acKills = aircraftStatsMap[ac.label].kills;
@@ -427,8 +445,8 @@ class Stats extends SlashCommand {
           ? acKills.length
           : (acKills.length / acDeaths.length).toFixed(2);
 
-      // Only include sessions within the season and less than 1.1 hours (3960000 ms)
-      const acSeasonSessions = (user.sessions ?? []).filter((session) => {
+      // Filter sessions for this aircraft and season window, using time overlap logic
+      const acSessions = (user.sessions ?? []).filter((session) => {
         if (
           typeof session.startTime !== "number" ||
           typeof session.endTime !== "number" ||
@@ -438,15 +456,15 @@ class Stats extends SlashCommand {
         }
         const sessionLength = session.endTime - session.startTime;
         if (sessionLength > 3960000) return false;
-        // Session must overlap with the season
         return (
           session.startTime < seasonEnd &&
           session.endTime > seasonStart &&
-          session.aircraftType === ac.key
+          "aircraftType" in session &&
+          (session as any).aircraftType === ac.key
         );
       });
 
-      const acTotalOnlineMs = acSeasonSessions.reduce((acc, session) => {
+      const acTotalOnlineMs = acSessions.reduce((acc, session) => {
         const sessionStart = Math.max(session.startTime, seasonStart);
         const sessionEndVal = Math.min(session.endTime, seasonEnd);
         return acc + Math.max(0, sessionEndVal - sessionStart);
@@ -519,9 +537,31 @@ class Stats extends SlashCommand {
     const miscStatsValue = [
       `Longest Killstreak: ${longestKillstreak}`,
       `Longest Deathstreak: ${longestDeathstreak}`,
-      `Kills/Hr: ${getKillsPerHour(user, kills, targetSeason.id)}`,
-      `Total Sessions: ${user.sessions?.length ?? 0}`,
-      getAvgSessionLength(user, targetSeason),
+      `Kills/Hr: ${getKillsPerHour(
+        user,
+        kills.filter(k => k.season === targetSeason.id),
+        // Use the season's time window, fallback to all time if not present
+        {
+          startTime: typeof targetSeason.started === "number" ? targetSeason.started : 0,
+          endTime: typeof targetSeason.ended === "number" ? targetSeason.ended : undefined
+        }
+      )}`,
+      `Total Sessions: ${
+        Array.isArray(user.sessions)
+          ? user.sessions.filter(session =>
+              typeof session.startTime === "number" &&
+              typeof session.endTime === "number" &&
+              session.endTime > session.startTime &&
+              session.endTime - session.startTime <= 3960000 &&
+              session.startTime < (typeof targetSeason.ended === "number" ? targetSeason.ended : Date.now()) &&
+              session.endTime > (typeof targetSeason.started === "number" ? targetSeason.started : 0)
+            ).length
+          : 0
+      }`,
+      getAvgSessionLength(user, {
+        startTime: typeof targetSeason.started === "number" ? targetSeason.started : 0,
+        endTime: typeof targetSeason.ended === "number" ? targetSeason.ended : undefined
+      }),
     ].join("\n");
 
     const vsStatsValue = [

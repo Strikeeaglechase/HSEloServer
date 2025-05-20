@@ -416,17 +416,12 @@ class Stats extends SlashCommand {
       if (ac) aircraftStatsMap[ac.label].deaths.push(d);
     });
 
-    // Calculate aircraft stats, filtering sessions by season time window and session length
-    // Use the same logic as getKillsPerHour/getAvgSessionLength for season filtering
     let seasonStart = 0;
     let seasonEnd = Date.now();
     if (targetSeason.active) {
-      // Active season: use current time window
-      // Optionally, you could set seasonStart to the earliest session startTime for the user in this season
-      // but here we use all sessions that overlap with now
+
       seasonEnd = Date.now();
     } else if (typeof targetSeason.id === "number") {
-      // For ended seasons, find the min/max session times for this season's kills/deaths
       const allSessionTimes = (user.sessions ?? [])
         .map(s => [s.startTime, s.endTime])
         .flat()
@@ -445,7 +440,6 @@ class Stats extends SlashCommand {
           ? acKills.length
           : (acKills.length / acDeaths.length).toFixed(2);
 
-      // Filter sessions for this aircraft and season window, using time overlap logic
       const acSessions = (user.sessions ?? []).filter((session) => {
         if (
           typeof session.startTime !== "number" ||
@@ -569,7 +563,7 @@ class Stats extends SlashCommand {
       `Most Deaths Against: ${mostDeathsVsName} (${mostDeathsVsCount})`,
     ].join("\n");
 
-    embed.addFields([
+     embed.addFields([
       { name: "Metrics", value: metricsValue, inline: true },
       { name: "KDR", value: kdrValue, inline: true },
       { name: "Online Stats", value: onlineStatsValue, inline: true },

@@ -350,6 +350,7 @@ export interface CurrentServerInformation {
 	onlineUsersFull: UserAircraftInformation[];
 	environment: RandomEnv;
 	missionId: string;
+	replayId: string;
 }
 
 export interface Kill {

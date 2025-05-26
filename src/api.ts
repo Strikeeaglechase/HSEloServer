@@ -75,6 +75,7 @@ interface APIServerInfo {
 	onlineUsersFull: APIUserAircraft[];
 	environment: RandomEnv;
 	missionId: string;
+	replayId: string;
 }
 
 interface DaemonReport {
@@ -112,7 +113,8 @@ function parseAPIServerInfo(apiSI: APIServerInfo): CurrentServerInformation {
 		onlineUsers: apiSI.onlineUsers,
 		onlineUsersFull: apiSI.onlineUsersFull.map(parseAPIUserAircraft),
 		environment: apiSI.environment,
-		missionId: apiSI.missionId
+		missionId: apiSI.missionId,
+		replayId: apiSI.replayId
 	};
 }
 

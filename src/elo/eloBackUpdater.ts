@@ -80,6 +80,7 @@ class EloBackUpdater {
 	protected oldUsers: Record<string, User> = {};
 	protected usersMap: Record<string, User> = {};
 	protected userHistory: Record<string, string[]> = {};
+	protected userPreviousSeenReplayId: Record<string, string> = {};
 
 	protected season: Season;
 
@@ -452,7 +453,8 @@ class EloBackUpdater {
 				return;
 			}
 
-			const keys = Object.keys(this.userHistory[u.id]);
+			const keys = Object.keys(this.userHistory[u.id]).map(k => +k);
+			keys.sort((a, b) => a - b);
 			keys.forEach(k => history.push(this.userHistory[u.id][k]));
 			delete this.userHistory[u.id];
 
@@ -487,6 +489,13 @@ class EloBackUpdater {
 		if (!victimMult) return 1;
 
 		return aircraft.mult * weapon.mult * victimMult.mult;
+	}
+
+	private maybeAddReplayLink(userId: string, replayId: string, timestamp: string, time: number) {
+		if (!replayId || this.userPreviousSeenReplayId[userId] == replayId) return;
+
+		this.userPreviousSeenReplayId[userId] = replayId;
+		this.userHistory[userId][time - 1] = `[${timestamp}] Replay link: https://vtolvr.live/replay?replay=${replayId}`;
 	}
 
 	public async runStreamedBackUpdate() {
@@ -557,6 +566,9 @@ class EloBackUpdater {
 			const log = ELOUpdater.getUserLogForKill(timestamp, killer, victim, multiplier, kill, eloSteal, info);
 			this.userHistory[killer.id][kill.time] = log.killer;
 			this.userHistory[victim.id][kill.time] = log.victim;
+
+			this.maybeAddReplayLink(killer.id, kill.serverInfo.replayId, timestamp, kill.time);
+			this.maybeAddReplayLink(victim.id, kill.serverInfo.replayId, timestamp, kill.time);
 
 			killer.eloHistory.push({ elo: killer.elo, time: kill.time });
 			victim.eloHistory.push({ elo: victim.elo, time: kill.time });

@@ -79,6 +79,8 @@ class Client {
 	private handleLookup<T extends Packet>(packet: T) {
 		const category: string = packet?.data?.category;
 		let id: string = packet?.data?.id;
+		const season: number = packet?.data?.season;
+		let query: object;
 		if (!category || !id) return;
 		id = id
 			.split("")
@@ -98,16 +100,18 @@ class Client {
 				this.app.users.collection.findOne({ pilotNames: { $regex: id, $options: "i" } }).then(r => this.replyToLookup(packet, r));
 				break;
 			case "kills_by_killer":
+				query = season ? { "season": season, "killer.ownerId": id } : { "killer.ownerId": id };
 				this.app.kills.collection
-					.find({ "killer.ownerId": id })
-					.limit(2000)
+					.find(query)
+					.limit(5000)
 					.toArray()
 					.then(r => this.replyToLookup(packet, r));
 				break;
 			case "kills_by_victim":
+				query = season ? { "season": season, "victim.ownerId": id } : { "victim.ownerId": id };
 				this.app.kills.collection
-					.find({ "victim.ownerId": id })
-					.limit(2000)
+					.find(query)
+					.limit(5000)
 					.toArray()
 					.then(r => this.replyToLookup(packet, r));
 				break;

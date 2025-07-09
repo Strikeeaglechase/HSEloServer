@@ -10,7 +10,7 @@ testCache
 *.zip
 rankedUsers.txt
 comp-log.txt
-docker-compose.yml
+docker-compose.yaml
 
 # Logs
 logs

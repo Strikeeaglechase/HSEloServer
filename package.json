@@ -6,7 +6,9 @@
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"redoc": "npx redoc-cli bundle ./openapi.json -o docs/index.html",
-		"tsc": "npx tsc --watch"
+		"tsc": "npx tsc --watch",
+		"build": "tsc",
+		"start": "cd dist && node index.js"
 	},
 	"keywords": [],
 	"type": "module",

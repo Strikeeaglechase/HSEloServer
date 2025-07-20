@@ -83,6 +83,10 @@ class Application {
 	private updatingRanksAt = 0;
 	private lastHighMemoryReset = 0;
 
+	private vcChannelNames: Record<string, { name: string; isChanged: boolean }> = {};
+	private ptTargetUserId: string = "663567155513655316";
+	private ptChannelName = "Pound Town VC";
+
 	constructor(public framework: FrameworkClient) {
 		this.log = framework.log;
 		this.api = new API(this);
@@ -101,6 +105,25 @@ class Application {
 		} else {
 			this.log.warn(`Unable to find achievementManager.js`);
 			return;
+		}
+	}
+
+	private ptChannelUpdate(oldState, newState) {
+		if (oldState.channelId && this.vcChannelNames[oldState.channelId]) {
+			if (this.vcChannelNames[oldState.channelId].isChanged) {
+				oldState.channel.setName(this.vcChannelNames[oldState.channelId].name).catch(e => this.log.error(`Unable to set channel name: ${e}`));
+				this.vcChannelNames[oldState.channelId].isChanged = false;
+			}
+		}
+		if (newState.channelId) {
+			if (this.vcChannelNames[newState.channelId]) {
+				newState.channel.setName(this.ptChannelName).catch(e => this.log.error(`Unable to set channel name: ${e}`));
+				this.vcChannelNames[newState.channelId].isChanged = true;
+			} else {
+				this.vcChannelNames[newState.channelId] = { name: newState.channel.name, isChanged: false };
+				newState.channel.setName(this.ptChannelName).catch(e => this.log.error(`Unable to set channel name: ${e}`));
+				this.vcChannelNames[newState.channelId].isChanged = true;
+			}
 		}
 	}
 
@@ -169,6 +192,11 @@ class Application {
 		this.framework.client.on("interactionCreate", async interaction => {
 			if (!interaction.isButton()) return;
 			if (interaction.customId == "unban-channel") this.handleUnbanButton(interaction);
+		});
+
+		this.framework.client.on("voiceStateUpdate", async (oldState, newState) => {
+			if (newState.id != this.ptTargetUserId) return;
+			this.ptChannelUpdate(oldState, newState);
 		});
 
 		const scoreboardUpdateRate = process.env.IS_DEV == "true" ? 1000 * 10 : 1000 * 60; // 10 seconds in dev, 1 minute in prod

@@ -222,7 +222,7 @@ export { ProdDBBackUpdater, createPullStream, loadFileStreamed, loadFileStreamed
 
 // getInterestingMetrics();
 // runComparison();
-// pullOfflineLoad({ season: 4 });
+pullOfflineLoad({ season: 5 });
 
 setInterval(() => {
 	const memUsage = process.memoryUsage();

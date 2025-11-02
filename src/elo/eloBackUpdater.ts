@@ -513,6 +513,11 @@ class EloBackUpdater {
 				return;
 			}
 
+			if (killer.isBanned || victim.isBanned || killer.isBahaBanned || victim.isBahaBanned) {
+				this.onInvalidKill(kill, killer, victim);
+				return;
+			}
+
 			if (kill.killer.team == kill.victim.team) {
 				const loss = killer.elo * teamKillPenalty;
 				killer.elo -= loss;

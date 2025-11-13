@@ -356,6 +356,29 @@ class Application {
 		return user;
 	}
 
+	private async getMainAircraft(userId: string): Promise<string> {
+		const kills = await this.kills.collection.find({ "killer.ownerId": userId }).toArray();
+		
+		const killsByAircraft: Record<number, number> = {};
+		kills.forEach(kill => {
+			const aircraftType = kill.killer.type;
+			killsByAircraft[aircraftType] = (killsByAircraft[aircraftType] || 0) + 1;
+		});
+		
+		let maxKills = 0;
+		let mainAircraft = Aircraft.Invalid;
+		
+		Object.entries(killsByAircraft).forEach(([aircraftStr, killCount]) => {
+			const aircraft = parseInt(aircraftStr) as Aircraft;
+			if (aircraft !== Aircraft.Invalid && killCount > maxKills) {
+				maxKills = killCount;
+				mainAircraft = aircraft;
+			}
+		});
+		
+		return mainAircraft === Aircraft.Invalid ? "N/A" : Aircraft[mainAircraft];
+	}
+
 	private async createScoreboardMessage() {
 		const embed = new Discord.EmbedBuilder({ title: "Scoreboard" });
 		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
@@ -367,26 +390,28 @@ class Application {
 		// [1;2m[1;37mOnline player[0m[0m
 		// Offline player
 		// ```
-		const table: (string | number)[][] = [["#", "Name", "ELO", "F/A-26b", "F-45A", "Kills", "Deaths", "KDR"]];
+		const table: (string | number)[][] = [["#", "Name", "ELO", "Kills", "Deaths", "Main Aircraft", "KDR"]];
 		const prefixes: string[] = [];
 		const suffixes: string[] = [];
-		filteredUsers.forEach((user, idx) => {
+		for (let idx = 0; idx < filteredUsers.length; idx++) {
+			const user = filteredUsers[idx];
 			const isOnline = this.onlineUsers.some(u => u.id == user.id);
 			const prefix = isOnline ? "[1;2m[1;37m" : "";
 			const suffix = isOnline ? "[0m[0m" : "";
+			const mainAircraft = await this.getMainAircraft(user.id);
 			prefixes.push(prefix);
 			suffixes.push(suffix);
+			
 			table.push([
 				idx + 1,
 				user.pilotNames[0],
 				Math.round(user.elo),
-				user.spawns[Aircraft.FA26b],
-				user.spawns[Aircraft.F45A],
 				user.kills,
 				user.deaths,
+				mainAircraft,
 				(user.kills / user.deaths).toFixed(2)
 			]);
-		});
+		}
 		const multiplierTable: (string | number)[][] = [["Mult", "Type", "Count"]];
 		this.elo.lastMultipliers
 			.sort((a, b) => a.multiplier - b.multiplier)
@@ -419,16 +444,21 @@ class Application {
 		let max = 0;
 		let avg = 0;
 
-		const table: (string | number)[][] = [["Name", "ELO", "Team"]];
-		onlineUsers.forEach((user, idx) => {
+		const table: (string | number)[][] = [["Name", "ELO", "Team", "Aircraft"]];
+		
+		await Promise.all(onlineUsers.map(async (user, idx) => {
 			const team = this.onlineUsers.find(u => u.id === user.id).team;
+			
+			// Get the most recent spawn to find current aircraft
+			const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id }, { sort: { time: -1 } });
+			const aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
 
 			min = Math.min(min, user.elo);
 			max = Math.max(max, user.elo);
 			avg += user.elo;
 
-			table.push([user.pilotNames[0], Math.round(user.elo), team]);
-		});
+			table.push([user.pilotNames[0], Math.round(user.elo), team, aircraftName]);
+		}));
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
 		resultStr += `\`\`\`ansi\n${this.table(table, 16).join("\n")}\n\`\`\`\n`;

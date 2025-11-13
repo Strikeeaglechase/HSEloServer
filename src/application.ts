@@ -357,7 +357,8 @@ class Application {
 	}
 
 	private async getMainAircraft(userId: string): Promise<string> {
-		const kills = await this.kills.collection.find({ "killer.ownerId": userId }).toArray();
+		const season = await this.getActiveSeason();
+		const kills = await this.kills.collection.find({ "killer.ownerId": userId, season: season.id }).toArray();
 		
 		const killsByAircraft: Record<number, number> = {};
 		kills.forEach(kill => {

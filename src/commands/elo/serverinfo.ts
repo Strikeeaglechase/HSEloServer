@@ -25,7 +25,7 @@ class ServerInfo extends SlashCommand {
 
     async run(
         { interaction, framework }: SlashCommandEvent<Application>,
-        @SArg({ choices: serverInfoOptions }) option: ServerInfoOptionType
+        @SArg({ choices: serverInfoOptions }) option: string
     ) {
         switch (option) {
             case ServerInfoOptionType.Season:

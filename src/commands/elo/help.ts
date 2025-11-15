@@ -1,13 +1,16 @@
 import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
-import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
+import { NoArgs, SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { Application } from "../../application.js";
 
 class Help extends SlashCommand {
+
 	name = "help";
 	description = "Displays help information";
 
+	@NoArgs
 	async run({ interaction, framework, app }: SlashCommandEvent<Application>) {
+
 		await interaction.deferReply();
 		await interaction.editReply(
 			"Are you banned from the VTOL server in-game? Request unban here: https://discord.com/channels/1015729793733492756/1350531719245336637\n\n" +

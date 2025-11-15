@@ -24,8 +24,9 @@ class Evasion extends SlashCommand {
 	description = "Displays evasion tactics information";
 
 	async run(
+		
 		{ interaction }: SlashCommandEvent<Application>,
-		@SArg({ choices: evasionConditions }) condition: EvasionConditionType
+		@SArg({ choices: evasionConditions }) condition: string
 	) {
 		switch (condition) {
 			case EvasionConditionType.GPull:

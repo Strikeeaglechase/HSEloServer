@@ -69,7 +69,7 @@ class EloBackUpdater {
 	protected killsDb: CollectionManager<Kill>;
 	protected seasons: CollectionManager<Season>;
 
-	protected killsUpdates: Record<string, Partial<Kill>> = {};
+	// protected killsUpdates: Record<string, Partial<Kill>> = {};
 	protected kills: Kill[] = [];
 	protected killsMap: Record<string, Kill> = {};
 	protected deaths: Death[] = [];
@@ -501,8 +501,8 @@ class EloBackUpdater {
 	}
 
 	protected queueKillUpdate(killId: string, update: Partial<Kill>) {
-		if (!this.killsUpdates[killId]) this.killsUpdates[killId] = {};
-		Object.assign(this.killsUpdates[killId], update);
+		// if (!this.killsUpdates[killId]) this.killsUpdates[killId] = {};
+		// Object.assign(this.killsUpdates[killId], update);
 	}
 
 	public async runStreamedBackUpdate() {
@@ -779,21 +779,21 @@ class EloBackUpdater {
 			console.log(`Finished bulk update for ${i} - ${i + batchSize}`);
 		}
 
-		const killUpdateActions = Object.entries(this.killsUpdates).map(([killId, update]) => {
-			return {
-				updateOne: {
-					filter: { id: killId },
-					update: { $set: update }
-				}
-			};
-		});
-		console.log(`About to bulk update ${killUpdateActions.length} kills`);
-		for (let i = 0; i < killUpdateActions.length; i += batchSize) {
-			const chunk = killUpdateActions.slice(i, i + batchSize);
-			console.log(`Starting bulk update for kills ${i} - ${i + batchSize}`);
-			await this.killsDb.collection.bulkWrite(chunk, { ordered: false });
-			console.log(`Finished bulk update for kills ${i} - ${i + batchSize}`);
-		}
+		// const killUpdateActions = Object.entries(this.killsUpdates).map(([killId, update]) => {
+		// 	return {
+		// 		updateOne: {
+		// 			filter: { id: killId },
+		// 			update: { $set: update }
+		// 		}
+		// 	};
+		// });
+		// console.log(`About to bulk update ${killUpdateActions.length} kills`);
+		// for (let i = 0; i < killUpdateActions.length; i += batchSize) {
+		// 	const chunk = killUpdateActions.slice(i, i + batchSize);
+		// 	console.log(`Starting bulk update for kills ${i} - ${i + batchSize}`);
+		// 	await this.killsDb.collection.bulkWrite(chunk, { ordered: false });
+		// 	console.log(`Finished bulk update for kills ${i} - ${i + batchSize}`);
+		// }
 	}
 
 	public async sendResult() {

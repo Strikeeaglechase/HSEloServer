@@ -74,7 +74,7 @@ function getFirstOnline(user: User): string {
 	return new Date(Math.min(...allTimes)).toLocaleDateString();
 }
 
-async function resolveUser(username: string, framework: FrameworkClient, app: Application, interaction: CommandInteraction) {
+export async function resolveUser(username: string, framework: FrameworkClient, app: Application, interaction: CommandInteraction) {
 	let user: User;
 	if (username) {
 		user = await lookupUser(app.users, username);

@@ -269,10 +269,15 @@ class ELOUpdater {
 		const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);
 		const proms = [new Promise(res => killsStream.on("finish", res)), new Promise(res => deathsStream.on("finish", res))];
 
+		let kc = 0;
 		this.app.kills.collection
 			.find({ season: activeSeason.id })
 			.stream()
-			.on("data", kill => killsStream.write(JSON.stringify(kill) + "\n"))
+			.on("data", kill => {
+				killsStream.write(JSON.stringify(kill) + "\n");
+				kc++;
+				if (kc % 10000 == 0) this.log.info(`Hourly report wrote ${kc} kills so far...`);
+			})
 			.on("end", () => killsStream.end());
 		this.app.deaths.collection
 			.find({ season: activeSeason.id })

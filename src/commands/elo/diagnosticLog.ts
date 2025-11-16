@@ -96,11 +96,11 @@ const eventHandlers: Record<EventType, (event: unknown, uDict: Record<string, st
 	spawn: (event: Spawn, uDict) => `Spawn: ${acInfo(event.user, uDict)}`,
 	missileLaunch: (event: MissileLaunchParams, uDict) => `Missile Launch: Type=${Weapon[event.type]}`,
 	receivedDamage: (event: Tracking, uDict) =>
-		`Received damage from ${uDict[unpackDamage(event).source]} Amount=${unpackDamage(event).amount.toFixed(2)} Where=${unpackDamage(event).type} WeaponUuid=${
-			unpackDamage(event).weaponUuid ?? "N/A"
-		}`,
+		`Received damage from ${uDict[unpackDamage(event).source]} Amount=${unpackDamage(event).amount.toFixed(2)} Where=${
+			unpackDamage(event).hpIndex
+		} WeaponUuid=${unpackDamage(event).weaponUuid ?? "N/A"}`,
 	dealtDamage: (event: Tracking, uDict) =>
-		`Dealt damage to ${uDict[unpackDamage(event).target]} Amount=${unpackDamage(event).amount.toFixed(2)} Where=${unpackDamage(event).type} WeaponUuid=${
+		`Dealt damage to ${uDict[unpackDamage(event).target]} Amount=${unpackDamage(event).amount.toFixed(2)} Where=${unpackDamage(event).hpIndex} WeaponUuid=${
 			unpackDamage(event).weaponUuid ?? "N/A"
 		}`,
 	takeoff: (event: Tracking, uDict) => `Takeoff`,

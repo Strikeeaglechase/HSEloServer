@@ -7,15 +7,16 @@
 		"outDir": "dist/",
 		"baseUrl": "./src",
 		"lib": [
-			"ES2019",
-			"ESNext",
-			"DOM",
+			"ES2023"
+		],
+		"types": [
+			"node"
 		],
 		"experimentalDecorators": true,
 		"emitDecoratorMetadata": true,
-		"skipLibCheck": true,
+		"skipLibCheck": true
 	},
 	"include": [
 		"src/"
-	],
+	]
 }

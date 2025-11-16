@@ -66,9 +66,10 @@ class EloBackUpdater {
 	protected reportPath: string = "../hourlyReport";
 	protected db: Database;
 	protected userDb: CollectionManager<User>;
+	protected killsDb: CollectionManager<Kill>;
 	protected seasons: CollectionManager<Season>;
-	// protected userLogs: UserLogsObj = {};
 
+	protected killsUpdates: Record<string, Partial<Kill>> = {};
 	protected kills: Kill[] = [];
 	protected killsMap: Record<string, Kill> = {};
 	protected deaths: Death[] = [];
@@ -100,6 +101,7 @@ class EloBackUpdater {
 		await this.db.init();
 		this.userDb = await this.db.collection("users", false, "id");
 		this.seasons = await this.db.collection("seasons", false, "id");
+		this.killsDb = await this.db.collection("kills-v2", false, "id");
 	}
 
 	protected loadFileStreamed<T>(path: string): Promise<T[]> {
@@ -498,6 +500,11 @@ class EloBackUpdater {
 		this.userHistory[userId][time - 1] = `[${timestamp}] Replay link: https://vtolvr.live/replay?replay=${replayId}`;
 	}
 
+	protected queueKillUpdate(killId: string, update: Partial<Kill>) {
+		if (!this.killsUpdates[killId]) this.killsUpdates[killId] = {};
+		Object.assign(this.killsUpdates[killId], update);
+	}
+
 	public async runStreamedBackUpdate() {
 		const start = Date.now();
 		await this.setupStreamedBackUpdate();
@@ -508,19 +515,24 @@ class EloBackUpdater {
 			const killer = this.usersMap[kill.killer.ownerId];
 			const victim = this.usersMap[kill.victim.ownerId];
 
+			this.queueKillUpdate(kill.id, { lastBackUpdateProcessTime: start });
+
 			if (!killer || !victim || !shouldKillBeCounted(kill, killer, victim)) {
 				this.onInvalidKill(kill, killer, victim);
+				if (kill.counted) this.queueKillUpdate(kill.id, { counted: false });
 				return;
 			}
 
 			if (killer.isBanned || victim.isBanned || killer.isBahaBanned || victim.isBahaBanned) {
 				this.onInvalidKill(kill, killer, victim);
+				if (kill.counted) this.queueKillUpdate(kill.id, { counted: false });
 				return;
 			}
 
 			if (kill.killer.team == kill.victim.team) {
 				const loss = killer.elo * teamKillPenalty;
 				killer.elo -= loss;
+				if (!kill.eloChange || Math.abs(kill.eloChange - loss) > 1) this.queueKillUpdate(kill.id, { eloChange: loss });
 				const tkLog = ELOUpdater.getUserLogForTK(timestamp, killer, victim, loss);
 				this.userHistory[killer.id][kill.time] = tkLog.killer;
 				this.userHistory[victim.id][kill.time] = tkLog.victim;
@@ -528,7 +540,10 @@ class EloBackUpdater {
 				return;
 			}
 
-			if (killer.ignoreKillsAgainstUsers && killer.ignoreKillsAgainstUsers.includes(victim.id)) return;
+			if (killer.ignoreKillsAgainstUsers && killer.ignoreKillsAgainstUsers.includes(victim.id)) {
+				if (kill.counted) this.queueKillUpdate(kill.id, { counted: false });
+				return;
+			}
 
 			// let metric = this.killMultipliers.find(m => m.killStr == killStr);
 			// let mult = this.getKillMultiplier(kill);
@@ -553,6 +568,7 @@ class EloBackUpdater {
 					victim.deaths++;
 					const log = ELOUpdater.getUserLogForDeath(timestamp, victim, 0);
 					this.userHistory[victim.id][kill.time] = log;
+					if (kill.counted) this.queueKillUpdate(kill.id, { counted: false });
 					return;
 				}
 				info = extraInfo;
@@ -567,6 +583,9 @@ class EloBackUpdater {
 			victim.elo = Math.max(victim.elo, 1);
 			killer.kills++;
 			victim.deaths++;
+
+			if (!kill.eloChange || Math.abs(kill.eloChange - eloSteal) > 1) this.queueKillUpdate(kill.id, { eloChange: eloSteal });
+			if (!kill.counted) this.queueKillUpdate(kill.id, { counted: true });
 
 			const log = ELOUpdater.getUserLogForKill(timestamp, killer, victim, multiplier, kill, eloSteal, info);
 			this.userHistory[killer.id][kill.time] = log.killer;
@@ -758,6 +777,22 @@ class EloBackUpdater {
 			console.log(`Starting bulk update for ${i} - ${i + batchSize}`);
 			await this.userDb.collection.bulkWrite(chunk, { ordered: false });
 			console.log(`Finished bulk update for ${i} - ${i + batchSize}`);
+		}
+
+		const killUpdateActions = Object.entries(this.killsUpdates).map(([killId, update]) => {
+			return {
+				updateOne: {
+					filter: { id: killId },
+					update: { $set: update }
+				}
+			};
+		});
+		console.log(`About to bulk update ${killUpdateActions.length} kills`);
+		for (let i = 0; i < killUpdateActions.length; i += batchSize) {
+			const chunk = killUpdateActions.slice(i, i + batchSize);
+			console.log(`Starting bulk update for kills ${i} - ${i + batchSize}`);
+			await this.killsDb.collection.bulkWrite(chunk, { ordered: false });
+			console.log(`Finished bulk update for kills ${i} - ${i + batchSize}`);
 		}
 	}
 

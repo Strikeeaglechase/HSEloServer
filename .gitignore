@@ -11,6 +11,8 @@ testCache
 rankedUsers.txt
 comp-log.txt
 docker-compose.yaml
+vtol-server-elo.*.json
+test.ts
 
 # Logs
 logs

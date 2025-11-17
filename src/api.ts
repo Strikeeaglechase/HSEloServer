@@ -382,7 +382,10 @@ class API extends EventEmitter<"tracking"> {
 			killer: parseAPIUserAircraft(killReq.killer),
 			victim: parseAPIUserAircraft(killReq.victim),
 			serverInfo: parseAPIServerInfo(killReq.serverInfo),
-			season: this.app.elo.activeSeason.id
+			season: this.app.elo.activeSeason.id,
+			lastBackUpdateProcessTime: 0,
+			counted: true,
+			eloChange: 0
 		};
 
 		this.log.info(`Kill: ${kill.killer.ownerId} killed ${kill.victim.ownerId} with ${Weapon[kill.weapon]} in ${Aircraft[kill.killer.type]}`);
@@ -396,10 +399,11 @@ class API extends EventEmitter<"tracking"> {
 			serverInfo: kill.serverInfo,
 			season: this.app.elo.activeSeason.id
 		};
-		this.app.kills.add(kill);
-		this.app.deaths.add(death);
 
 		const update = await this.app.elo.updateELOForKill(kill);
+		const insertProms = [this.app.kills.add(kill), this.app.deaths.add(death)];
+		await Promise.all(insertProms);
+
 		if (!update) {
 			return {
 				killerElo: 0,

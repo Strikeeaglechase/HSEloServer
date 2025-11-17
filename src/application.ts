@@ -1,5 +1,6 @@
 import Discord, { ActionRowBuilder, ButtonBuilder, EmbedBuilder, Message, MessageActionRowComponentBuilder, ThreadAutoArchiveDuration } from "discord.js";
 import fs from "fs";
+import fetch from "node-fetch";
 import { memoryUsage } from "node:process";
 import FrameworkClient from "strike-discord-framework";
 import { CollectionManager } from "strike-discord-framework/dist/collectionManager.js";
@@ -279,7 +280,7 @@ class Application {
 		const memUsage = process.memoryUsage();
 		const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
 		this.log.info(`Memory usage: ${usageGb.toFixed(2)}GB`);
-		if (usageGb > 0.5) {
+		if (usageGb > 1.5) {
 			const timeFromLastReset = Date.now() - this.lastHighMemoryReset;
 			// One minute
 			if (timeFromLastReset < 1000 * 60) return;

@@ -74,7 +74,7 @@ function getFirstOnline(user: User): string {
 	return new Date(Math.min(...allTimes)).toLocaleDateString();
 }
 
-async function resolveUser(username: string, framework: FrameworkClient, app: Application, interaction: CommandInteraction) {
+export async function resolveUser(username: string, framework: FrameworkClient, app: Application, interaction: CommandInteraction) {
 	let user: User;
 	if (username) {
 		user = await lookupUser(app.users, username);
@@ -192,7 +192,7 @@ async function getSteamAvatar(userId: string) {
 		const response = await fetch(steamApiUrl);
 		const data = await response.json();
 		// console.log("Steam API response data:", data);
-		const avatarUrl = data.response?.players?.[0]?.avatarfull;
+		const avatarUrl = (data as any).response?.players?.[0]?.avatarfull;
 		return avatarUrl || null;
 	} catch (err) {
 		// console.warn("Could not fetch Steam avatar:", err);

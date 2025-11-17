@@ -269,10 +269,15 @@ class ELOUpdater {
 		const deathsStream = fs.createWriteStream(`${hourlyReportPath}/deaths.json`);
 		const proms = [new Promise(res => killsStream.on("finish", res)), new Promise(res => deathsStream.on("finish", res))];
 
+		let kc = 0;
 		this.app.kills.collection
 			.find({ season: activeSeason.id })
 			.stream()
-			.on("data", kill => killsStream.write(JSON.stringify(kill) + "\n"))
+			.on("data", kill => {
+				killsStream.write(JSON.stringify(kill) + "\n");
+				kc++;
+				if (kc % 10000 == 0) this.log.info(`Hourly report wrote ${kc} kills so far...`);
+			})
 			.on("end", () => killsStream.end());
 		this.app.deaths.collection
 			.find({ season: activeSeason.id })
@@ -361,11 +366,13 @@ class ELOUpdater {
 
 		if (!killer) {
 			this.log.error(`Killer ${kill.killer.ownerId} not found!`);
+			kill.counted = false;
 			return;
 		}
 
 		if (!victim) {
 			this.log.error(`Victim ${kill.victim.ownerId} not found!`);
+			kill.counted = false;
 			return;
 		}
 
@@ -383,6 +390,7 @@ class ELOUpdater {
 		if (kill.killer.team == kill.victim.team) {
 			this.log.info(`User ${killer.pilotNames[0]} killed a teammate! Applying ELO penalty.`);
 			const loss = await this.updateELOForTeamKill(killer, victim);
+			kill.eloChange = loss;
 			return {
 				killer: killer,
 				victim: killer,
@@ -391,7 +399,10 @@ class ELOUpdater {
 			};
 		}
 
-		if (!shouldKillBeCounted(kill, killer, victim)) return;
+		if (!shouldKillBeCounted(kill, killer, victim)) {
+			kill.counted = false;
+			return;
+		}
 
 		const killStr = getKillStr(kill);
 		let multiplier: number;
@@ -411,6 +422,8 @@ class ELOUpdater {
 				victim.deaths++;
 				ELOUpdater.updateUserLogForDeath(new Date().toISOString(), victim, 0);
 				await this.app.users.update(victim, victim.id);
+
+				kill.counted = false;
 				return;
 			}
 			info = extraInfo;
@@ -430,13 +443,15 @@ class ELOUpdater {
 		killer.elo += eloSteal;
 		victim.elo -= eloSteal;
 		victim.elo = Math.max(victim.elo, 1);
+		kill.eloChange = eloSteal;
 		ELOUpdater.updateUserLogForKill(new Date().toISOString(), killer, victim, multiplier, kill, eloSteal, info);
 
 		killer.kills++;
 		victim.deaths++;
 
-		await this.app.users.update(killer, killer.id);
-		await this.app.users.update(victim, victim.id);
+		const updateProms = [this.app.users.update(killer, killer.id), this.app.users.update(victim, victim.id)];
+		await Promise.all(updateProms);
+
 		return { killer, victim, eloSteal };
 	}
 

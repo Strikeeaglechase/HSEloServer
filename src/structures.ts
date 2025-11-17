@@ -363,6 +363,10 @@ export interface Kill {
 	previousDamagedByUserId: string;
 	previousDamagedByWeapon: Weapon;
 
+	counted: boolean;
+	eloChange: number;
+	lastBackUpdateProcessTime: number;
+
 	time: number;
 	id: string;
 	season: number;

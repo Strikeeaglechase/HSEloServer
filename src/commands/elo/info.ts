@@ -34,155 +34,131 @@ class Info extends SlashCommand {
 	name = "info";
 	description = "Displays server information and evasion tactics";
 
-	async run(
-		{ interaction, app }: SlashCommandEvent<Application>,
-		@SArg({ choices: infoCategories }) category: string
-	) {
+	async run({ interaction, app }: SlashCommandEvent<Application>, @SArg({ choices: infoCategories }) category: string) {
 		switch (category) {
-		case InfoCategory.Season:
-			const activeSeason = app.getActiveSeason();
-			const seasonEmbed = new EmbedBuilder()
-				.setTitle("Current Season")
-				.setDescription(`The current season is **${activeSeason}**`)
-				.setColor(0x5865F2);
+			case InfoCategory.Season:
+				const activeSeason = await app.getActiveSeason();
+				const seasonEmbed = new EmbedBuilder().setTitle("Current Season").setDescription(`The current season is **${activeSeason.name}**`).setColor(0x5865f2);
 
-			await interaction.reply({ embeds: [seasonEmbed] });
-			break;
+				await interaction.reply({ embeds: [seasonEmbed] });
+				break;
 
-		case InfoCategory.ELO:
-			const eloInfo = await app.serverInfos.get("ELO");
-			const eloEmbed = new EmbedBuilder()
-				.setTitle("ELO System")
-				.setColor(0x5865F2);
+			case InfoCategory.ELO:
+				const eloInfo = await app.serverInfos.get("ELO");
+				const eloEmbed = new EmbedBuilder().setTitle("ELO System").setColor(0x5865f2);
 
-			if (eloInfo?.text) {
-				eloEmbed.setDescription(eloInfo.text);
-			} else {
-				eloEmbed.setDescription("No ELO information configured. Use `/setinfo ELO <text>` to set it.");
-			}
+				if (eloInfo?.text) {
+					eloEmbed.setDescription(eloInfo.text);
+				} else {
+					eloEmbed.setDescription("No ELO information configured. Use `/setinfo ELO <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [eloEmbed] });
-			break;
+				await interaction.reply({ embeds: [eloEmbed] });
+				break;
 
-		case InfoCategory.MapList:
-			const mapListInfo = await app.serverInfos.get("MapList");
-			const mapListEmbed = new EmbedBuilder()
-				.setTitle("Map List")
-				.setColor(0x5865F2);
+			case InfoCategory.MapList:
+				const mapListInfo = await app.serverInfos.get("MapList");
+				const mapListEmbed = new EmbedBuilder().setTitle("Map List").setColor(0x5865f2);
 
-			if (mapListInfo?.text) {
-				mapListEmbed.setDescription(mapListInfo.text);
-			} else {
-				mapListEmbed.setDescription("No map list configured. Use `/setinfo MapList <text>` to set it.");
-			}
+				if (mapListInfo?.text) {
+					mapListEmbed.setDescription(mapListInfo.text);
+				} else {
+					mapListEmbed.setDescription("No map list configured. Use `/setinfo MapList <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [mapListEmbed] });
-			break;
+				await interaction.reply({ embeds: [mapListEmbed] });
+				break;
 
-		case InfoCategory.AircraftList:
-			const aircraftListInfo = await app.serverInfos.get("AircraftList");
-			const aircraftListEmbed = new EmbedBuilder()
-				.setTitle("Aircraft List")
-				.setColor(0x5865F2);
+			case InfoCategory.AircraftList:
+				const aircraftListInfo = await app.serverInfos.get("AircraftList");
+				const aircraftListEmbed = new EmbedBuilder().setTitle("Aircraft List").setColor(0x5865f2);
 
-			if (aircraftListInfo?.text) {
-				aircraftListEmbed.setDescription(aircraftListInfo.text);
-			} else {
-				aircraftListEmbed.setDescription("No aircraft list configured. Use `/setinfo AircraftList <text>` to set it.");
-			}
+				if (aircraftListInfo?.text) {
+					aircraftListEmbed.setDescription(aircraftListInfo.text);
+				} else {
+					aircraftListEmbed.setDescription("No aircraft list configured. Use `/setinfo AircraftList <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [aircraftListEmbed] });
-			break;
+				await interaction.reply({ embeds: [aircraftListEmbed] });
+				break;
 
-		case InfoCategory.CFIT:
-			const cfitInfo = await app.serverInfos.get("CFIT");
-			const cfitEmbed = new EmbedBuilder()
-				.setTitle("CFIT (Controlled Flight Into Terrain)")
-				.setColor(0x5865F2);
+			case InfoCategory.CFIT:
+				const cfitInfo = await app.serverInfos.get("CFIT");
+				const cfitEmbed = new EmbedBuilder().setTitle("CFIT (Controlled Flight Into Terrain)").setColor(0x5865f2);
 
-			if (cfitInfo?.text) {
-				cfitEmbed.setDescription(cfitInfo.text);
-			} else {
-				cfitEmbed.setDescription("No CFIT information configured. Use `/setinfo CFIT <text>` to set it.");
-			}
+				if (cfitInfo?.text) {
+					cfitEmbed.setDescription(cfitInfo.text);
+				} else {
+					cfitEmbed.setDescription("No CFIT information configured. Use `/setinfo CFIT <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [cfitEmbed] });
-			break;
+				await interaction.reply({ embeds: [cfitEmbed] });
+				break;
 
-		case InfoCategory.GPull:
-			const gPullInfo = await app.serverInfos.get("GPull");
-			const gPullEmbed = new EmbedBuilder()
-				.setTitle("G-Pull Evasion")
-				.setColor(0x5865F2);
+			case InfoCategory.GPull:
+				const gPullInfo = await app.serverInfos.get("GPull");
+				const gPullEmbed = new EmbedBuilder().setTitle("G-Pull Evasion").setColor(0x5865f2);
 
-			if (gPullInfo?.text) {
-				gPullEmbed.setDescription(gPullInfo.text);
-			} else {
-				gPullEmbed.setDescription("No G-Pull information configured. Use `/setinfo GPull <text>` to set it.");
-			}
+				if (gPullInfo?.text) {
+					gPullEmbed.setDescription(gPullInfo.text);
+				} else {
+					gPullEmbed.setDescription("No G-Pull information configured. Use `/setinfo GPull <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [gPullEmbed] });
-			break;
+				await interaction.reply({ embeds: [gPullEmbed] });
+				break;
 
-		case InfoCategory.Notching:
-			const notchingInfo = await app.serverInfos.get("Notching");
-			const notchingEmbed = new EmbedBuilder()
-				.setTitle("Notching Evasion")
-				.setColor(0x5865F2);
+			case InfoCategory.Notching:
+				const notchingInfo = await app.serverInfos.get("Notching");
+				const notchingEmbed = new EmbedBuilder().setTitle("Notching Evasion").setColor(0x5865f2);
 
-			if (notchingInfo?.text) {
-				notchingEmbed.setDescription(notchingInfo.text);
-			} else {
-				notchingEmbed.setDescription("No Notching information configured. Use `/setinfo Notching <text>` to set it.");
-			}
+				if (notchingInfo?.text) {
+					notchingEmbed.setDescription(notchingInfo.text);
+				} else {
+					notchingEmbed.setDescription("No Notching information configured. Use `/setinfo Notching <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [notchingEmbed] });
-			break;
+				await interaction.reply({ embeds: [notchingEmbed] });
+				break;
 
-		case InfoCategory.TerrainMask:
-			const terrainMaskInfo = await app.serverInfos.get("TerrainMask");
-			const terrainMaskEmbed = new EmbedBuilder()
-				.setTitle("Terrain Mask Evasion")
-				.setColor(0x5865F2);
+			case InfoCategory.TerrainMask:
+				const terrainMaskInfo = await app.serverInfos.get("TerrainMask");
+				const terrainMaskEmbed = new EmbedBuilder().setTitle("Terrain Mask Evasion").setColor(0x5865f2);
 
-			if (terrainMaskInfo?.text) {
-				terrainMaskEmbed.setDescription(terrainMaskInfo.text);
-			} else {
-				terrainMaskEmbed.setDescription("No Terrain Mask information configured. Use `/setinfo TerrainMask <text>` to set it.");
-			}
+				if (terrainMaskInfo?.text) {
+					terrainMaskEmbed.setDescription(terrainMaskInfo.text);
+				} else {
+					terrainMaskEmbed.setDescription("No Terrain Mask information configured. Use `/setinfo TerrainMask <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [terrainMaskEmbed] });
-			break;
+				await interaction.reply({ embeds: [terrainMaskEmbed] });
+				break;
 
-		case InfoCategory.Cranking:
-			const crankingInfo = await app.serverInfos.get("Cranking");
-			const crankingEmbed = new EmbedBuilder()
-				.setTitle("Cranking Evasion")
-				.setColor(0x5865F2);
+			case InfoCategory.Cranking:
+				const crankingInfo = await app.serverInfos.get("Cranking");
+				const crankingEmbed = new EmbedBuilder().setTitle("Cranking Evasion").setColor(0x5865f2);
 
-			if (crankingInfo?.text) {
-				crankingEmbed.setDescription(crankingInfo.text);
-			} else {
-				crankingEmbed.setDescription("No Cranking information configured. Use `/setinfo Cranking <text>` to set it.");
-			}
+				if (crankingInfo?.text) {
+					crankingEmbed.setDescription(crankingInfo.text);
+				} else {
+					crankingEmbed.setDescription("No Cranking information configured. Use `/setinfo Cranking <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [crankingEmbed] });
-			break;
+				await interaction.reply({ embeds: [crankingEmbed] });
+				break;
 
-		case InfoCategory.Intercept:
-			const interceptInfo = await app.serverInfos.get("Intercept");
-			const interceptEmbed = new EmbedBuilder()
-				.setTitle("Intercept Evasion")
-				.setColor(0x5865F2);
+			case InfoCategory.Intercept:
+				const interceptInfo = await app.serverInfos.get("Intercept");
+				const interceptEmbed = new EmbedBuilder().setTitle("Intercept Evasion").setColor(0x5865f2);
 
-			if (interceptInfo?.text) {
-				interceptEmbed.setDescription(interceptInfo.text);
-			} else {
-				interceptEmbed.setDescription("No Intercept information configured. Use `/setinfo Intercept <text>` to set it.");
-			}
+				if (interceptInfo?.text) {
+					interceptEmbed.setDescription(interceptInfo.text);
+				} else {
+					interceptEmbed.setDescription("No Intercept information configured. Use `/setinfo Intercept <text>` to set it.");
+				}
 
-			await interaction.reply({ embeds: [interceptEmbed] });
-			break;
+				await interaction.reply({ embeds: [interceptEmbed] });
+				break;
 		}
 	}
 }

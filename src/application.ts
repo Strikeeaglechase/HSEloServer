@@ -24,6 +24,7 @@ import {
 	OnlineRole,
 	ScoreboardMessage,
 	Season,
+	ServerInfoEntry,
 	Spawn,
 	Tracking,
 	UnbanRequest,
@@ -67,6 +68,7 @@ class Application {
 	public tracking: CollectionManager<Tracking>;
 	public endOfSeasonStats: CollectionManager<EndOfSeasonStats>;
 	public unbanRequests: CollectionManager<UnbanRequest>;
+	public serverInfos: CollectionManager<ServerInfoEntry>;
 
 	public achievementManager: IAchievementManager = new DummyAchievementManager();
 	public achievementsDb: CollectionManager<AchievementDBEntry>;
@@ -273,6 +275,7 @@ class Application {
 		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
 		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
 		this.unbanRequests = await this.framework.database.collection("unban-requests", false, "id");
+		this.serverInfos = await this.framework.database.collection("server-info", false, "id");
 	}
 
 	private async checkMemoryUsage() {

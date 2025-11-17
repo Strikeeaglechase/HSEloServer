@@ -504,3 +504,8 @@ export interface AchievementDBEntry {
 
 	messages: { channelId: string; messageId: string }[];
 }
+
+export interface ServerInfoEntry {
+	id: string;
+	text: string;
+}

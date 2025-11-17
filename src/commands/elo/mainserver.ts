@@ -5,7 +5,7 @@ import { Application } from "../../application.js";
 
 class MainServer extends SlashCommand {
   name = "mainserver";
-  description = "Main server command placeholder";
+  description = "Main server command";
 
   @NoArgs
   async run({ interaction, framework, app }: SlashCommandEvent<Application>) {

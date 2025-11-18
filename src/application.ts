@@ -8,7 +8,7 @@ import Logger from "strike-discord-framework/dist/logger";
 import { v4 as uuidv4 } from "uuid";
 
 import { DummyAchievementManager, IAchievementManager } from "./achievementDeclare.js";
-import { API } from "./api.js";
+import { API, DaemonReport } from "./api.js";
 import { BASE_ELO, ELOUpdater, shouldKillBeCounted, userCanRank } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import { getRandomEnv, RandomEnv, weatherNames } from "./serverEnvProfile.js";
@@ -82,6 +82,7 @@ class Application {
 	public currentServerEnv: RandomEnv;
 	private currentMission: string = "";
 	public lastOnlineUserUpdateAt = 0;
+	public matchStartTime = 0;
 
 	private updatingRanksAt = 0;
 	private lastHighMemoryReset = 0;
@@ -226,6 +227,7 @@ class Application {
 			case "mission":
 				const missionName = tracking.args[0].match(/\/([\w ]+).vts/)[1];
 				this.currentMission = missionName;
+				this.matchStartTime = Date.now();
 				this.log.info(`Received mission name via tracking: ${missionName}`);
 				break;
 
@@ -425,7 +427,7 @@ class Application {
 			});
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
-		resultStr += `\`\`\`ansi\n${this.table(table, 16)
+		resultStr += `\`\`\`ansi\n${this.table(table, 16, [3, 4, 5])
 			.map((l, i) => {
 				if (i == 0) return l;
 				return prefixes[i - 1] + l + suffixes[i - 1];
@@ -449,20 +451,57 @@ class Application {
 		let max = 0;
 		let avg = 0;
 
-		const table: (string | number)[][] = [["Name", "ELO", "Team", "Aircraft"]];
+		const table: (string | number)[][] = [["Name", "ELO", "K/D", "Team", "Aircraft"]];
+		
+		// Get current session start time (last online user update)
+		const sessionStartTime = this.lastOnlineUserUpdateAt;
 		
 		await Promise.all(onlineUsers.map(async (user, idx) => {
 			const team = this.onlineUsers.find(u => u.id === user.id).team;
 			
 			// Get the most recent spawn to find current aircraft
 			const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id }, { sort: { time: -1 } });
-			const aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
+			let aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
+
+			// Check for multi-seat aircraft and determine seat position
+			if (latestSpawn && latestSpawn.user.occupants && latestSpawn.user.occupants.length > 1) {
+				const seatIndex = latestSpawn.user.occupants.indexOf(user.id);
+				
+				if (latestSpawn.user.type === Aircraft.EF24G) {
+					// EF-24G: index 0 = Pilot, index 1 = EWO
+					if (seatIndex === 0) {
+						aircraftName += " (Pilot)";
+					} else if (seatIndex === 1) {
+						aircraftName += " (EWO)";
+					}
+				} else if (latestSpawn.user.type === Aircraft.T55) {
+					// T-55: index 0 = Pilot, index 1 = Instructor
+					if (seatIndex === 0) {
+						aircraftName += " (Pilot)";
+					} else if (seatIndex === 1) {
+						aircraftName += " (Instructor)";
+					}
+				}
+			}
+
+			// Calculate K/D ratio for current session only
+			const sessionKills = await this.kills.collection.countDocuments({
+				"killer.ownerId": user.id,
+				time: { $gte: sessionStartTime }
+			});
+			
+			const sessionDeaths = await this.deaths.collection.countDocuments({
+				"victim.ownerId": user.id,
+				time: { $gte: sessionStartTime }
+			});
+
+			const kd = `${sessionKills}/${sessionDeaths}`;
 
 			min = Math.min(min, user.elo);
 			max = Math.max(max, user.elo);
 			avg += user.elo;
 
-			table.push([user.pilotNames[0], Math.round(user.elo), team, aircraftName]);
+			table.push([user.pilotNames[0], Math.round(user.elo), kd, team, aircraftName]);
 		}));
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
@@ -478,8 +517,11 @@ class Application {
 		const timeMins = Math.floor((this.currentServerEnv.tod % 1) * 60)
 			.toString()
 			.padStart(2, "0");
+		
+		const matchDurationMs = this.matchStartTime ? Date.now() - this.matchStartTime : 0;
+		const matchDurationMins = Math.floor(matchDurationMs / 60000);
 
-		resultStr += `${this.currentMission ?? ""}\nTOD ${timeHrs}:${timeMins}\nWind ${windHeading} @ ${windKn}kts${gustKn}\nWeather ${
+		resultStr += `${this.currentMission ?? ""}\nMatch Duration: ${matchDurationMins} min\nTOD ${timeHrs}:${timeMins}\nWind ${windHeading} @ ${windKn}kts${gustKn}\nWeather ${
 			weatherNames[this.currentServerEnv.weather]
 		}`;
 		resultStr += `\n\`\`\``;
@@ -489,9 +531,18 @@ class Application {
 		return embed;
 	}
 
-	public table(data: (string | number)[][], tEntryMaxLen = 16) {
+	public table(data: (string | number)[][], tEntryMaxLen = 16, centerColumns: number[] = []) {
 		const widths = data[0].map((_, i) => Math.max(...data.map(row => String(row[i]).length)));
-		return data.map(row => row.map((val, i) => String(val).padEnd(widths[i]).substring(0, tEntryMaxLen)).join(" "));
+		return data.map(row => row.map((val, i) => {
+			const str = String(val);
+			if (centerColumns.includes(i)) {
+				const totalPadding = widths[i] - str.length;
+				const leftPadding = Math.floor(totalPadding / 2);
+				const rightPadding = totalPadding - leftPadding;
+				return ' '.repeat(leftPadding) + str + ' '.repeat(rightPadding);
+			}
+			return str.padEnd(widths[i]);
+		}).map(val => val.substring(0, tEntryMaxLen)).join(" "));
 	}
 
 	private async updateScoreboards() {

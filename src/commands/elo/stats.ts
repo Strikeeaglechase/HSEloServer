@@ -45,7 +45,7 @@ async function lookupUser(users: CollectionManager<User>, query: string) {
 const expectedMaxTimeOnServer = 1000 * 60 * 60 * 1.1; // 1.1 hours
 const aircraftWithMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 
-function getStatsBlockForAircraft(aircraft: Aircraft, kills: Kill[], deaths: Kill[]) {
+function getStatsBlockForAircraft(aircraft: Aircraft, kills: Kill[], deaths: Kill[], missileLaunches: any[]) {
 	if (kills.length === 0) return null;
 
 	const kdr = deaths.length === 0 ? kills.length : kills.length / deaths.length;
@@ -55,11 +55,10 @@ function getStatsBlockForAircraft(aircraft: Aircraft, kills: Kill[], deaths: Kil
 		weaponKills[k.weapon] = (weaponKills[k.weapon] ?? 0) + 1;
 	});
 
-	const weaponKillsArr = Object.entries(weaponKills)
+	const weaponKillsStr = Object.entries(weaponKills)
 		.sort((a, b) => b[1] - a[1])
-		.map(entry => ({ weapon: +entry[0] as Weapon, count: entry[1] }));
-
-	const weaponKillsStr = weaponKillsArr.map(w => `${w.count} ${Weapon[w.weapon]}`).join("\n");
+		.map(entry => `${entry[1]} ${Weapon[entry[0]]}`)
+		.join("\n");
 
 	return `Total Kills: ${kills.length}\nKDR: ${kdr.toFixed(2)}\n*__Weapon Kills__*\n${weaponKillsStr}`;
 }
@@ -205,14 +204,14 @@ async function getAchievementStats(user: User, app: Application, targetSeason: S
 	if (!achievementsEnabled || (!targetSeason.active && !endOfSeasonStats)) return { achievementsStr: "", achievementLogText: "" };
 
 	const userAchievements = targetSeason.active ? user.achievements : endOfSeasonStats.achievements ?? [];
-	const achievements = userAchievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).sort();
+	const achievements = userAchievements.map(userAchInfo => app.achievementManager.getAchievement(userAchInfo.id)).filter(ach => ach != null).sort();
 	const dbAchievements = await Promise.all(
 		achievements.map(ach => {
 			if (targetSeason.active) return app.achievementsDb.get(ach.id);
 			return targetSeason.endStats.achievementHistory.find(a => a.id == ach.id);
 		})
 	);
-	const topAchievements = dbAchievements.sort((a, b) => {
+	const topAchievements = dbAchievements.filter(a => a != null).sort((a, b) => {
 		if (a.firstAchievedBy == user.id) return -1;
 		const aCount = a.users.length;
 		const bCount = b.users.length;
@@ -332,12 +331,14 @@ class Stats extends SlashCommand {
 
 		const weaponKillsStr = Object.entries(usedWeapons)
 			.sort((a, b) => b[1] - a[1])
-			.map(entry => entry[1] + " " + Weapon[entry[0]])
+			.map(entry => `${entry[1]} ${Weapon[entry[0]]}`)
 			.join("\n");
 		const weaponDeathsStr = Object.entries(diedToWeapons)
 			.sort((a, b) => b[1] - a[1])
 			.map(entry => entry[1] + " " + Weapon[entry[0]])
 			.join("\n");
+
+		const missileLaunches = await app.missileLaunchParams.collection.find({ "launcher.ownerId": user.id, "season": targetSeason.id }).toArray();
 
 		const endOfSeasonStats = targetSeason.active
 			? null
@@ -358,14 +359,14 @@ class Stats extends SlashCommand {
 		const seasonSessions = getValidSessions(user, targetSeason);
 		// const averageSessionLength =
 
-		// Map for aircraft stats
-		const aircraftStatsMap: Partial<Record<Aircraft, { kills: Kill[]; deaths: Kill[] }>> = {};
+		const aircraftStatsMap: Partial<Record<Aircraft, { kills: Kill[]; deaths: Kill[]; missiles: any[] }>> = {};
 		aircraftWithMetrics.forEach(ac => {
-			aircraftStatsMap[ac] = { kills: [], deaths: [] };
+			aircraftStatsMap[ac] = { kills: [], deaths: [], missiles: [] };
 		});
 
 		kills.forEach(k => aircraftStatsMap[k.killer.type].kills.push(k));
 		deaths.forEach(d => aircraftStatsMap[d.victim.type].deaths.push(d));
+		missileLaunches.forEach(ml => aircraftStatsMap[ml.launcher.type]?.missiles.push(ml));
 
 		let maxElo = 0;
 		user.eloHistory.forEach(h => (maxElo = Math.max(maxElo, h.elo)));
@@ -406,7 +407,7 @@ class Stats extends SlashCommand {
 
 		const aircraftStatBlocks = aircraftWithMetrics
 			.map(ac => {
-				const text = getStatsBlockForAircraft(ac, aircraftStatsMap[ac].kills, aircraftStatsMap[ac].deaths);
+				const text = getStatsBlockForAircraft(ac, aircraftStatsMap[ac].kills, aircraftStatsMap[ac].deaths, aircraftStatsMap[ac].missiles);
 				if (!text) return null;
 
 				return {

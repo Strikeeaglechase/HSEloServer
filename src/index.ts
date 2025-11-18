@@ -36,7 +36,7 @@ const frameworkOptions: FrameworkClientOptions = {
 	dmPrefixOnPing: true,
 	dmErrorSilently: false,
 	permErrorSilently: false,
-	slashCommandDevServer: "1015729793733492756"
+	slashCommandDevServer: process.env.DEV_SERVER_ID || "234754745053478913"
 };
 
 const frameClient = new FrameworkClient(frameworkOptions);
@@ -61,8 +61,8 @@ async function deleteSlashCommands() {
 	const client = new Client({ intents: IntentsBitField.Flags.GuildIntegrations });
 	client.login(process.env.TOKEN);
 	client.on("ready", async () => {
-		const devGuild = await client.guilds.fetch("1015729793733492756");
-		await devGuild.commands.set([]).then(() => {
+		    const deleteGuild = await client.guilds.fetch("1015729793733492756");
+		await deleteGuild.commands.set([]).then(() => {
 			process.exit();
 		});
 	});

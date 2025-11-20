@@ -1,5 +1,4 @@
 import { AchievementId } from "./achievementDeclare.js";
-import { RandomEnv } from "./serverEnvProfile.js";
 
 export enum Aircraft {
 	AV42c,
@@ -343,6 +342,17 @@ export interface UserAircraftInformation {
 	lastViffTime: number;
 	alive: boolean;
 	aoa: number;
+}
+
+export interface RandomEnv {
+	tod: number;
+	weather: number;
+	wind: {
+		heading: number;
+		mag: number;
+		vari: number;
+		gust: number;
+	};
 }
 
 export interface CurrentServerInformation {

@@ -11,7 +11,7 @@ import { DummyAchievementManager, IAchievementManager } from "./achievementDecla
 import { API, DaemonReport } from "./api.js";
 import { BASE_ELO, ELOUpdater, shouldKillBeCounted, userCanRank } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
-import { getRandomEnv, RandomEnv, weatherNames } from "./serverEnvProfile.js";
+import { getRandomEnv, weatherNames } from "./serverEnvProfile.js";
 import {
 	AchievementDBEntry,
 	AchievementLogChannel,
@@ -23,6 +23,7 @@ import {
 	MissileLaunchParams,
 	OnlineboardMessage,
 	OnlineRole,
+	RandomEnv,
 	ScoreboardMessage,
 	Season,
 	ServerInfoEntry,

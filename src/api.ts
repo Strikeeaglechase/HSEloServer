@@ -12,7 +12,7 @@ import { Client } from "./client.js";
 import { hourlyReportPath } from "./elo/eloUpdater.js";
 import { EventEmitter } from "./eventEmitter.js";
 import { createUserEloGraph } from "./graph/graph.js";
-import { getRandomEnv, RandomEnv } from "./serverEnvProfile.js";
+import { getRandomEnv } from "./serverEnvProfile.js";
 import {
 	Aircraft,
 	CurrentServerInformation,
@@ -23,6 +23,7 @@ import {
 	parseAircraftString,
 	parseTeamString,
 	parseWeaponString,
+	RandomEnv,
 	Spawn,
 	Tracking,
 	UserAircraftInformation,

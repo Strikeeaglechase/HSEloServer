@@ -1,5 +1,4 @@
 import { AchievementId } from "./achievementDeclare.js";
-import { RandomEnv } from "./serverEnvProfile.js";
 
 export enum Aircraft {
 	AV42c,
@@ -345,11 +344,23 @@ export interface UserAircraftInformation {
 	aoa: number;
 }
 
+export interface RandomEnv {
+	tod: number;
+	weather: number;
+	wind: {
+		heading: number;
+		mag: number;
+		vari: number;
+		gust: number;
+	};
+}
+
 export interface CurrentServerInformation {
 	onlineUsers: string[];
 	onlineUsersFull: UserAircraftInformation[];
 	environment: RandomEnv;
 	missionId: string;
+	replayId: string;
 }
 
 export interface Kill {
@@ -361,6 +372,10 @@ export interface Kill {
 	weaponUuid: string;
 	previousDamagedByUserId: string;
 	previousDamagedByWeapon: Weapon;
+
+	counted: boolean;
+	eloChange: number;
+	lastBackUpdateProcessTime: number;
 
 	time: number;
 	id: string;

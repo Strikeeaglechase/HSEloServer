@@ -12,7 +12,7 @@ import { Client } from "./client.js";
 import { hourlyReportPath } from "./elo/eloUpdater.js";
 import { EventEmitter } from "./eventEmitter.js";
 import { createUserEloGraph } from "./graph/graph.js";
-import { getRandomEnv, RandomEnv } from "./serverEnvProfile.js";
+import { getRandomEnv } from "./serverEnvProfile.js";
 import {
 	Aircraft,
 	CurrentServerInformation,
@@ -23,6 +23,7 @@ import {
 	parseAircraftString,
 	parseTeamString,
 	parseWeaponString,
+	RandomEnv,
 	Spawn,
 	Tracking,
 	UserAircraftInformation,
@@ -75,6 +76,7 @@ interface APIServerInfo {
 	onlineUsersFull: APIUserAircraft[];
 	environment: RandomEnv;
 	missionId: string;
+	replayId: string;
 }
 
 interface DaemonReport {
@@ -112,7 +114,8 @@ function parseAPIServerInfo(apiSI: APIServerInfo): CurrentServerInformation {
 		onlineUsers: apiSI.onlineUsers,
 		onlineUsersFull: apiSI.onlineUsersFull.map(parseAPIUserAircraft),
 		environment: apiSI.environment,
-		missionId: apiSI.missionId
+		missionId: apiSI.missionId,
+		replayId: apiSI.replayId
 	};
 }
 
@@ -380,7 +383,10 @@ class API extends EventEmitter<"tracking"> {
 			killer: parseAPIUserAircraft(killReq.killer),
 			victim: parseAPIUserAircraft(killReq.victim),
 			serverInfo: parseAPIServerInfo(killReq.serverInfo),
-			season: this.app.elo.activeSeason.id
+			season: this.app.elo.activeSeason.id,
+			lastBackUpdateProcessTime: 0,
+			counted: true,
+			eloChange: 0
 		};
 
 		this.log.info(`Kill: ${kill.killer.ownerId} killed ${kill.victim.ownerId} with ${Weapon[kill.weapon]} in ${Aircraft[kill.killer.type]}`);
@@ -394,10 +400,11 @@ class API extends EventEmitter<"tracking"> {
 			serverInfo: kill.serverInfo,
 			season: this.app.elo.activeSeason.id
 		};
-		this.app.kills.add(kill);
-		this.app.deaths.add(death);
 
 		const update = await this.app.elo.updateELOForKill(kill);
+		const insertProms = [this.app.kills.add(kill), this.app.deaths.add(death)];
+		await Promise.all(insertProms);
+
 		if (!update) {
 			return {
 				killerElo: 0,

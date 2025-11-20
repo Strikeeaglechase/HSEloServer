@@ -1,3 +1,5 @@
+import { RandomEnv } from "./structures.js";
+
 export interface WindProfile {
 	magMin: number;
 	magMax: number;
@@ -12,17 +14,6 @@ export interface EnvProfile {
 	todWeights: number[];
 	weatherWeights: number[];
 	windProfiles: WindProfile[];
-}
-
-export interface RandomEnv {
-	tod: number;
-	weather: number;
-	wind: {
-		heading: number;
-		mag: number;
-		vari: number;
-		gust: number;
-	};
 }
 
 export const weatherNames = ["Clear", "Few", "Scattered", "Broken", "Overcast", "Foggy", "Rain", "Storm"];

@@ -16,10 +16,32 @@ class Help extends SlashCommand {
 		if (helpInfo?.text) {
 			helpEmbed.setDescription(helpInfo.text);
 		} else {
-			helpEmbed.setDescription("No help information configured. Use `/sethelp <text>` to set it.");
+			helpEmbed.setDescription("No help information configured. Use `/sethelp` to set it.");
 		}
 
-		await interaction.reply({ embeds: [helpEmbed] });
+		// Create a message to send and then collect user messages
+		const sentMessage = await interaction.reply({ embeds: [helpEmbed], fetchReply: true });
+
+		// Set up message collector for updates
+		const filter = (msg) => msg.author.id === interaction.user.id && msg.channel.id === interaction.channel.id;
+		const collector = interaction.channel.createMessageCollector({ filter, time: 60000, max: 1 });
+
+		collector.on("collect", async (msg) => {
+			if (msg.content.toLowerCase() === "edit") {
+				// User wants to see how to edit this
+				const editEmbed = new EmbedBuilder()
+					.setTitle("Editing Help")
+					.setDescription("To edit the help text, an admin should use:\n`/sethelp`")
+					.setColor(0x5865f2);
+				
+				await sentMessage.reply({ embeds: [editEmbed] });
+			}
+			msg.delete().catch(() => {});
+		});
+
+		collector.on("end", () => {
+			// Collector timeout - no further action needed
+		});
 	}
 }
 

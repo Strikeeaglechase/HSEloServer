@@ -1,37 +1,27 @@
 import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
+import { EmbedBuilder, AutocompleteInteraction } from "discord.js";
 
 import { admins, authRoleIds, Application } from "../../application.js";
-
-enum InfoCategory {
-	ELO = "ELO",
-	MapList = "MapList",
-	AircraftList = "AircraftList",
-	CFIT = "CFIT",
-	GPull = "GPull",
-	Notching = "Notching",
-	TerrainMask = "TerrainMask",
-	Cranking = "Cranking",
-	Intercept = "Intercept"
-}
-
-const infoCategories = [
-	{ name: InfoCategory.ELO, value: InfoCategory.ELO },
-	{ name: InfoCategory.MapList, value: InfoCategory.MapList },
-	{ name: InfoCategory.AircraftList, value: InfoCategory.AircraftList },
-	{ name: InfoCategory.CFIT, value: InfoCategory.CFIT },
-	{ name: InfoCategory.GPull, value: InfoCategory.GPull },
-	{ name: InfoCategory.Notching, value: InfoCategory.Notching },
-	{ name: InfoCategory.TerrainMask, value: InfoCategory.TerrainMask },
-	{ name: InfoCategory.Cranking, value: InfoCategory.Cranking },
-	{ name: InfoCategory.Intercept, value: InfoCategory.Intercept }
-];
 
 class SetInfo extends SlashCommand {
 	name = "setinfo";
 	description = "Sets info text for a category";
 
-	async run({ interaction, framework, app }: SlashCommandEvent<Application>, @SArg({ choices: infoCategories }) category: string, @SArg({}) text: string) {
+	async autocomplete(interaction: AutocompleteInteraction, app: Application) {
+		const entries = await app.serverInfos.get();
+		const categories = entries.map(entry => entry.id).sort();
+		
+		// Add option to create new categories
+		const allCategories = [...new Set([...categories, "ELO", "MapList", "AircraftList", "CFIT", "GPull", "Notching", "TerrainMask", "Cranking", "Intercept"])].sort();
+		
+		const focusedValue = interaction.options.getFocused(true);
+		const filtered = allCategories.filter(cat => cat.toLowerCase().includes(focusedValue.value.toLowerCase())).slice(0, 25);
+		
+		await interaction.respond(filtered.map(cat => ({ name: cat, value: cat })));
+	}
+
+	async run({ interaction, framework, app }: SlashCommandEvent<Application>, @SArg({}) category: string) {
 		const member = interaction.guild?.members.cache.get(interaction.user.id);
 		const hasAllowedRole = member?.roles.cache.some(role => authRoleIds.includes(role.id));
 
@@ -40,13 +30,46 @@ class SetInfo extends SlashCommand {
 			return;
 		}
 
-		await app.serverInfos.collection.updateOne(
-			{ id: category },
-			{ $set: { id: category, text: text } },
-			{ upsert: true }
-		);
+		// Prompt user for text input
+		const promptEmbed = new EmbedBuilder()
+			.setTitle(`Setting ${category}`)
+			.setDescription(`Please send the new text content for the **${category}** category in the next message.`)
+			.setColor(0x5865f2);
 
-		return framework.success(`Updated ${category} info`);
+		await interaction.reply({ embeds: [promptEmbed] });
+
+		// Set up message collector for text input
+		const filter = (msg) => msg.author.id === interaction.user.id && msg.channel.id === interaction.channel.id;
+		const collector = interaction.channel.createMessageCollector({ filter, time: 300000, max: 1 });
+
+		collector.on("collect", async (msg) => {
+			const text = msg.content;
+
+			await app.serverInfos.collection.updateOne(
+				{ id: category },
+				{ $set: { id: category, text: text } },
+				{ upsert: true }
+			);
+
+			const successEmbed = new EmbedBuilder()
+				.setTitle("Success")
+				.setDescription(`Updated **${category}** info with:\n\n${text}`)
+				.setColor(0x00ff00);
+
+			await msg.reply({ embeds: [successEmbed] });
+			msg.delete().catch(() => {});
+		});
+
+		collector.on("end", (collected) => {
+			if (collected.size === 0) {
+				interaction.channel.send(
+					new EmbedBuilder()
+						.setTitle("Timeout")
+						.setDescription(`No message received within 5 minutes. Cancelled.`)
+						.setColor(0xff0000)
+				).catch(() => {});
+			}
+		});
 	}
 }
 

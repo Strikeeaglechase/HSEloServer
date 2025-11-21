@@ -1,51 +1,18 @@
-import Discord, { CommandInteraction } from "discord.js";
-import FrameworkClient from "strike-discord-framework";
-import { CollectionManager } from "strike-discord-framework/dist/collectionManager.js";
+import Discord from "discord.js";
 import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { ENDPOINT_BASE, getHost } from "../../api.js";
 import { achievementsEnabled, Application } from "../../application.js";
 import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
+import { resolveUser, resolveSeason } from "../../elo/utils/userUtils.js";
 import { createUserEloGraph } from "../../graph/graph.js";
-import { Aircraft, EndOfSeasonStats, Kill, Season, User, Weapon } from "../../structures.js";
-
-async function lookupUser(users: CollectionManager<User>, query: string) {
-	// SteamID
-	if (query.match(/(https):\/\/steamcommunity\.com\/profiles\/[0-9]+|(http):\/\/steamcommunity\.com\/profiles\/[0-9]+/gim)) {
-		const userIdUser = await users.get(query.replace(/(https):\/\/steamcommunity\.com\/profiles\/|(http):\/\/steamcommunity\.com\/profiles\//gim, ""));
-		if (userIdUser) return userIdUser;
-	} else if (query.match(/[0-9]+/gim)) {
-		const userIdUser = await users.get(query);
-		if (userIdUser) return userIdUser;
-	}
-
-	// DiscordID
-	if (query.match(/<@[0-9]+>/gim)) {
-		const discordIdUser = await users.collection.findOne({
-			discordId: query.replace(/<@|>/gim, "")
-		});
-		if (discordIdUser) return discordIdUser;
-	} else if (query.match(/[0-9]+/gim)) {
-		const discordIdUser = await users.collection.findOne({ discordId: query });
-		if (discordIdUser) return discordIdUser;
-	}
-
-	console.log(`Doing regex query for ${query}`);
-	// PilotName
-	const pilotNameUser = await users.collection
-		.find({ pilotNames: { $regex: new RegExp(query, "i") } })
-		.limit(100)
-		.toArray();
-	if (pilotNameUser.length > 0) {
-		return pilotNameUser.sort((a, b) => b.elo - a.elo)[0];
-	}
-}
+import { Aircraft, EndOfSeasonStats, Kill, MissileLaunchParams, Season, User, Weapon } from "../../structures.js";
 
 const expectedMaxTimeOnServer = 1000 * 60 * 60 * 1.1; // 1.1 hours
 const aircraftWithMetrics = [Aircraft.FA26b, Aircraft.F45A, Aircraft.T55, Aircraft.EF24G, Aircraft.AV42c];
 
-function getStatsBlockForAircraft(aircraft: Aircraft, kills: Kill[], deaths: Kill[], missileLaunches: any[]) {
+function getStatsBlockForAircraft(aircraft: Aircraft, kills: Kill[], deaths: Kill[], missileLaunches: MissileLaunchParams[]) {
 	if (kills.length === 0) return null;
 
 	const kdr = deaths.length === 0 ? kills.length : kills.length / deaths.length;
@@ -71,42 +38,6 @@ function getFirstOnline(user: User): string {
 	const allTimes = [...loginTimes, ...sessionTimes];
 	if (allTimes.length === 0) return "Never";
 	return new Date(Math.min(...allTimes)).toLocaleDateString();
-}
-
-export async function resolveUser(username: string, framework: FrameworkClient, app: Application, interaction: CommandInteraction) {
-	let user: User;
-	if (username) {
-		user = await lookupUser(app.users, username);
-		if (!user) {
-			await interaction.editReply(framework.error(`Could not find a user with that id/name`));
-			return null;
-		}
-	} else {
-		const linkedUser = await app.users.collection.findOne({
-			discordId: interaction.user.id
-		});
-		if (!linkedUser) {
-			interaction.editReply(framework.error(`You must be linked to a steam account to use this command without an argument. \`/link <steamid>\``));
-			return null;
-		}
-		user = linkedUser;
-	}
-
-	return user;
-}
-
-async function resolveSeason(season: number, framework: FrameworkClient, app: Application, interaction: CommandInteraction) {
-	const activeSeason = await app.getActiveSeason();
-	let targetSeason = activeSeason;
-	if (season) {
-		targetSeason = await app.getSeason(season);
-		if (!targetSeason) {
-			interaction.editReply(framework.error(`Could not find that season`));
-			return null;
-		}
-	}
-
-	return targetSeason;
 }
 
 async function getMostInteractedWith(kills: Kill[], app: Application, mode: "killer" | "victim") {
@@ -359,7 +290,7 @@ class Stats extends SlashCommand {
 		const seasonSessions = getValidSessions(user, targetSeason);
 		// const averageSessionLength =
 
-		const aircraftStatsMap: Partial<Record<Aircraft, { kills: Kill[]; deaths: Kill[]; missiles: any[] }>> = {};
+		const aircraftStatsMap: Partial<Record<Aircraft, { kills: Kill[]; deaths: Kill[]; missiles: MissileLaunchParams[] }>> = {};
 		aircraftWithMetrics.forEach(ac => {
 			aircraftStatsMap[ac] = { kills: [], deaths: [], missiles: [] };
 		});

@@ -1,7 +1,7 @@
 import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
-import { admins, Application } from "../../application.js";
+import { admins, authRoleIds, Application } from "../../application.js";
 
 enum InfoCategory {
 	ELO = "ELO",
@@ -32,19 +32,19 @@ class SetInfo extends SlashCommand {
 	description = "Sets info text for a category";
 
 	async run({ interaction, framework, app }: SlashCommandEvent<Application>, @SArg({ choices: infoCategories }) category: string, @SArg({}) text: string) {
-		const allowedRoleIds = [
-			"1078735204706963457"
-		];
-
 		const member = interaction.guild?.members.cache.get(interaction.user.id);
-		const hasAllowedRole = member?.roles.cache.some(role => allowedRoleIds.includes(role.id));
+		const hasAllowedRole = member?.roles.cache.some(role => authRoleIds.includes(role.id));
 
 		if (!admins.includes(interaction.user.id) && !hasAllowedRole) {
 			await interaction.reply(framework.error("No"));
 			return;
 		}
 
-		await app.serverInfos.update({ id: category, text: text }, category);
+		await app.serverInfos.collection.updateOne(
+			{ id: category },
+			{ $set: { id: category, text: text } },
+			{ upsert: true }
+		);
 
 		return framework.success(`Updated ${category} info`);
 	}

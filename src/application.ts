@@ -35,6 +35,7 @@ import {
 } from "./structures.js";
 
 const admins = ["272143648114606083", "500744458699276288"];
+const authRoleIds = ["1078735204706963457"];
 const SERVER_MAX_PLAYERS = 16;
 const USERS_PER_PAGE = 30;
 const KILLS_TO_RANK = 10;
@@ -456,12 +457,13 @@ class Application {
 		
 		// Get current session start time (last online user update)
 		const sessionStartTime = this.lastOnlineUserUpdateAt;
+		const activeSeason = await this.getActiveSeason();
 		
 		await Promise.all(onlineUsers.map(async (user, idx) => {
 			const team = this.onlineUsers.find(u => u.id === user.id).team;
 			
 			// Get the most recent spawn to find current aircraft
-			const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id }, { sort: { time: -1 } });
+			const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id, season: activeSeason.id }, { sort: { time: -1 } });
 			let aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
 
 			// Check for multi-seat aircraft and determine seat position
@@ -488,11 +490,13 @@ class Application {
 			// Calculate K/D ratio for current session only
 			const sessionKills = await this.kills.collection.countDocuments({
 				"killer.ownerId": user.id,
+				season: activeSeason.id,
 				time: { $gte: sessionStartTime }
 			});
 			
 			const sessionDeaths = await this.deaths.collection.countDocuments({
 				"victim.ownerId": user.id,
+				season: activeSeason.id,
 				time: { $gte: sessionStartTime }
 			});
 
@@ -864,7 +868,8 @@ class Application {
 
 	public async createModerationEmbed(userEntry: User) {
 		const MAX_SHOWN_TKs = 10;
-		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id }).toArray();
+		const activeSeason = await this.getActiveSeason();
+		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id, season: activeSeason.id }).toArray();
 		kills.sort((a, b) => b.time - a.time);
 		const realKills = kills.filter(k => k.killer.team != k.victim.team && shouldKillBeCounted(k) && k.weapon != Weapon.Collision && k.weapon != Weapon.CFIT);
 		const killsWithoutCollisions = kills.filter(k => k.weapon != Weapon.Collision);
@@ -1090,4 +1095,4 @@ class Application {
 	}
 }
 
-export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled, admins };
+export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled, admins, authRoleIds };

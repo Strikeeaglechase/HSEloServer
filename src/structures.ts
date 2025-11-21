@@ -396,10 +396,9 @@ export function isKillValid(kill: Kill) {
 	if (kill.victim.type == Aircraft.Invalid) return false;
 	if (kill.killer.type == Aircraft.Invalid) return false;
 	if (kill.weapon == Weapon.Invalid) return false;
-	if (!kill.victim.occupants || !kill.killer.occupants) return false;
 	if (kill.victim.ownerId != kill.victim.occupants[0] && kill.weapon == Weapon.CFIT && kill.victim.type != Aircraft.T55) return false;
 	if (kill.killer.ownerId != kill.killer.occupants[0] && kill.weapon == Weapon.CFIT && kill.killer.type != Aircraft.T55) return false;
-
+	
 	const loadout = aircraftLoadoutMap[kill.killer.type];
 	return loadout.includes(kill.weapon);
 

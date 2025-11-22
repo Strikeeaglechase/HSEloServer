@@ -29,7 +29,7 @@
 		"mongodb": "^6.1.0",
 		"node-fetch": "^3.3.2",
 		"sharp": "^0.31.3",
-		"strike-discord-framework": "^1.5.9",
+		"strike-discord-framework": "^1.5.12",
 		"uuid": "^8.3.2",
 		"vega": "^5.22.1",
 		"ws": "^8.13.0"

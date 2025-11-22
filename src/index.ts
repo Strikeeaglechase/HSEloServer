@@ -63,7 +63,7 @@ async function deleteSlashCommands() {
 	client.on("ready", async () => {
 		const devGuild = await client.guilds.fetch("1015729793733492756");
 		await devGuild.commands.set([]).then(() => {
-			process.exit();
+						process.exit();
 		});
 	});
 }

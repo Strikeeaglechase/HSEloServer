@@ -72,6 +72,7 @@ class Application {
 	public endOfSeasonStats: CollectionManager<EndOfSeasonStats>;
 	public unbanRequests: CollectionManager<UnbanRequest>;
 	public serverInfos: CollectionManager<ServerInfoEntry>;
+	public serverHelps: CollectionManager<ServerInfoEntry>;
 
 	public achievementManager: IAchievementManager = new DummyAchievementManager();
 	public achievementsDb: CollectionManager<AchievementDBEntry>;
@@ -281,6 +282,7 @@ class Application {
 		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
 		this.unbanRequests = await this.framework.database.collection("unban-requests", false, "id");
 		this.serverInfos = await this.framework.database.collection("server-info", false, "id");
+		this.serverHelps = await this.framework.database.collection("server-help", false, "id");
 	}
 
 	private async checkMemoryUsage() {

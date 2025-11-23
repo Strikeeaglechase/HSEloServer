@@ -32,7 +32,7 @@ class Help extends SlashCommand {
 		if (helpInfo?.text) {
 			helpEmbed.setDescription(helpInfo.text);
 		} else {
-			helpEmbed.setDescription(`No ${category} information configured. Use \`/sethelp ${category}\` to set it.`);
+			helpEmbed.setDescription(`No ${category} information configured. Use /sethelp to set it.`);
 		}
 
 		await interaction.reply({ embeds: [helpEmbed] });

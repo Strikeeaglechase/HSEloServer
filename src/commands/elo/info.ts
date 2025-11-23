@@ -34,7 +34,7 @@ class Info extends SlashCommand {
 		if (info?.text) {
 			embed.setDescription(info.text);
 		} else {
-			embed.setDescription(`No ${category} information configured. Use \`/setinfo ${category} <text>\` to set it.`);
+			embed.setDescription(`No ${category} information configured. Use /setinfo to set it.`);
 		}
 
 		await interaction.reply({ embeds: [embed] });

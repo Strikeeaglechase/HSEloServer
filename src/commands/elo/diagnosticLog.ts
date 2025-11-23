@@ -5,7 +5,7 @@ import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.j
 import { Application } from "../../application.js";
 import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
 import { Aircraft, CurrentServerInformation, Kill, MissileLaunchParams, Spawn, Team, Tracking, UserAircraftInformation, Weapon } from "../../structures.js";
-import { resolveUser } from "../../elo/utils/userUtils.js";
+import { resolveUser } from "../../userUtils.js";
 
 function loadingEmbed(state: string) {
 	const emb = new EmbedBuilder();

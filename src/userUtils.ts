@@ -2,8 +2,8 @@ import { CommandInteraction } from "discord.js";
 import FrameworkClient from "strike-discord-framework";
 import { CollectionManager } from "strike-discord-framework/dist/collectionManager.js";
 
-import { Application } from "../../application.js";
-import { User } from "../../structures.js";
+import { Application } from "./application.js";
+import { User } from "./structures.js";
 
 export async function lookupUser(users: CollectionManager<User>, query: string) {
 	// SteamID

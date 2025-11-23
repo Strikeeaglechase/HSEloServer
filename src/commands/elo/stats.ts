@@ -5,7 +5,7 @@ import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.j
 import { ENDPOINT_BASE, getHost } from "../../api.js";
 import { achievementsEnabled, Application } from "../../application.js";
 import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
-import { resolveUser, resolveSeason } from "../../elo/utils/userUtils.js";
+import { resolveUser, resolveSeason } from "../../userUtils.js";
 import { createUserEloGraph } from "../../graph/graph.js";
 import { Aircraft, EndOfSeasonStats, Kill, MissileLaunchParams, Season, User, Weapon } from "../../structures.js";
 

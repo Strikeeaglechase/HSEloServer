@@ -1,4 +1,4 @@
-import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
+import { SlashCommand, SlashCommandEvent, SlashCommandAutocompleteEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 import { EmbedBuilder, AutocompleteInteraction } from "discord.js";
 
@@ -8,7 +8,7 @@ class SetInfo extends SlashCommand {
 	name = "setinfo";
 	description = "Sets info text for a category";
 
-	async handleAutocomplete(event: any) {
+	async handleAutocomplete(event: SlashCommandAutocompleteEvent<Application>) {
 		const interaction = event.interaction;
 		const app = event.app;
 		const entries = await app.serverInfos.get();

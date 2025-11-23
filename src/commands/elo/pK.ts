@@ -3,7 +3,7 @@ import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/s
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
 import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
-import { resolveUser, resolveSeason } from "../../elo/utils/userUtils.js";
+import { resolveUser, resolveSeason } from "../../userUtils.js";
 import { Aircraft, Kill, MissileLaunchParams, Tracking, Weapon } from "../../structures.js";
 import { Application } from "../../application.js";
 
@@ -42,56 +42,13 @@ function calculateAircraftWeaponStats(
 	missileLaunches: MissileLaunchParams[],
 	damageEvents: Tracking[]
 ): WeaponStatsMap {
-	const weaponStats: WeaponStatsMap = {};
-
 	const aircraftKills = kills.filter(k => k.killer.type === aircraftType);
 	const aircraftMissileLaunches = missileLaunches.filter(ml => ml.launcher.type === aircraftType);
 
 	const aircraftLaunchUuids = new Set(aircraftMissileLaunches.map(ml => ml.uuid));
 	const aircraftDamageEvents = damageEvents.filter(de => aircraftLaunchUuids.has(de.args[7]));
-	const aircraftDamageWeaponUuids = new Set(aircraftDamageEvents.map(de => de.args[7]).filter(uuid => uuid));
 
-	const aircraftMissileHits = aircraftMissileLaunches.filter(ml => aircraftDamageWeaponUuids.has(ml.uuid));
-
-	// Count fired missiles
-	aircraftMissileLaunches.forEach(ml => {
-		const weaponKey = ml.type.toString();
-		if (!weaponStats[weaponKey]) {
-			weaponStats[weaponKey] = initializeWeaponStats();
-		}
-		weaponStats[weaponKey].fired++;
-	});
-
-	// Count hits
-	aircraftMissileHits.forEach(ml => {
-		const weaponKey = ml.type.toString();
-		if (weaponStats[weaponKey]) {
-			weaponStats[weaponKey].hit++;
-		}
-	});
-
-	// Count missile kills
-	const aircraftMissileKills = aircraftKills.filter(k => MISSILE_WEAPONS.includes(k.weapon));
-	aircraftMissileKills.forEach(k => {
-		const weaponKey = k.weapon.toString();
-		if (!weaponStats[weaponKey]) {
-			weaponStats[weaponKey] = initializeWeaponStats();
-		}
-		weaponStats[weaponKey].kill++;
-	});
-
-	// Count non-tracked weapon kills
-	aircraftKills
-		.filter(k => NON_TRACKED_WEAPONS.includes(k.weapon))
-		.forEach(k => {
-			const weaponKey = k.weapon.toString();
-			if (!weaponStats[weaponKey]) {
-				weaponStats[weaponKey] = initializeWeaponStats();
-			}
-			weaponStats[weaponKey].kill++;
-		});
-
-	return weaponStats;
+	return calculateWeaponStats(aircraftKills, aircraftMissileLaunches, aircraftDamageEvents);
 }
 
 function calculateWeaponStats(
@@ -105,7 +62,6 @@ function calculateWeaponStats(
 	const damageWeaponUuids = new Set(damageEvents.map(de => de.args[7]).filter(uuid => uuid));
 	const missileHits = missileLaunches.filter(ml => damageWeaponUuids.has(ml.uuid));
 
-	// Count fired missiles
 	missileLaunches.forEach(ml => {
 		const weaponKey = ml.type.toString();
 		if (!weaponStats[weaponKey]) {
@@ -114,7 +70,6 @@ function calculateWeaponStats(
 		weaponStats[weaponKey].fired++;
 	});
 
-	// Count hits
 	missileHits.forEach(ml => {
 		const weaponKey = ml.type.toString();
 		if (weaponStats[weaponKey]) {
@@ -122,7 +77,6 @@ function calculateWeaponStats(
 		}
 	});
 
-	// Count missile kills
 	missileKills.forEach(k => {
 		const weaponKey = k.weapon.toString();
 		if (!weaponStats[weaponKey]) {
@@ -131,7 +85,6 @@ function calculateWeaponStats(
 		weaponStats[weaponKey].kill++;
 	});
 
-	// Count non-tracked weapon kills
 	kills
 		.filter(k => NON_TRACKED_WEAPONS.includes(k.weapon))
 		.forEach(k => {
@@ -141,6 +94,10 @@ function calculateWeaponStats(
 			}
 			weaponStats[weaponKey].kill++;
 		});
+
+	Object.keys(weaponStats).forEach(weaponKey => {
+		weaponStats[weaponKey].hit = Math.max(weaponStats[weaponKey].hit, weaponStats[weaponKey].kill);
+	});
 
 	return weaponStats;
 }
@@ -177,26 +134,14 @@ function createWeaponStatsTable(sortedWeapons: Array<[string, WeaponStats]>, hea
 		maxKillLen = Math.max(maxKillLen, stats.kill.toString().length);
 	}
 
-	let text = "```ansi\n";
+	const lines: string[] = ["```ansi"];
 	const tableWidth = maxWeaponLen + 1 + maxFireLen + 1 + maxHitLen + 1 + maxKillLen + 1 + 5 + 1 + 4;
 	const totalWidth = Math.max(tableWidth, headerText.length + 4);
 	const paddingNeeded = Math.max(0, totalWidth - headerText.length);
 	const leftPad = Math.floor(paddingNeeded / 2);
 	const rightPad = paddingNeeded - leftPad;
-	text += "=".repeat(leftPad) + "\u001b[0;31m" + headerText + "\u001b[0m" + "=".repeat(rightPad) + "\n";
-	text +=
-		"Weapon".padEnd(maxWeaponLen) +
-		" " +
-		"Fired".padStart(maxFireLen) +
-		" " +
-		"Hit".padStart(maxHitLen) +
-		" " +
-		"Kill".padStart(maxKillLen) +
-		" " +
-		"pH".padStart(5) +
-		" " +
-		"pK".padStart(4) +
-		"\n";
+	lines.push(`${"=".repeat(leftPad)}\u001b[0;31m${headerText}\u001b[0m${"=".repeat(rightPad)}`);
+	lines.push(`${"Weapon".padEnd(maxWeaponLen)} ${"Fired".padStart(maxFireLen)} ${"Hit".padStart(maxHitLen)} ${"Kill".padStart(maxKillLen)} ${"pH".padStart(5)} ${"pK".padStart(4)}`);
 
 	for (const [weaponType, stats] of sortedWeapons) {
 		const weaponEnum = parseInt(weaponType) as Weapon;
@@ -207,23 +152,13 @@ function createWeaponStatsTable(sortedWeapons: Array<[string, WeaponStats]>, hea
 		if (isTracked) {
 			const pK = stats.fired > 0 ? ((stats.kill / stats.fired) * 100).toFixed(0) : "0";
 			const pH = stats.fired > 0 ? ((stats.hit / stats.fired) * 100).toFixed(0) : "0";
-			const weaponPadded = weapon.padEnd(maxWeaponLen);
-			const firedPadded = stats.fired.toString().padStart(maxFireLen);
-			const hitPadded = stats.hit.toString().padStart(maxHitLen);
-			const killPadded = stats.kill.toString().padStart(maxKillLen);
-			const pHPadded = (pH + "%").padStart(5);
-			const pKPadded = (pK + "%").padStart(4);
-			text += `${weaponPadded} ${firedPadded} ${hitPadded} ${killPadded} ${pHPadded} ${pKPadded}\n`;
+			lines.push(`${weapon.padEnd(maxWeaponLen)} ${stats.fired.toString().padStart(maxFireLen)} ${stats.hit.toString().padStart(maxHitLen)} ${stats.kill.toString().padStart(maxKillLen)} ${`${pH}%`.padStart(5)} ${`${pK}%`.padStart(4)}`);
 		} else {
-			const weaponPadded = weapon.padEnd(maxWeaponLen);
-			const killPadded = stats.kill.toString().padStart(maxKillLen);
-			const dashFire = "-".padStart(maxFireLen);
-			const dashHit = "-".padStart(maxHitLen);
-			text += `${weaponPadded} ${dashFire} ${dashHit} ${killPadded}     -    -\n`;
+			lines.push(`${weapon.padEnd(maxWeaponLen)} ${"-".padStart(maxFireLen)} ${"-".padStart(maxHitLen)} ${stats.kill.toString().padStart(maxKillLen)}     -    -`);
 		}
 	}
-	text += "```";
-	return text;
+	lines.push("```");
+	return lines.join("\n");
 }
 
 class PK extends SlashCommand {
@@ -248,22 +183,18 @@ class PK extends SlashCommand {
 		const missileLaunches = await app.missileLaunchParams.collection.find({ "launcher.ownerId": user.id, "season": targetSeason.id }).toArray();
 		const damageEvents = await app.tracking.collection.find({ "type": "damage", "args.5": user.id, "season": targetSeason.id }).toArray();
 
-		// Calculate overall weapon stats
 		const weaponStats = calculateWeaponStats(kills, missileLaunches, damageEvents);
 		const sortedWeapons = sortWeaponStats(weaponStats);
 
 		const fields: { name: string; value: string; inline: boolean }[] = [];
 
-		// Add overall stats field
 		const overviewText = createWeaponStatsTable(sortedWeapons, "All Weapons Overview");
 		if (overviewText) {
 			fields.push({ name: "\u200B", value: overviewText, inline: false });
 		}
 
-		const spawns = await app.spawns.collection.find({ "user.ownerId": user.id, "season": targetSeason.id }).toArray();
-		const aircraftWithData = [...new Set(spawns.map(s => s.user.type))];
+		const aircraftWithData = [...new Set(kills.map(k => k.killer.type))];
 
-		// Calculate and add per-aircraft stats
 		for (const aircraftType of aircraftWithData) {
 			const aircraftName = Aircraft[aircraftType];
 			const aircraftWeaponStats = calculateAircraftWeaponStats(aircraftType, kills, missileLaunches, damageEvents);

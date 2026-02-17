@@ -281,7 +281,7 @@ class Application {
 		const memUsage = process.memoryUsage();
 		const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
 		this.log.info(`Memory usage: ${usageGb.toFixed(2)}GB`);
-		if (usageGb > 1.5) {
+		if (usageGb > 2.5) {
 			const timeFromLastReset = Date.now() - this.lastHighMemoryReset;
 			// One minute
 			if (timeFromLastReset < 1000 * 60) return;
@@ -922,7 +922,7 @@ class Application {
 				await message.delete().catch(() => {});
 				return;
 			}
-			const name = user ? user.pilotNames[0] ?? user.id : "Unknown";
+			const name = user ? (user.pilotNames[0] ?? user.id) : "Unknown";
 
 			const thread = await message.channel.threads.create({
 				name: `Unban Request - ${name}`,

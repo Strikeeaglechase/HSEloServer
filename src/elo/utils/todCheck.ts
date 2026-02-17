@@ -1,6 +1,7 @@
 import fs from "fs";
 
-import { RandomEnv } from "../../serverEnvProfile.js";
+import { getRandomEnv } from "../../serverEnvProfile.js";
+import { RandomEnv } from "../../structures.js";
 import { Tracking } from "../../structures.js";
 
 function countTimes(envs: RandomEnv[]) {

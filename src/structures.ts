@@ -398,7 +398,7 @@ export function isKillValid(kill: Kill) {
 	if (kill.weapon == Weapon.Invalid) return false;
 	if (kill.victim.ownerId != kill.victim.occupants[0] && kill.weapon == Weapon.CFIT && kill.victim.type != Aircraft.T55) return false;
 	if (kill.killer.ownerId != kill.killer.occupants[0] && kill.weapon == Weapon.CFIT && kill.killer.type != Aircraft.T55) return false;
-
+	
 	const loadout = aircraftLoadoutMap[kill.killer.type];
 	return loadout.includes(kill.weapon);
 
@@ -517,4 +517,9 @@ export interface AchievementDBEntry {
 	firstAchievedBy?: string;
 
 	messages: { channelId: string; messageId: string }[];
+}
+
+export interface ServerInfoEntry {
+	id: string;
+	text: string;
 }

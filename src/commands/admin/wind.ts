@@ -1,7 +1,7 @@
 import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
-import { admins, Application } from "../../application.js";
+import { adminrole, Application } from "../../application.js";
 
 class Wind extends SlashCommand {
 	name = "wind";
@@ -14,7 +14,8 @@ class Wind extends SlashCommand {
 		@SArg({}) variation: number,
 		@SArg({}) gust: number
 	) {
-		if (!admins.includes(interaction.user.id)) {
+		const m = await interaction.guild.members.fetch(interaction.user.id).catch(() => {});
+		if (!m || !m.roles.cache.has(adminrole)) {
 			await interaction.reply(framework.error("No"));
 			return;
 		}

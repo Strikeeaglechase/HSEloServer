@@ -2,7 +2,7 @@ import Discord, { ActionRowBuilder, ButtonBuilder, ComponentType, MessageActionR
 import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
-import { admins, Application } from "../../application.js";
+import { adminrole, Application } from "../../application.js";
 
 class Mod extends SlashCommand {
 	name = "mod";
@@ -19,7 +19,9 @@ class Mod extends SlashCommand {
 		interaction.deferReply();
 		const embed = await app.createModerationEmbed(userEntry);
 
-		if (admins.includes(interaction.user.id) && userEntry.isBanned) {
+		const m = await interaction.guild.members.fetch(interaction.user.id).catch(() => {});
+		const hasAdminRole = m && m.roles.cache.has(adminrole);
+		if (hasAdminRole && userEntry.isBanned) {
 			const row = new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
 				new ButtonBuilder().setCustomId("unban").setLabel("Unban").setStyle(Discord.ButtonStyle.Success)
 			);
@@ -29,7 +31,8 @@ class Mod extends SlashCommand {
 			const collector = message.createMessageComponentCollector({ componentType: ComponentType.Button, time: 5 * 60 * 1000 });
 			collector.on("collect", async i => {
 				if (i.customId != "unban") return;
-				if (!admins.includes(i.user.id)) {
+				const iMember = await interaction.guild.members.fetch(i.user.id).catch(() => {});
+				if (!iMember || !iMember.roles.cache.has(adminrole)) {
 					i.reply(framework.error("No", true));
 					return;
 				}

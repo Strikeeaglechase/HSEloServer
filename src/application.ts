@@ -8,7 +8,7 @@ import Logger from "strike-discord-framework/dist/logger";
 import { v4 as uuidv4 } from "uuid";
 
 import { DummyAchievementManager, IAchievementManager } from "./achievementDeclare.js";
-import { API, DaemonReport } from "./api.js";
+import { API } from "./api.js";
 import { BASE_ELO, ELOUpdater, shouldKillBeCounted, userCanRank } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
 import { getRandomEnv, weatherNames } from "./serverEnvProfile.js";
@@ -368,17 +368,17 @@ class Application {
 
 	private async getMainAircraft(userId: string): Promise<string> {
 		const season = await this.getActiveSeason();
-		const kills = await this.kills.collection.find({ "killer.ownerId": userId, season: season.id }).toArray();
-		
+		const kills = await this.kills.collection.find({ "killer.ownerId": userId, "season": season.id }).toArray();
+
 		const killsByAircraft: Record<number, number> = {};
 		kills.forEach(kill => {
 			const aircraftType = kill.killer.type;
 			killsByAircraft[aircraftType] = (killsByAircraft[aircraftType] || 0) + 1;
 		});
-		
+
 		let maxKills = 0;
 		let mainAircraft = Aircraft.Invalid;
-		
+
 		Object.entries(killsByAircraft).forEach(([aircraftStr, killCount]) => {
 			const aircraft = parseInt(aircraftStr) as Aircraft;
 			if (aircraft !== Aircraft.Invalid && killCount > maxKills) {
@@ -386,7 +386,7 @@ class Application {
 				mainAircraft = aircraft;
 			}
 		});
-		
+
 		return mainAircraft === Aircraft.Invalid ? "N/A" : Aircraft[mainAircraft];
 	}
 
@@ -412,16 +412,8 @@ class Application {
 			const mainAircraft = await this.getMainAircraft(user.id);
 			prefixes.push(prefix);
 			suffixes.push(suffix);
-			
-			table.push([
-				idx + 1,
-				user.pilotNames[0],
-				Math.round(user.elo),
-				user.kills,
-				user.deaths,
-				mainAircraft,
-				(user.kills / user.deaths).toFixed(2)
-			]);
+
+			table.push([idx + 1, user.pilotNames[0], Math.round(user.elo), user.kills, user.deaths, mainAircraft, (user.kills / user.deaths).toFixed(2)]);
 		}
 		const multiplierTable: (string | number)[][] = [["Mult", "Type", "Count"]];
 		this.elo.lastMultipliers
@@ -456,60 +448,62 @@ class Application {
 		let avg = 0;
 
 		const table: (string | number)[][] = [["Name", "ELO", "K/D", "Team", "Aircraft"]];
-		
-		// Get current session start time (last online user update)
-		const sessionStartTime = this.lastOnlineUserUpdateAt;
-		const activeSeason = await this.getActiveSeason();
-		
-		await Promise.all(onlineUsers.map(async (user, idx) => {
-			const team = this.onlineUsers.find(u => u.id === user.id).team;
-			
-			// Get the most recent spawn to find current aircraft
-			const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id, season: activeSeason.id }, { sort: { time: -1 } });
-			let aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
 
-			// Check for multi-seat aircraft and determine seat position
-			if (latestSpawn && latestSpawn.user.occupants && latestSpawn.user.occupants.length > 1) {
-				const seatIndex = latestSpawn.user.occupants.indexOf(user.id);
-				
-				if (latestSpawn.user.type === Aircraft.EF24G) {
-					// EF-24G: index 0 = Pilot, index 1 = EWO
-					if (seatIndex === 0) {
-						aircraftName += " (Pilot)";
-					} else if (seatIndex === 1) {
-						aircraftName += " (EWO)";
-					}
-				} else if (latestSpawn.user.type === Aircraft.T55) {
-					// T-55: index 0 = Pilot, index 1 = Instructor
-					if (seatIndex === 0) {
-						aircraftName += " (Pilot)";
-					} else if (seatIndex === 1) {
-						aircraftName += " (Instructor)";
+		// Get current session start time (last online user update)
+		// const sessionStartTime = this.lastOnlineUserUpdateAt;
+		const activeSeason = await this.getActiveSeason();
+
+		await Promise.all(
+			onlineUsers.map(async (user, idx) => {
+				const team = this.onlineUsers.find(u => u.id === user.id).team;
+
+				// Get the most recent spawn to find current aircraft
+				const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id, "season": activeSeason.id }, { sort: { time: -1 } });
+				let aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
+
+				// Check for multi-seat aircraft and determine seat position
+				if (latestSpawn && latestSpawn.user.occupants && latestSpawn.user.occupants.length > 1) {
+					const seatIndex = latestSpawn.user.occupants.indexOf(user.id);
+
+					if (latestSpawn.user.type === Aircraft.EF24G) {
+						// EF-24G: index 0 = Pilot, index 1 = EWO
+						if (seatIndex === 0) {
+							aircraftName += " (Pilot)";
+						} else if (seatIndex === 1) {
+							aircraftName += " (EWO)";
+						}
+					} else if (latestSpawn.user.type === Aircraft.T55) {
+						// T-55: index 0 = Pilot, index 1 = Instructor
+						if (seatIndex === 0) {
+							aircraftName += " (Pilot)";
+						} else if (seatIndex === 1) {
+							aircraftName += " (Instructor)";
+						}
 					}
 				}
-			}
 
-			// Calculate K/D ratio for current session only
-			const sessionKills = await this.kills.collection.countDocuments({
-				"killer.ownerId": user.id,
-				season: activeSeason.id,
-				time: { $gte: sessionStartTime }
-			});
-			
-			const sessionDeaths = await this.deaths.collection.countDocuments({
-				"victim.ownerId": user.id,
-				season: activeSeason.id,
-				time: { $gte: sessionStartTime }
-			});
+				// Calculate K/D ratio for current session only
+				const sessionKills = await this.kills.collection.countDocuments({
+					"killer.ownerId": user.id,
+					"season": activeSeason.id,
+					"time": { $gte: this.matchStartTime }
+				});
 
-			const kd = `${sessionKills}/${sessionDeaths}`;
+				const sessionDeaths = await this.deaths.collection.countDocuments({
+					"victim.ownerId": user.id,
+					"season": activeSeason.id,
+					"time": { $gte: this.matchStartTime }
+				});
 
-			min = Math.min(min, user.elo);
-			max = Math.max(max, user.elo);
-			avg += user.elo;
+				const kd = `${sessionKills}/${sessionDeaths}`;
 
-			table.push([user.pilotNames[0], Math.round(user.elo), kd, team, aircraftName]);
-		}));
+				min = Math.min(min, user.elo);
+				max = Math.max(max, user.elo);
+				avg += user.elo;
+
+				table.push([user.pilotNames[0], Math.round(user.elo), kd, team, aircraftName]);
+			})
+		);
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
 		resultStr += `\`\`\`ansi\n${this.table(table, 16).join("\n")}\n\`\`\`\n`;
@@ -524,7 +518,7 @@ class Application {
 		const timeMins = Math.floor((this.currentServerEnv.tod % 1) * 60)
 			.toString()
 			.padStart(2, "0");
-		
+
 		const matchDurationMs = this.matchStartTime ? Date.now() - this.matchStartTime : 0;
 		const matchDurationMins = Math.floor(matchDurationMs / 60000);
 
@@ -540,16 +534,21 @@ class Application {
 
 	public table(data: (string | number)[][], tEntryMaxLen = 16, centerColumns: number[] = []) {
 		const widths = data[0].map((_, i) => Math.max(...data.map(row => String(row[i]).length)));
-		return data.map(row => row.map((val, i) => {
-			const str = String(val);
-			if (centerColumns.includes(i)) {
-				const totalPadding = widths[i] - str.length;
-				const leftPadding = Math.floor(totalPadding / 2);
-				const rightPadding = totalPadding - leftPadding;
-				return ' '.repeat(leftPadding) + str + ' '.repeat(rightPadding);
-			}
-			return str.padEnd(widths[i]);
-		}).map(val => val.substring(0, tEntryMaxLen)).join(" "));
+		return data.map(row =>
+			row
+				.map((val, i) => {
+					const str = String(val);
+					if (centerColumns.includes(i)) {
+						const totalPadding = widths[i] - str.length;
+						const leftPadding = Math.floor(totalPadding / 2);
+						const rightPadding = totalPadding - leftPadding;
+						return " ".repeat(leftPadding) + str + " ".repeat(rightPadding);
+					}
+					return str.padEnd(widths[i]);
+				})
+				.map(val => val.substring(0, tEntryMaxLen))
+				.join(" ")
+		);
 	}
 
 	private async updateScoreboards() {
@@ -871,7 +870,7 @@ class Application {
 	public async createModerationEmbed(userEntry: User) {
 		const MAX_SHOWN_TKs = 10;
 		const activeSeason = await this.getActiveSeason();
-		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id, season: activeSeason.id }).toArray();
+		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id, "season": activeSeason.id }).toArray();
 		kills.sort((a, b) => b.time - a.time);
 		const realKills = kills.filter(k => k.killer.team != k.victim.team && shouldKillBeCounted(k) && k.weapon != Weapon.Collision && k.weapon != Weapon.CFIT);
 		const killsWithoutCollisions = kills.filter(k => k.weapon != Weapon.Collision);

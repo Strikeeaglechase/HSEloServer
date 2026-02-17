@@ -26,6 +26,7 @@ import {
 	RandomEnv,
 	ScoreboardMessage,
 	Season,
+	ServerInfoEntry,
 	Spawn,
 	Tracking,
 	UnbanRequest,
@@ -34,6 +35,7 @@ import {
 } from "./structures.js";
 
 const admins = ["272143648114606083", "500744458699276288"];
+const authRoleIds = ["1078735204706963457"];
 const SERVER_MAX_PLAYERS = 16;
 const USERS_PER_PAGE = 30;
 const KILLS_TO_RANK = 10;
@@ -69,6 +71,8 @@ class Application {
 	public tracking: CollectionManager<Tracking>;
 	public endOfSeasonStats: CollectionManager<EndOfSeasonStats>;
 	public unbanRequests: CollectionManager<UnbanRequest>;
+	public serverInfos: CollectionManager<ServerInfoEntry>;
+	public serverHelps: CollectionManager<ServerInfoEntry>;
 
 	public achievementManager: IAchievementManager = new DummyAchievementManager();
 	public achievementsDb: CollectionManager<AchievementDBEntry>;
@@ -81,6 +85,7 @@ class Application {
 	public currentServerEnv: RandomEnv;
 	private currentMission: string = "";
 	public lastOnlineUserUpdateAt = 0;
+	public matchStartTime = 0;
 
 	private updatingRanksAt = 0;
 	private lastHighMemoryReset = 0;
@@ -225,6 +230,7 @@ class Application {
 			case "mission":
 				const missionName = tracking.args[0].match(/\/([\w ]+).vts/)[1];
 				this.currentMission = missionName;
+				this.matchStartTime = Date.now();
 				this.log.info(`Received mission name via tracking: ${missionName}`);
 				break;
 
@@ -275,13 +281,15 @@ class Application {
 		this.missileLaunchParams = await this.framework.database.collection("missiles", false, "uuid");
 		this.achievementsDb = await this.framework.database.collection("achievements", false, "id");
 		this.unbanRequests = await this.framework.database.collection("unban-requests", false, "id");
+		this.serverInfos = await this.framework.database.collection("server-info", false, "id");
+		this.serverHelps = await this.framework.database.collection("server-help", false, "id");
 	}
 
 	private async checkMemoryUsage() {
 		const memUsage = process.memoryUsage();
 		const usageGb = memUsage.heapUsed / 1024 / 1024 / 1024;
 		this.log.info(`Memory usage: ${usageGb.toFixed(2)}GB`);
-		if (usageGb > 1.5) {
+		if (usageGb > 2.5) {
 			const timeFromLastReset = Date.now() - this.lastHighMemoryReset;
 			// One minute
 			if (timeFromLastReset < 1000 * 60) return;
@@ -358,6 +366,30 @@ class Application {
 		return user;
 	}
 
+	private async getMainAircraft(userId: string): Promise<string> {
+		const season = await this.getActiveSeason();
+		const kills = await this.kills.collection.find({ "killer.ownerId": userId, "season": season.id }).toArray();
+
+		const killsByAircraft: Record<number, number> = {};
+		kills.forEach(kill => {
+			const aircraftType = kill.killer.type;
+			killsByAircraft[aircraftType] = (killsByAircraft[aircraftType] || 0) + 1;
+		});
+
+		let maxKills = 0;
+		let mainAircraft = Aircraft.Invalid;
+
+		Object.entries(killsByAircraft).forEach(([aircraftStr, killCount]) => {
+			const aircraft = parseInt(aircraftStr) as Aircraft;
+			if (aircraft !== Aircraft.Invalid && killCount > maxKills) {
+				maxKills = killCount;
+				mainAircraft = aircraft;
+			}
+		});
+
+		return mainAircraft === Aircraft.Invalid ? "N/A" : Aircraft[mainAircraft];
+	}
+
 	private async createScoreboardMessage() {
 		const embed = new Discord.EmbedBuilder({ title: "Scoreboard" });
 		// const filteredUsers = this.cachedSortedUsers.filter(u => u.elo != BASE_ELO && u.kills > KILLS_TO_RANK).slice(0, USERS_PER_PAGE);
@@ -369,26 +401,20 @@ class Application {
 		// [1;2m[1;37mOnline player[0m[0m
 		// Offline player
 		// ```
-		const table: (string | number)[][] = [["#", "Name", "ELO", "F/A-26b", "F-45A", "Kills", "Deaths", "KDR"]];
+		const table: (string | number)[][] = [["#", "Name", "ELO", "Kills", "Deaths", "Main Aircraft", "KDR"]];
 		const prefixes: string[] = [];
 		const suffixes: string[] = [];
-		filteredUsers.forEach((user, idx) => {
+		for (let idx = 0; idx < filteredUsers.length; idx++) {
+			const user = filteredUsers[idx];
 			const isOnline = this.onlineUsers.some(u => u.id == user.id);
 			const prefix = isOnline ? "[1;2m[1;37m" : "";
 			const suffix = isOnline ? "[0m[0m" : "";
+			const mainAircraft = await this.getMainAircraft(user.id);
 			prefixes.push(prefix);
 			suffixes.push(suffix);
-			table.push([
-				idx + 1,
-				user.pilotNames[0],
-				Math.round(user.elo),
-				user.spawns[Aircraft.FA26b],
-				user.spawns[Aircraft.F45A],
-				user.kills,
-				user.deaths,
-				(user.kills / user.deaths).toFixed(2)
-			]);
-		});
+
+			table.push([idx + 1, user.pilotNames[0], Math.round(user.elo), user.kills, user.deaths, mainAircraft, (user.kills / user.deaths).toFixed(2)]);
+		}
 		const multiplierTable: (string | number)[][] = [["Mult", "Type", "Count"]];
 		this.elo.lastMultipliers
 			.sort((a, b) => a.multiplier - b.multiplier)
@@ -397,7 +423,7 @@ class Application {
 			});
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
-		resultStr += `\`\`\`ansi\n${this.table(table, 16)
+		resultStr += `\`\`\`ansi\n${this.table(table, 16, [3, 4, 5])
 			.map((l, i) => {
 				if (i == 0) return l;
 				return prefixes[i - 1] + l + suffixes[i - 1];
@@ -421,16 +447,63 @@ class Application {
 		let max = 0;
 		let avg = 0;
 
-		const table: (string | number)[][] = [["Name", "ELO", "Team"]];
-		onlineUsers.forEach((user, idx) => {
-			const team = this.onlineUsers.find(u => u.id === user.id).team;
+		const table: (string | number)[][] = [["Name", "ELO", "K/D", "Team", "Aircraft"]];
 
-			min = Math.min(min, user.elo);
-			max = Math.max(max, user.elo);
-			avg += user.elo;
+		// Get current session start time (last online user update)
+		// const sessionStartTime = this.lastOnlineUserUpdateAt;
+		const activeSeason = await this.getActiveSeason();
 
-			table.push([user.pilotNames[0], Math.round(user.elo), team]);
-		});
+		await Promise.all(
+			onlineUsers.map(async (user, idx) => {
+				const team = this.onlineUsers.find(u => u.id === user.id).team;
+
+				// Get the most recent spawn to find current aircraft
+				const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id, "season": activeSeason.id }, { sort: { time: -1 } });
+				let aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
+
+				// Check for multi-seat aircraft and determine seat position
+				if (latestSpawn && latestSpawn.user.occupants && latestSpawn.user.occupants.length > 1) {
+					const seatIndex = latestSpawn.user.occupants.indexOf(user.id);
+
+					if (latestSpawn.user.type === Aircraft.EF24G) {
+						// EF-24G: index 0 = Pilot, index 1 = EWO
+						if (seatIndex === 0) {
+							aircraftName += " (Pilot)";
+						} else if (seatIndex === 1) {
+							aircraftName += " (EWO)";
+						}
+					} else if (latestSpawn.user.type === Aircraft.T55) {
+						// T-55: index 0 = Pilot, index 1 = Instructor
+						if (seatIndex === 0) {
+							aircraftName += " (Pilot)";
+						} else if (seatIndex === 1) {
+							aircraftName += " (Instructor)";
+						}
+					}
+				}
+
+				// Calculate K/D ratio for current session only
+				const sessionKills = await this.kills.collection.countDocuments({
+					"killer.ownerId": user.id,
+					"season": activeSeason.id,
+					"time": { $gte: this.matchStartTime }
+				});
+
+				const sessionDeaths = await this.deaths.collection.countDocuments({
+					"victim.ownerId": user.id,
+					"season": activeSeason.id,
+					"time": { $gte: this.matchStartTime }
+				});
+
+				const kd = `${sessionKills}/${sessionDeaths}`;
+
+				min = Math.min(min, user.elo);
+				max = Math.max(max, user.elo);
+				avg += user.elo;
+
+				table.push([user.pilotNames[0], Math.round(user.elo), kd, team, aircraftName]);
+			})
+		);
 
 		let resultStr = `**Online: ${this.onlineUsers.length}/${SERVER_MAX_PLAYERS}**\n`;
 		resultStr += `\`\`\`ansi\n${this.table(table, 16).join("\n")}\n\`\`\`\n`;
@@ -446,7 +519,10 @@ class Application {
 			.toString()
 			.padStart(2, "0");
 
-		resultStr += `${this.currentMission ?? ""}\nTOD ${timeHrs}:${timeMins}\nWind ${windHeading} @ ${windKn}kts${gustKn}\nWeather ${
+		const matchDurationMs = this.matchStartTime ? Date.now() - this.matchStartTime : 0;
+		const matchDurationMins = Math.floor(matchDurationMs / 60000);
+
+		resultStr += `${this.currentMission ?? ""}\nMatch Duration: ${matchDurationMins} min\nTOD ${timeHrs}:${timeMins}\nWind ${windHeading} @ ${windKn}kts${gustKn}\nWeather ${
 			weatherNames[this.currentServerEnv.weather]
 		}`;
 		resultStr += `\n\`\`\``;
@@ -456,9 +532,23 @@ class Application {
 		return embed;
 	}
 
-	public table(data: (string | number)[][], tEntryMaxLen = 16) {
+	public table(data: (string | number)[][], tEntryMaxLen = 16, centerColumns: number[] = []) {
 		const widths = data[0].map((_, i) => Math.max(...data.map(row => String(row[i]).length)));
-		return data.map(row => row.map((val, i) => String(val).padEnd(widths[i]).substring(0, tEntryMaxLen)).join(" "));
+		return data.map(row =>
+			row
+				.map((val, i) => {
+					const str = String(val);
+					if (centerColumns.includes(i)) {
+						const totalPadding = widths[i] - str.length;
+						const leftPadding = Math.floor(totalPadding / 2);
+						const rightPadding = totalPadding - leftPadding;
+						return " ".repeat(leftPadding) + str + " ".repeat(rightPadding);
+					}
+					return str.padEnd(widths[i]);
+				})
+				.map(val => val.substring(0, tEntryMaxLen))
+				.join(" ")
+		);
 	}
 
 	private async updateScoreboards() {
@@ -779,7 +869,8 @@ class Application {
 
 	public async createModerationEmbed(userEntry: User) {
 		const MAX_SHOWN_TKs = 10;
-		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id }).toArray();
+		const activeSeason = await this.getActiveSeason();
+		const kills = await this.kills.collection.find({ "killer.ownerId": userEntry.id, "season": activeSeason.id }).toArray();
 		kills.sort((a, b) => b.time - a.time);
 		const realKills = kills.filter(k => k.killer.team != k.victim.team && shouldKillBeCounted(k) && k.weapon != Weapon.Collision && k.weapon != Weapon.CFIT);
 		const killsWithoutCollisions = kills.filter(k => k.weapon != Weapon.Collision);
@@ -922,7 +1013,7 @@ class Application {
 				await message.delete().catch(() => {});
 				return;
 			}
-			const name = user ? user.pilotNames[0] ?? user.id : "Unknown";
+			const name = user ? (user.pilotNames[0] ?? user.id) : "Unknown";
 
 			const thread = await message.channel.threads.create({
 				name: `Unban Request - ${name}`,
@@ -1005,4 +1096,4 @@ class Application {
 	}
 }
 
-export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled, admins };
+export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled, admins, authRoleIds };

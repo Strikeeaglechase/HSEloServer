@@ -5,7 +5,7 @@ import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.j
 import { Application } from "../../application.js";
 import { shouldKillBeCounted } from "../../elo/eloUpdater.js";
 import { Aircraft, CurrentServerInformation, Kill, MissileLaunchParams, Spawn, Team, Tracking, UserAircraftInformation, Weapon } from "../../structures.js";
-import { resolveUser } from "./stats.js";
+import { resolveUser } from "../../userUtils.js";
 
 function loadingEmbed(state: string) {
 	const emb = new EmbedBuilder();
@@ -90,19 +90,21 @@ const unpackDamage = (dmg: Tracking) => {
 
 const eventHandlers: Record<EventType, (event: unknown, uDict: Record<string, string>) => string> = {
 	kill: (event: Kill, uDict) =>
-		`Kill: Killer=${acInfo(event.killer, uDict)} Victim=${acInfo(event.victim, uDict)} Weapon=${event.weapon} Valid=${shouldKillBeCounted(event)}`,
+		`Kill: Killer=${acInfo(event.killer, uDict)} Victim=${acInfo(event.victim, uDict)} Weapon=${event.weapon} (${Weapon[event.weapon]}) WeaponUuid=${
+			event.weaponUuid
+		} Valid=${shouldKillBeCounted(event)}`,
 	death: (event: Kill, uDict) =>
 		`Death: Killer=${acInfo(event.killer, uDict)} Victim=${acInfo(event.victim, uDict)} Weapon=${event.weapon} Valid=${shouldKillBeCounted(event)}`,
 	spawn: (event: Spawn, uDict) => `Spawn: ${acInfo(event.user, uDict)}`,
-	missileLaunch: (event: MissileLaunchParams, uDict) => `Missile Launch: Type=${Weapon[event.type]}`,
+	missileLaunch: (event: MissileLaunchParams, uDict) => `Missile Launch: Type=${event.type} (${Weapon[event.type]}) WeaponUuid=${event.uuid}`,
 	receivedDamage: (event: Tracking, uDict) =>
 		`Received damage from ${uDict[unpackDamage(event).source]} Amount=${unpackDamage(event).amount.toFixed(2)} Where=${
 			unpackDamage(event).hpIndex
 		} WeaponUuid=${unpackDamage(event).weaponUuid ?? "N/A"}`,
 	dealtDamage: (event: Tracking, uDict) =>
-		`Dealt damage to ${uDict[unpackDamage(event).target]} Amount=${unpackDamage(event).amount.toFixed(2)} Where=${unpackDamage(event).hpIndex} WeaponUuid=${
-			unpackDamage(event).weaponUuid ?? "N/A"
-		}`,
+		`Dealt damage: Victim=${uDict[unpackDamage(event).target]} Amount=${unpackDamage(event).amount.toFixed(2)} Where=${
+			unpackDamage(event).hpIndex
+		} WeaponUuid=${unpackDamage(event).weaponUuid ?? "N/A"}`,
 	takeoff: (event: Tracking, uDict) => `Takeoff`,
 	landing: (event: Tracking, uDict) => `Landing`,
 	tkKick: (event: Tracking, uDict) => `Kick for TKs`,

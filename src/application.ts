@@ -229,11 +229,8 @@ class Application {
 		switch (tracking.type) {
 			case "mission":
 				const missionName = tracking.args[0].match(/\/([\w ]+).vts/)[1];
-				if (this.currentMission !== missionName) {
-					this.matchStartTime = Date.now();
-					this.log.info(`Mission changed to: ${missionName}, resetting match start time`);
-				}
 				this.currentMission = missionName;
+				this.matchStartTime = Date.now();
 				this.log.info(`Received mission name via tracking: ${missionName}`);
 				break;
 
@@ -460,11 +457,9 @@ class Application {
 			onlineUsers.map(async (user, idx) => {
 				const team = this.onlineUsers.find(u => u.id === user.id).team;
 
-				// Get the most recent spawn to find current aircraft
 				const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id, "season": activeSeason.id }, { sort: { time: -1 } });
 				let aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
 
-				// Check for multi-seat aircraft and determine seat position
 				const hasMultipleOccupants = latestSpawn?.user?.occupants && Array.isArray(latestSpawn.user.occupants) && latestSpawn.user.occupants.length > 1;
 				
 				if (hasMultipleOccupants) {
@@ -489,25 +484,17 @@ class Application {
 					}
 				}
 
-				// Calculate K/D ratio for current session only
-				const killsQuery = Object.assign(
-					{
-						"killer.ownerId": user.id,
-						"season": activeSeason.id
-					},
-					this.matchStartTime > 0 ? { "time": { $gte: this.matchStartTime } } : {}
-				);
+				const sessionKills = await this.kills.collection.countDocuments({
+					"killer.ownerId": user.id,
+					"season": activeSeason.id,
+					"time": { $gte: this.matchStartTime }
+				});	
 
-				const deathsQuery = Object.assign(
-					{
-						"victim.ownerId": user.id,
-						"season": activeSeason.id
-					},
-					this.matchStartTime > 0 ? { "time": { $gte: this.matchStartTime } } : {}
-				);
-
-				const sessionKills = await this.kills.collection.countDocuments(killsQuery);
-				const sessionDeaths = await this.deaths.collection.countDocuments(deathsQuery);
+				const sessionDeaths = await this.deaths.collection.countDocuments({
+					"victim.ownerId": user.id,
+					"season": activeSeason.id,
+					"time": { $gte: this.matchStartTime }
+				});
 
 				const kd = `${sessionKills}/${sessionDeaths}`;
 

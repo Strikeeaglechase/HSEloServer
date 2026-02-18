@@ -545,13 +545,12 @@ class API extends EventEmitter<"tracking"> {
 	}
 
 	public async updateOnlineUsers(
-		users: {
-			name: string;
-			id: string;
-			team: string;
-		}[]
+		users: 
+			| { name: string; id: string; team: string }[]
+			| { onlineUsers: { name: string; id: string; team: string }[] }
 	) {
-		this.app.onlineUsers = users;
+		let usersList = Array.isArray(users) ? users : (users.onlineUsers || []);
+		this.app.onlineUsers = usersList;
 		this.app.lastOnlineUserUpdateAt = Date.now();
 		this.app.updateOnlineRole();
 		return 200;

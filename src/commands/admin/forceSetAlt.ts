@@ -1,4 +1,4 @@
-import { admins, Application } from "../../application.js";
+import { adminrole, Application } from "../../application.js";
 import { SlashCommand, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { replyOrEdit } from "../../iterConfirm.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
@@ -9,8 +9,8 @@ class ForceSetAlt extends SlashCommand {
     description = "forces a alt to be set to a user";
 
     async run({ interaction, framework, app}: SlashCommandEvent<Application>, @SArg() parentId: string, @SArg() altId: string){
-
-        if (!admins.includes(interaction.user.id)) {
+        const m = await interaction.guild.members.fetch(interaction.user.id).catch(() => {});
+        if (!m || !m.roles.cache.has(adminrole)) {
             await interaction.reply(framework.error("No"));
             return;
         }

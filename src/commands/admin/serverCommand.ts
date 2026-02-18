@@ -1,7 +1,7 @@
 import { SlashCommand, SlashCommandAutocompleteEvent, SlashCommandEvent } from "strike-discord-framework/dist/slashCommand.js";
 import { SArg } from "strike-discord-framework/dist/slashCommandArgumentParser.js";
 
-import { admins, Application } from "../../application.js";
+import { adminrole, Application } from "../../application.js";
 
 const validateFloat = (value: string) => {
 	if (isNaN(parseFloat(value))) return false;
@@ -13,7 +13,8 @@ class ServerCommand extends SlashCommand {
 	description = "Executes a server command";
 
 	async run({ interaction, framework, app }: SlashCommandEvent<Application>, @SArg({ autocomplete: true }) user: string, @SArg({}) command: string) {
-		if (!admins.includes(interaction.user.id)) {
+		const m = await interaction.guild.members.fetch(interaction.user.id).catch(() => {});
+		if (!m || !m.roles.cache.has(adminrole)) {
 			await interaction.reply(framework.error("No"));
 			return;
 		}

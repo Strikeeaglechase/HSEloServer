@@ -35,7 +35,7 @@ import {
 } from "./structures.js";
 
 const admins = ["272143648114606083", "500744458699276288"];
-const authRoleIds = ["1078735204706963457"];
+const adminrole = "1281305915064062044";
 const SERVER_MAX_PLAYERS = 16;
 const USERS_PER_PAGE = 30;
 const KILLS_TO_RANK = 10;
@@ -457,37 +457,38 @@ class Application {
 			onlineUsers.map(async (user, idx) => {
 				const team = this.onlineUsers.find(u => u.id === user.id).team;
 
-				// Get the most recent spawn to find current aircraft
 				const latestSpawn = await this.spawns.collection.findOne({ "user.ownerId": user.id, "season": activeSeason.id }, { sort: { time: -1 } });
 				let aircraftName = latestSpawn ? Aircraft[latestSpawn.user.type] : "Unknown";
 
-				// Check for multi-seat aircraft and determine seat position
-				if (latestSpawn && latestSpawn.user.occupants && latestSpawn.user.occupants.length > 1) {
+				const hasMultipleOccupants = latestSpawn?.user?.occupants && Array.isArray(latestSpawn.user.occupants) && latestSpawn.user.occupants.length > 1;
+				
+				if (hasMultipleOccupants) {
 					const seatIndex = latestSpawn.user.occupants.indexOf(user.id);
 
-					if (latestSpawn.user.type === Aircraft.EF24G) {
-						// EF-24G: index 0 = Pilot, index 1 = EWO
-						if (seatIndex === 0) {
-							aircraftName += " (Pilot)";
-						} else if (seatIndex === 1) {
-							aircraftName += " (EWO)";
-						}
-					} else if (latestSpawn.user.type === Aircraft.T55) {
-						// T-55: index 0 = Pilot, index 1 = Instructor
-						if (seatIndex === 0) {
-							aircraftName += " (Pilot)";
-						} else if (seatIndex === 1) {
-							aircraftName += " (Instructor)";
+					if (seatIndex >= 0) {
+						if (latestSpawn.user.type === Aircraft.EF24G) {
+							// EF-24G: index 0 = Pilot, index 1 = EWO
+							if (seatIndex === 0) {
+								aircraftName += " (Pilot)";
+							} else if (seatIndex === 1) {
+								aircraftName += " (EWO)";
+							}
+						} else if (latestSpawn.user.type === Aircraft.T55) {
+							// T-55: index 0 = Pilot, index 1 = Instructor
+							if (seatIndex === 0) {
+								aircraftName += " (Pilot)";
+							} else if (seatIndex === 1) {
+								aircraftName += " (Instructor)";
+							}
 						}
 					}
 				}
 
-				// Calculate K/D ratio for current session only
 				const sessionKills = await this.kills.collection.countDocuments({
 					"killer.ownerId": user.id,
 					"season": activeSeason.id,
 					"time": { $gte: this.matchStartTime }
-				});
+				});	
 
 				const sessionDeaths = await this.deaths.collection.countDocuments({
 					"victim.ownerId": user.id,
@@ -1096,4 +1097,4 @@ class Application {
 	}
 }
 
-export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled, admins, authRoleIds };
+export { Application, IAchievementManager, KILLS_TO_RANK, achievementsEnabled, admins, adminrole };

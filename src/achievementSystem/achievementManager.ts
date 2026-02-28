@@ -11,7 +11,10 @@ type EmittedEvents = "user_kill" | "user_death" | "tracking_event" | "user_login
 class AchievementManager extends EventEmitter<EmittedEvents> implements IAchievementManager {
 	public log: Logger;
 	private sheetParser: GoogleSheetParser;
-	private achievements: Achievement[];
+	private achievements: Achievement[] = [];
+	public get achievementCount() {
+		return this.achievements.length;
+	}
 
 	constructor(public app: Application) {
 		super();
@@ -39,10 +42,6 @@ class AchievementManager extends EventEmitter<EmittedEvents> implements IAchieve
 				this.log.info(`Added achievement ${ac.id} to database`);
 			}
 		});
-		// this.achievements[1].giveToUser("76561198985917972");
-
-		// setTimeout(() => {
-		// }, 3 * 1000);
 	}
 
 	public async onAchievementGiven(user: User, achievement: Achievement) {

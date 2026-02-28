@@ -8,6 +8,7 @@ import Logger from "strike-discord-framework/dist/logger";
 import { v4 as uuidv4 } from "uuid";
 
 import { DummyAchievementManager, IAchievementManager } from "./achievementDeclare.js";
+import { AchievementManager } from "./achievementSystem/achievementManager.js";
 import { API } from "./api.js";
 import { BASE_ELO, ELOUpdater, shouldKillBeCounted, userCanRank } from "./elo/eloUpdater.js";
 import { LiveryModifierManager } from "./liveryModifierManager.js";
@@ -102,13 +103,16 @@ class Application {
 	}
 
 	private async loadAchievementManager() {
-		if (fs.existsSync("./achievementSystem/achievementManager.js") && achievementsEnabled) {
+		if (achievementsEnabled) {
 			this.log.info(`Loading achievement manager`);
-			//@ts-ignore
-			const { AchievementManager } = await import("./achievementSystem/achievementManager.js");
-			this.achievementManager = new AchievementManager(this);
+			const realAc = new AchievementManager(this);
+			this.achievementManager = realAc;
 			await this.achievementManager.init();
-			this.log.info(`Loaded achievement manager`);
+			this.log.info(`Loaded achievement manager with ${realAc.achievementCount} achievements`);
+			if (realAc.achievementCount == 0) {
+				this.log.warn(`Achievement manager loaded with 0 achievements, something might be wrong`);
+				setTimeout(() => this.loadAchievementManager(), 1000 * 60); // Try again in a minute
+			}
 		} else {
 			this.log.warn(`Unable to find achievementManager.js`);
 			return;
